@@ -14,14 +14,16 @@ def check(name, cond, extra=""):
 tmp = Path(tempfile.mkdtemp())
 out = L.Output(tmp)
 day = L.now_dhaka().strftime("%Y-%m-%d")
-art = lambda h: {"headline": h, "description": "d", "author": "A", "section": "bangladesh",
-                 "published": L.now_dhaka(), "updated": None}
+art = lambda h: {"headline": h, "description": "d", "body": "Full article text for testing Spark.",
+                 "word_count": 6, "author": "A", "section": "bangladesh",
+                 "published": L.now_dhaka(), "updated": None, "site_key": "dailysun", "lang": "en",
+                 "event_types": ["blockade"], "locations": ["Mirpur-10"], "is_disruption": True}
 
 # daily files
 out.emit("Daily Sun", "https://www.daily-sun.com/bangladesh/1", art("First headline of the day for testing"))
 out.note("-- round 1 done")
 check("daily jsonl exists", (tmp / "logs" / f"news_stream_{day}.jsonl").exists())
-log = (tmp / "logs" / f"news_stream_{day}.log").read_text()
+log = (tmp / "logs" / f"news_stream_{day}.log").read_text(encoding="utf-8")
 check("log has NEW line with date-time", f"[{day} " in log and "NEW | Daily Sun" in log)
 check("log has INFO status line", "INFO | -- round 1 done" in log)
 
@@ -35,7 +37,10 @@ out.emit("BSS", "https://www.bssnews.net/news/2", art("Second headline after mid
 L.now_dhaka = real
 d2 = tomorrow.strftime("%Y-%m-%d")
 check("rollover makes a new day file", (tmp / "logs" / f"news_stream_{d2}.jsonl").exists())
-check("old day file untouched (1 line)", len((tmp / "logs" / f"news_stream_{day}.jsonl").read_text().splitlines()) == 1)
+check("old day file untouched (1 line)", len((tmp / "logs" / f"news_stream_{day}.jsonl").read_text(encoding="utf-8").splitlines()) == 1)
+
+# save seen_urls.json for debug endpoint test
+out.save_seen({"dailysun:1": "today", "dailysun:2": "old", "bss:1": "nodate"})
 
 # dashboard
 srv = D.serve(tmp / "logs", 0)
@@ -44,10 +49,15 @@ import threading; threading.Thread(target=srv.serve_forever, daemon=True).start(
 base = f"http://127.0.0.1:{port}"
 get = lambda p: urllib.request.urlopen(base + p, timeout=5).read()
 
-html = get("/").decode()
+html = get("/").decode("utf-8")
 check("page served", "<title>Bangladesh news stream</title>" in html)
 check("sort dropdown present", '<select id="sort"' in html)
 check("latest updated option present", 'value="updated"' in html)
+check("debug filter dropdown present", '<select id="debug_filter"' in html)
+check("search box present", 'id="q"' in html)
+check("site health matrix tab present", 'id="tab-matrix"' in html)
+check("live scraper logs tab present", 'id="tab-logs"' in html)
+
 days = json.loads(get("/api/days"))
 check("days lists both files", day in days["days"] and d2 in days["days"], days)
 r = json.loads(get(f"/api/items?date={day}&after=0"))
@@ -57,6 +67,12 @@ check("incremental: nothing new after 1", r2["items"] == [] and r2["total"] == 1
 out.emit("Daily Sun", "https://www.daily-sun.com/bangladesh/3", art("Third headline arrives later in the day"))
 r3 = json.loads(get(f"/api/items?date={day}&after=1"))
 check("incremental: new one appears", len(r3["items"]) == 1 and r3["total"] == 2)
+
+# debug endpoint test
+dbg = json.loads(get(f"/api/debug?date={day}"))
+check("debug api returns log_lines", any("round 1 done" in ln for ln in dbg["log_lines"]), dbg["log_lines"])
+check("debug api returns seen_stats", dbg["seen_stats"].get("dailysun", {}).get("today") == 1, dbg["seen_stats"])
+
 try:
     get("/api/items?date=../../etc/passwd"); bad = False
 except urllib.error.HTTPError as e:
