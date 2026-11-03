@@ -2,6 +2,8 @@ import json, sys, tempfile, threading
 from pathlib import Path
 from datetime import datetime
 
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import live_news_stream as L
 
 fails = []
@@ -11,7 +13,10 @@ def check(name, cond, extra=""):
         fails.append(name)
 
 sites = {s["key"]: s for s in L.compile_sites(None)}
-check("10 sites", len(sites) == 10, len(sites))
+check("45 sites (15 EN + 30 BN)", len(sites) == 45, len(sites))
+en_sites = L.compile_sites(None, lang_filter="en")
+bn_sites = L.compile_sites(None, lang_filter="bn")
+check("lang filter: 15 EN and 30 BN", len(en_sites) == 15 and len(bn_sites) == 30, (len(en_sites), len(bn_sites)))
 
 # ---- article URL patterns: (site, url, should_match)
 cases = [
@@ -41,6 +46,43 @@ cases = [
     ("bdnews24", "https://bdnews24.com/bangladesh", False),
     ("unb", "https://unb.com.bd/category/Bangladesh/dcs-conference-unb-advocates-for-integrity/152660", True),
     ("unb", "https://unb.com.bd/category/Bangladesh", False),
+    # New English portals
+    ("observerbd", "https://observerbd.com/news/603621", True),
+    ("bangladeshpost", "https://bangladeshpost.net/posts/pm-meets-president-at-bangabhaban-175166", True),
+    ("banglanews24_en", "https://en.banglanews24.com/national/news/bd/197475.details", True),
+    ("dailycountrytoday", "https://dailycountrytodaybd.com/story/cabinet-clears-draft-law-to-expedite-solar", True),
+    ("viewsbangladesh", "https://viewsbangladesh.com/garment-workers-clash-with-police-at-mirpur", True),
+    # New Bangla portals
+    ("prothomalo_bn", "https://www.prothomalo.com/bangladesh/crime/zakgd4ohb1", True),
+    ("bdnews24_bn", "https://bangla.bdnews24.com/world/qykdkrbmhq", True),
+    ("thedailystar_bn", "https://bangla.thedailystar.net/news/bangladesh/news-3976016", True),
+    ("dhakatribune_bn", "https://bangla.dhakatribune.com/bangladesh/112385/some-bangla-slug", True),
+    ("tbs_bn", "https://www.tbsnews.net/bangla/bangladesh/news-details-560411", True),
+    ("bss_bn", "https://www.bssnews.net/bangla/news-flash/356259", True),
+    ("unb_bn", "https://unb.com.bd/bangla/category/বাংলাদেশ/সৌরবিদ্যুৎ/116336", True),
+    ("jugantor", "https://www.jugantor.com/national/1178626", True),
+    ("ittefaq", "https://www.ittefaq.com.bd/818834/some-slug", True),
+    ("samakal", "https://samakal.com/capital/article/381166/some-slug", True),
+    ("dhakapost", "https://www.dhakapost.com/country/495111", True),
+    ("banglanews24_bn", "https://www.banglanews24.com/sports/news/bd/1690896.details", True),
+    ("jamuna", "https://www.jamuna.tv/national/667336", True),
+    ("independent24", "https://www.itvbd.com/national/277455/some-slug", True),
+    ("rtvonline", "https://rtvonline.com/national/413507", True),
+    ("ntvbd", "https://www.ntvbd.com/sports/news-1830021", True),
+    ("ekattor", "https://ekattor.tv/national/97069/some-slug", True),
+    ("banglatribune", "https://www.banglatribune.com/national/978509/some-slug", True),
+    ("sarabangla", "https://sarabangla.net/./bangladesh/post-1215803/", True),
+    ("ajkerpatrika", "https://www.ajkerpatrika.com/national/ajp0h90876vmk", True),
+    ("deshrupantor", "https://www.deshrupantor.com/732373/some-slug", True),
+    ("mzamin", "https://www.mzamin.com/article/56136", True),
+    ("bhorerkagoj", "https://www.bhorerkagoj.net/national/802948", True),
+    ("shomoyeralo", "https://www.shomoyeralo.com/news/393396", True),
+    ("sangbad", "https://sangbad.net/news/22464", True),
+    ("janakantha", "https://www.dailyjanakantha.com/national/news/918090", True),
+    ("manobkantha", "https://manobkantha.com.bd/news/national/673645/some-slug", True),
+    ("dhakatimes24", "https://www.dhakatimes24.com/2026/11/03/416373", True),
+    ("arthosuchak", "https://www.arthosuchak.com/archives/980724/some-slug", True),
+    ("sharebiz", "https://www.sharebiz.net/national/news/179823", True),
 ]
 for key, url, want in cases:
     got = bool(sites[key]["article_re"].match(L.clean_url(url, sites[key])))
@@ -55,11 +97,13 @@ tbs = sites["tbs"]
 check("tbs node/slug same key", L.art_key(tbs, "https://www.tbsnews.net/node/504494")
       == L.art_key(tbs, "https://www.tbsnews.net/supplement/going-504494"))
 
-# ---- host normalisation (non-www -> declared host)
+# ---- host & path normalisation
 check("clean_url host", L.clean_url("http://tbsnews.net/economy/x-123456/?a=1#z", tbs)
       == "https://www.tbsnews.net/economy/x-123456")
+check("clean_url dot-slash", L.clean_url("https://sarabangla.net/./bangladesh/post-1215803/", sites["sarabangla"])
+      == "https://sarabangla.net/bangladesh/post-1215803")
 
-# ---- text dates
+# ---- text dates (English & Bangla)
 d = L.parse_text_date(L.PUBLISHED_LABEL, "Published : 23 Oct 2013, 06:00 PM")
 check("date: 23 Oct 2013 6pm", d == datetime(2013, 10, 23, 18, 0, tzinfo=L.DHAKA), d)
 d = L.parse_text_date(L.UPDATED_LABEL, "Updated: 29 Oct 2026, 05: 48")
@@ -72,21 +116,41 @@ d = L.parse_text_date(L.UPDATED_LABEL, "Update : 30 Aug 2026, 16:53")
 check("date: BSS 24h", d == datetime(2026, 8, 30, 16, 53, tzinfo=L.DHAKA), d)
 d = L.parse_text_date(L.PUBLISHED_LABEL, "Published : 29 October 2026")
 check("date: no time", d == datetime(2026, 10, 29, 0, 0, tzinfo=L.DHAKA), d)
+d = L.parse_text_date(L.UPDATED_LABEL, "Update- November 03, 2026, 12:16 PM")
+check("date: UNB Month-DD-YYYY style", d == datetime(2026, 11, 3, 12, 16, tzinfo=L.DHAKA), d)
+d = L.parse_text_date(L.PUBLISHED_LABEL, "প্রকাশ: ০৩ নভেম্বর ২০২৬, ০৩:২৫ পিএম")
+check("date: Bangla digits + month + PM", d == datetime(2026, 11, 3, 15, 25, tzinfo=L.DHAKA), d)
+d = L.parse_text_date(L.PUBLISHED_LABEL, "প্রকাশিত: ১০:৩২, ৩ নভেম্বর ২০২৬")
+check("date: Janakantha Bangla HH:MM, DD Mon YYYY", d == datetime(2026, 11, 3, 10, 32, tzinfo=L.DHAKA), d)
 
-# ---- article parsing
+# ---- article parsing, full body, and disruption/location pre-tagging
 now = L.now_dhaka()
 iso = now.strftime("%Y-%m-%dT%H:%M:%S+06:00")
 html = f"""<html><head><meta property="og:type" content="article">
-<meta property="og:title" content="Big storm hits coast as thousands flee homes | The Daily Star">
-<meta property="og:description" content="desc">
+<meta property="og:title" content="Garment workers block road in Mirpur-10 and Ashulia | The Daily Star">
+<meta property="og:description" content="Clashes broke out at 10:30 am during the blockade.">
 <script type="application/ld+json">{{"@graph":[{{"@type":"NewsArticle","datePublished":"{iso}",
-"dateModified":"{iso}","author":[{{"name":"Staff Correspondent"}}],"articleSection":"Bangladesh"}}]}}</script>
-</head><body><h1>x</h1></body></html>"""
+"dateModified":"{iso}","author":[{{"name":"Staff Correspondent"}}],"articleSection":"Bangladesh"}}]}}
+</script></head><body><article><p>Thousands of garment workers staged a road blockade at Mirpur-10 and Ashulia from 9:00 am to 1:00 pm today, halting traffic and clashing with police.</p></article></body></html>"""
 a = L.parse_article(html, "https://www.thedailystar.net/news/bangladesh/news/storm-1234567", sites["thedailystar"])
 check("parse: kind", a and a["kind"] == "article")
-check("parse: title suffix stripped", a["headline"] == "Big storm hits coast as thousands flee homes", a["headline"])
+check("parse: title suffix stripped", a["headline"] == "Garment workers block road in Mirpur-10 and Ashulia", a["headline"])
 check("parse: @graph date + author + section", a["author"] == "Staff Correspondent" and a["section"] == "Bangladesh")
+check("parse: full body extracted", "Thousands of garment workers" in a["body"] and a["word_count"] >= 15, a["body"])
+check("parse: disruption events tagged", "blockade" in a["event_types"] and "clash" in a["event_types"] and a["is_disruption"], a["event_types"])
+check("parse: locations tagged", "Mirpur-10" in a["locations"] and "Ashulia" in a["locations"], a["locations"])
+check("parse: time windows tagged", any("10:30 am" in tw for tw in a["time_windows"]), a["time_windows"])
 check("classify today", L.classify(a) == "today")
+
+# Bangla disruption & location tagging test
+bn_tags = L.extract_disruption_tags(
+    "মিরপুর-১০ ও আশুলিয়ায় পোশাকশ্রমিকদের সড়ক অবরোধ, পুলিশের সঙ্গে সংঘর্ষ",
+    "সকাল ১০টা থেকে যান চলাচল বন্ধ রয়েছে।",
+    ""
+)
+check("Bangla disruption & location tags",
+      "blockade" in bn_tags["event_types"] and "clash" in bn_tags["event_types"]
+      and "Mirpur-10" in bn_tags["locations"] and "Ashulia" in bn_tags["locations"], bn_tags)
 
 old = html.replace(iso, "2020-01-01T10:00:00+06:00")
 check("classify old", L.classify(L.parse_article(old, "https://www.thedailystar.net/x-1234567", sites["thedailystar"])) == "old")
@@ -122,7 +186,8 @@ check("discover drops junk", not any(x in p for p in paths for x in ("e-paper", 
 today_iso = iso
 def page(title, pub):
     return (f'<html><head><meta property="og:type" content="article"><meta property="og:title" content="{title}">'
-            f'<script type="application/ld+json">{{"datePublished":"{pub}"}}</script></head><body></body></html>')
+            f'<script type="application/ld+json">{{"datePublished":"{pub}"}}</script></head>'
+            f'<body><article><p>Students blocked Shahbagh intersection at 11:00 am causing heavy traffic gridlock in Dhaka.</p></article></body></html>')
 PAGES = {
     "https://www.daily-sun.com/": '<a href="/bangladesh/905537">a</a><a href="/bangladesh/905001">b</a><a href="/opinion">o</a>',
     "https://www.daily-sun.com/opinion": '<a href="/opinion/905130">c</a>',
@@ -138,8 +203,6 @@ class FakeFetcher(L.Fetcher):
         self.status = 200 if url in PAGES else 404
         return PAGES.get(url)
 tmp = Path(tempfile.mkdtemp())
-class A: pass
-args = L.parse_args.__wrapped__() if hasattr(L.parse_args, "__wrapped__") else None
 sys.argv = ["x", "--out-dir", str(tmp), "--article-pause-min", "0", "--article-pause-max", "0"]
 args = L.parse_args()
 ss = L.compile_sites({"dailysun", "bss"})
@@ -154,6 +217,7 @@ check("e2e: old article not emitted", all("old story" not in l["headline"] for l
 dups = [l for l in lines if l["duplicate_of"]]
 check("e2e: cross-site duplicate flagged", len(dups) == 1 and dups[0]["source"] == "Bangladesh Sangbad Sangstha", dups)
 check("e2e: bss id dedup (1 bss article)", sum(l["source"].startswith("Bangladesh Sangbad") for l in lines) == 1)
+check("e2e: Spark schema fields emitted", all("body" in l and "event_types" in l and "locations" in l and "lang" in l for l in lines))
 total2 = sum(L.safe_scrape(ctx, s, 2, False) for s in ss)
 check("e2e: round 2 emits nothing again", total2 == 0, total2)
 
