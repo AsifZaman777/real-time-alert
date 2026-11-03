@@ -1,0 +1,994 @@
+[2026-11-03 15:46:03] INFO | Live news stream started 2026-11-03 15:46:03 (Dhaka time). Today = 03 Nov 2026. Press Ctrl+C to stop.
+[2026-11-03 15:46:03] INFO | Sources: Prothom Alo, The Daily Star, Dhaka Tribune, The Business Standard, New Age, Daily Sun, The Financial Express, Bangladesh Sangbad Sangstha, bdnews24.com, United News of Bangladesh
+[2026-11-03 15:46:03] INFO | Wait 10-20s between rounds. Logs: F:\real-time-alert\news-live-POC
+[2026-11-03 15:46:03] INFO | ! Daily Sun: home page not loaded, pausing this site for 2 round(s)
+[2026-11-03 15:46:03] INFO | The Business Standard: 25 categories to watch
+[2026-11-03 15:46:03] INFO | bdnews24.com: 25 categories to watch
+[2026-11-03 15:46:03] INFO | The Daily Star: 25 categories to watch
+[2026-11-03 15:46:03] INFO | Bangladesh Sangbad Sangstha: 25 categories to watch
+[2026-11-03 15:46:03] INFO | United News of Bangladesh: 4 categories to watch
+[2026-11-03 15:46:03] INFO | Dhaka Tribune: 25 categories to watch
+[2026-11-03 15:46:03] INFO | The Financial Express: 25 categories to watch
+[2026-11-03 15:46:03] INFO | Prothom Alo: 19 categories to watch
+[2026-11-03 15:46:04] INFO | New Age: 8 categories to watch
+[2026-11-03 15:46:19] NEW | New Age | Police constable beaten during garment workers’ protest in Mirpur
+    link: https://www.newagebd.net/post/law-order/320776/police-constable-beaten-during-garment-workers-protest-in-mirpur
+    published: 2026-11-03 14:47 | updated: 2026-11-03 14:50 | section: law-order | by: newagebd
+[2026-11-03 15:46:20] NEW | New Age | Prime minister installed solar panels at his residence, ready to supply to the national grid
+    link: https://www.newagebd.net/post/bangladesh/320777/prime-minister-installed-solar-panels-at-his-residence-ready-to-supply-to-the-national-grid
+    published: 2026-11-03 14:56 | updated: 2026-11-03 15:00 | section: bangladesh | by: newagebd
+[2026-11-03 15:46:22] NEW | Prothom Alo | Garment workers–police clashes in Mirpur: Police officer beaten, eyewitnesses say
+    link: https://en.prothomalo.com/bangladesh/city/v2wdqhf22g
+    published: 2026-11-03 14:04 | updated: 2026-11-03 14:04 | section: City | by: Staff Correspondent
+[2026-11-03 15:46:22] NEW | New Age | Amit Shah claims three crore deleted voters in India are ‘Bangladeshi infiltrators’
+    link: https://www.newagebd.net/post/south-asia/320773/amit-shah-claims-three-crore-deleted-voters-in-india-are-bangladeshi-infiltrators
+    published: 2026-11-03 14:02 | updated: 2026-11-03 15:22 | section: south-asia | by: newagebd
+[2026-11-03 15:46:23] NEW | New Age | Immediately confiscate properties of Hasina, Obaidul Quader, nine others: ICT prosecution
+    link: https://www.newagebd.net/post/human-rights/320774/immediately-confiscate-properties-of-hasina-obaidul-quader-nine-others-ict-prosecution
+    published: 2026-11-03 14:11 | updated: 2026-11-03 14:21 | section: human-rights | by: newagebd
+[2026-11-03 15:46:23] NEW | Prothom Alo | Surveyor caught to ACC while collecting Tk 100000, demanded Tk 8m bribe
+    link: https://en.prothomalo.com/bangladesh/st7x5s31x1
+    published: 2026-11-03 14:29 | updated: 2026-11-03 14:29 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:24] NEW | Prothom Alo | 33 members of banned organisation arrested over sabotage posing as garment workers: DMP
+    link: https://en.prothomalo.com/bangladesh/crime-and-law/4dhtgmiv0y
+    published: 2026-11-03 15:13 | updated: 2026-11-03 15:13 | section: Crime | by: Staff Correspondent
+[2026-11-03 15:46:25] NEW | New Age | Garment workers, police clash again in Mirpur
+    link: https://www.newagebd.net/post/country/320758/garment-workers-police-clash-again-in-mirpur
+    published: 2026-11-03 10:49 | updated: 2026-11-03 14:21 | section: country | by: newagebd
+[2026-11-03 15:46:25] NEW | Prothom Alo | Chief prosecutor’s office to seek seizure of half of Hasina, Asaduzzaman’s assets
+    link: https://en.prothomalo.com/bangladesh/9hgq8eqp30
+    published: 2026-11-03 14:48 | updated: 2026-11-03 14:48 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:25] NEW | Prothom Alo | Garment workers clash with police in Mirpur
+    link: https://en.prothomalo.com/bangladesh/enrrb5j68c
+    published: 2026-11-03 11:08 | updated: 2026-11-03 11:08 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:26] NEW | New Age | Police seek fresh seven-day remand for Dip in Tahsif murder case
+    link: https://www.newagebd.net/post/law-order/320779/police-seek-fresh-seven-day-remand-for-dip-in-tahsif-murder-case
+    published: 2026-11-03 15:01 | updated: 2026-11-03 15:02 | section: law-order | by: newagebd
+[2026-11-03 15:46:26] NEW | Prothom Alo | How much should garment workers actually be paid?
+    link: https://en.prothomalo.com/opinion/2nuq171a7l
+    published: 2026-11-03 10:26 | updated: 2026-11-03 10:26 | section: Opinion | by: Helal Mohiuddin
+[2026-11-03 15:46:28] NEW | Prothom Alo | Investigation yet to progress after 10 and a half months, all arrested suspects out on bail
+    link: https://en.prothomalo.com/bangladesh/kcrpqpbl3l
+    published: 2026-11-03 08:27 | updated: 2026-11-03 08:27 | section: Bangladesh | by: Special Correspondent
+[2026-11-03 15:46:28] NEW | New Age | Hadi murder probe report deferred again, next date December 7
+    link: https://www.newagebd.net/post/country/320778/hadi-murder-probe-report-deferred-again-next-date-december-7
+    published: 2026-11-03 14:58 | updated: 2026-11-03 15:02 | section: country | by: newagebd
+[2026-11-03 15:46:29] NEW | Prothom Alo | Garments workers clash with police, 40 factories declare holiday in Ashulia
+    link: https://en.prothomalo.com/bangladesh/local-news/9c4qw8c7p7
+    published: 2026-11-03 14:16 | updated: 2026-11-03 14:16 | section: Local News | by: Staff Correspondent
+[2026-11-03 15:46:29] NEW | Prothom Alo | Two Mirpur metro stations reopen after nearly an hour
+    link: https://en.prothomalo.com/bangladesh/f7e347aq8m
+    published: 2026-11-03 12:58 | updated: 2026-11-03 12:58 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:31] NEW | Prothom Alo | Akhtaruzzaman released from prison in airport disorder case
+    link: https://en.prothomalo.com/bangladesh/xcidbvivz6
+    published: 2026-11-03 12:56 | updated: 2026-11-03 12:56 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:32] NEW | Prothom Alo | Garment workers block highway in Gazipur, 50 factories declare holiday
+    link: https://en.prothomalo.com/bangladesh/local-news/mk905jega8
+    published: 2026-11-03 11:08 | updated: 2026-11-03 11:08 | section: Local News | by: Correspondent
+[2026-11-03 15:46:33] NEW | Prothom Alo | Will the govt borrow in dollars, Yen or Yuan?
+    link: https://en.prothomalo.com/business/6xwoova47q
+    published: 2026-11-03 08:55 | updated: 2026-11-03 08:55 | section: Business | by: Fakhrul Islam
+[2026-11-03 15:46:33] NEW | Bangladesh Sangbad Sangstha | Solar, not quick rentals, to address power crisis: PM  | News Flash
+    link: https://www.bssnews.net/news-flash/441406
+    published: unknown | updated: 2026-11-03 13:34 | section: news-flash
+[2026-11-03 15:46:34] NEW | Prothom Alo | RMG industry keeps growing despite challenges, but Bangladesh lags behind on wages
+    link: https://en.prothomalo.com/business/local/jjf2ngpr30
+    published: 2026-11-03 12:08 | updated: 2026-11-03 12:08 | section: Local | by: Shovongkor Karmakar
+[2026-11-03 15:46:34] NEW | Bangladesh Sangbad Sangstha | PM opens two-day Solar Expo-2026 | News Flash
+    link: https://www.bssnews.net/news-flash/441378
+    published: unknown | updated: 2026-11-03 13:03 | section: news-flash
+[2026-11-03 15:46:35] NEW | Prothom Alo | Sent out to beg, yet the 4-year-old girl dreams of becoming a teacher
+    link: https://en.prothomalo.com/bangladesh/city/w7bsndizpo
+    published: 2026-11-03 08:27 | updated: 2026-11-03 08:27 | section: City | by: Tarek Hasan Sarkar
+[2026-11-03 15:46:35] NEW | Dhaka Tribune | Mirpur people gripped by fear after three days of clashes
+    link: https://www.dhakatribune.com/bangladesh/dhaka/423594/mirpur-people-gripped-by-fear-after-three-days-of
+    published: 2026-11-03 14:43 | updated: 2026-11-03 14:43 | section: bangladesh/dhaka | by: Tribune Report
+[2026-11-03 15:46:36] NEW | Dhaka Tribune | 13 held in two cases filed over worker unrest in Savar, Ashulia
+    link: https://www.dhakatribune.com/bangladesh/nation/423592/13-held-in-two-cases-filed-over-worker-unrest-in
+    published: 2026-11-03 13:42 | updated: 2026-11-03 13:42 | section: bangladesh/nation | by: Ariful Islam Sabbir
+[2026-11-03 15:46:36] NEW | The Financial Express | More than 300 factories shut amid wage hike protests in Gazipur, Ashulia, Mirpur
+    link: https://thefinancialexpress.com.bd/national/more-than-300-factories-shut-amid-wage-hike-protests-in-gazipur-ashulia-mirpur
+    published: 2026-11-03 12:25 | updated: 2026-11-03 12:25 | section: National
+[2026-11-03 15:46:36] NEW | Prothom Alo | PM opens two-day Solar Expo-2026
+    link: https://en.prothomalo.com/bangladesh/q4ye55vtlg
+    published: 2026-11-03 12:19 | updated: 2026-11-03 12:19 | section: Bangladesh | by: BSS
+[2026-11-03 15:46:37] NEW | Prothom Alo | US strikes Iran’s Qeshm Island ahead of midterm elections
+    link: https://en.prothomalo.com/international/middle-east/vptgmydah5
+    published: 2026-11-03 10:45 | updated: 2026-11-03 10:45 | section: Middle East | by: AFP
+[2026-11-03 15:46:37] NEW | Dhaka Tribune | Jail Killing Day: Bangladesh remembers four national leaders
+    link: https://www.dhakatribune.com/bangladesh/423587/jail-killing-day-bangladesh-remembers-four
+    published: 2026-11-03 12:10 | updated: 2026-11-03 12:10 | section: bangladesh | by: Tribune Desk
+[2026-11-03 15:46:37] NEW | The Financial Express | Govt eyes 3,000-4,000MW solar power addition to grid before next summer: PM
+    link: https://thefinancialexpress.com.bd/trade/govt-eyes-3000-4000mw-solar-power-addition-to-grid-before-next-summer-pm
+    published: 2026-11-03 13:06 | updated: 2026-11-03 13:21 | section: Trade
+[2026-11-03 15:46:38] NEW | Dhaka Tribune | Workers block Dhaka-Tangail highway, set fire to roadside waste in Gazipur
+    link: https://www.dhakatribune.com/bangladesh/423585/workers-block-dhaka-tangail-highway-set-fire-to
+    published: 2026-11-03 11:18 | updated: 2026-11-03 11:18 | section: bangladesh | by: Raihanul Islam Akand
+[2026-11-03 15:46:38] NEW | The Financial Express | US struck Iran's Qeshm Island, Wall Street Journal reports
+    link: https://thefinancialexpress.com.bd/america/us-struck-irans-qeshm-island-wall-street-journal-reports
+    published: 2026-11-03 10:44 | updated: 2026-11-03 10:44 | section: America
+[2026-11-03 15:46:38] NEW | Prothom Alo | Prothom Alo to celebrate anniversary tomorrow with a range of programmes
+    link: https://en.prothomalo.com/bangladesh/bqbqvl0ucc
+    published: 2026-11-03 10:09 | updated: 2026-11-03 10:09 | section: Bangladesh | by: Staff Correspondent
+[2026-11-03 15:46:39] NEW | The Financial Express | Chase and counter-chase in Mirpur-11 as RMG workers continue protests on Tuesday
+    link: https://thefinancialexpress.com.bd/national/garment-workers-police-clash-in-mirpur-as-unrest-continues
+    published: 2026-11-03 10:43 | updated: 2026-11-03 12:36 | section: National
+[2026-11-03 15:46:39] NEW | Dhaka Tribune | BGB deployment in Gazipur increased to 11 platoons, magistrates to 25
+    link: https://www.dhakatribune.com/bangladesh/423584/bgb-deployment-in-gazipur-increased-to-11
+    published: 2026-11-03 10:56 | updated: 2026-11-03 10:56 | section: bangladesh | by: Raihanul Islam Akand
+[2026-11-03 15:46:39] NEW | Prothom Alo | Americans vote in midterms set to upend Trump presidency
+    link: https://en.prothomalo.com/international/americas/3vd9d6m2aq
+    published: 2026-11-03 10:56 | updated: 2026-11-03 10:56 | section: Americas | by: AFP
+[2026-11-03 15:46:39] NEW | The Financial Express | Drug makers post double-digit profit growth in FY26 on strong demand
+    link: https://thefinancialexpress.com.bd/stock/drug-makers-post-double-digit-profit-growth-in-fy26-on-strong-demand
+    published: 2026-11-03 10:01 | updated: 2026-11-03 10:01 | section: Stock
+[2026-11-03 15:46:40] NEW | Bangladesh Sangbad Sangstha | Faisal Amin, Eliza Jaman take oaths as MPs  | News
+    link: https://www.bssnews.net/news/441412
+    published: unknown | updated: 2026-11-03 14:14 | section: -
+[2026-11-03 15:46:40] NEW | The Financial Express | Prosecution to ask home ministry to enforce tribunal order on Hasina's assets
+    link: https://thefinancialexpress.com.bd/national/prosecution-to-ask-home-ministry-to-enforce-tribunal-order-on-hasinas-assets
+    published: 2026-11-03 15:21 | updated: 2026-11-03 15:21 | section: National
+[2026-11-03 15:46:40] NEW | Dhaka Tribune | Wall Street Journal: US strikes Iran's Qeshm island
+    link: https://www.dhakatribune.com/world/middle-east/423583/wall-street-journal-us-strikes-iran-s-qeshm
+    published: 2026-11-03 10:00 | updated: 2026-11-03 10:00 | section: world/middle-east | by: AFP
+[2026-11-03 15:46:40] NEW | Bangladesh Sangbad Sangstha | Govt moves to revive shrimp sector, says Minu | News
+    link: https://www.bssnews.net/news/441419
+    published: unknown | updated: 2026-11-03 14:09 | section: -
+[2026-11-03 15:46:41] NEW | Bangladesh Sangbad Sangstha | Post-CEPA partnership to open new frontiers for Bangladesh-Korea trade, investment  | News
+    link: https://www.bssnews.net/news/441374
+    published: unknown | updated: 2026-11-03 14:02 | section: -
+[2026-11-03 15:46:41] NEW | The Financial Express | Police clear Dhaka-Tangail Highway as workers set tyres ablaze
+    link: https://thefinancialexpress.com.bd/national/police-clear-gazipur-highway-as-workers-set-tyres-ablaze
+    published: 2026-11-03 13:16 | updated: 2026-11-03 13:16 | section: National
+[2026-11-03 15:46:42] NEW | Bangladesh Sangbad Sangstha | Bangladesh, UAE stress early CEPA to boost trade | News
+    link: https://www.bssnews.net/news/441370
+    published: unknown | updated: 2026-11-03 12:52 | section: -
+[2026-11-03 15:46:42] NEW | bdnews24.com | Police have legal authority to kill, but the govt doesn't want to use it: Advisor Zahed
+    link: https://bdnews24.com/bangladesh/kvtd69f29t
+    published: 2026-11-03 14:46 | updated: 2026-11-03 14:48 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:42] NEW | Dhaka Tribune | Beyond equality: The unfinished journey of women's rights in Bangladesh
+    link: https://www.dhakatribune.com/opinion/op-ed/423580/beyond-equality-the-unfinished-journey-of-women-s
+    published: 2026-11-03 09:47 | updated: 2026-11-03 09:47 | section: opinion/op-ed | by: Shejuti Hossain
+[2026-11-03 15:46:42] NEW | The Financial Express | Bangladesh, South Korea to form working group on post-CEPA trade, investment
+    link: https://thefinancialexpress.com.bd/trade/bangladesh-south-korea-to-form-working-group-on-post-cepa-trade-investment
+    published: 2026-11-03 10:56 | updated: 2026-11-03 10:56 | section: Trade
+[2026-11-03 15:46:43] NEW | Dhaka Tribune | From climate pledges to youth power: Bangladesh’s opportunity ahead of COP31
+    link: https://www.dhakatribune.com/opinion/op-ed/423579/from-climate-pledges-to-youth-power-bangladesh%E2%80%99s
+    published: 2026-11-03 09:26 | updated: 2026-11-03 09:26 | section: opinion/op-ed | by: Arif M Faisal
+[2026-11-03 15:46:43] NEW | Bangladesh Sangbad Sangstha | Nano urea to cut crop production cost, save billions in foreign exchange | Special Stories
+    link: https://www.bssnews.net/special-stories/441369
+    published: unknown | updated: 2026-11-03 12:38 | section: special-stories
+[2026-11-03 15:46:43] NEW | The Financial Express | CPA extends CCT operation deal with Saif Powertec for 3 weeks
+    link: https://thefinancialexpress.com.bd/bangladesh/cpa-extends-cct-operation-deal-with-saif-powertec-for-3-weeks
+    published: 2026-11-03 10:50 | updated: 2026-11-03 10:50 | section: Bangladesh
+[2026-11-03 15:46:45] NEW | Dhaka Tribune | When grievances remain unresolved
+    link: https://www.dhakatribune.com/opinion/editorial/423581/when-grievances-remain-unresolved
+    published: 2026-11-03 09:32 | updated: 2026-11-03 09:32 | section: opinion/editorial | by: Tribune Editorial
+[2026-11-03 15:46:45] NEW | The Financial Express | Police have legal authority to kill, but the govt doesn't want to use it: Advisor Zahed  (also in bdnews24.com)
+    link: https://thefinancialexpress.com.bd/national/police-have-legal-authority-to-kill-but-the-govt-doesnt-want-to-use-it-advisor-zahed
+    published: 2026-11-03 15:19 | updated: 2026-11-03 15:19 | section: National
+[2026-11-03 15:46:46] NEW | Dhaka Tribune | Supporting young entrepreneurs
+    link: https://www.dhakatribune.com/opinion/editorial/423582/supporting-young-entrepreneurs
+    published: 2026-11-03 09:37 | updated: 2026-11-03 09:37 | section: opinion/editorial | by: Tribune Editorial
+[2026-11-03 15:46:46] NEW | The Financial Express | Mirza Faisal Amin, Aliza Zaman sworn in as MPs
+    link: https://thefinancialexpress.com.bd/national/mirza-faisal-amin-aliza-zaman-sworn-in-as-mps
+    published: 2026-11-03 14:40 | updated: 2026-11-03 14:40 | section: National
+[2026-11-03 15:46:47] NEW | New Age | Stitching prosperity, struggling to survive
+    link: https://www.newagebd.net/post/opinion/320712/stitching-prosperity-struggling-to-survive
+    published: 2026-11-03 01:05 | updated: 2026-11-03 15:34 | section: opinion | by: newagebd
+[2026-11-03 15:46:47] NEW | The Financial Express | University student dies as lorry flips bus in Sitakunda, highway blocked
+    link: https://thefinancialexpress.com.bd/national/university-student-dies-as-lorry-flips-bus-in-sitakunda-highway-blocked
+    published: 2026-11-03 14:05 | updated: 2026-11-03 14:05 | section: National
+[2026-11-03 15:46:48] NEW | The Financial Express | ACC sting catches Dhaka surveyor accepting part of ‘Tk 8mn bribe’
+    link: https://thefinancialexpress.com.bd/national/acc-sting-catches-dhaka-surveyor-accepting-part-of-tk-8mn-bribe
+    published: 2026-11-03 13:33 | updated: 2026-11-03 13:33 | section: National
+[2026-11-03 15:46:49] NEW | New Age | Class question in the making and unmaking of Dhaka
+    link: https://www.newagebd.net/post/opinion/320711/class-question-in-the-making-and-unmaking-of-dhaka
+    published: 2026-11-03 01:02 | updated: 2026-11-03 01:07 | section: opinion | by: newagebd
+[2026-11-03 15:46:49] NEW | Dhaka Tribune | CAL to acquire 51% stake in Hong-Kong based fund manager Asia Frontier Capital
+    link: https://www.dhakatribune.com/business/423578/cal-to-acquire-51%25-stake-in-hong-kong-based-fund
+    published: 2026-11-03 00:42 | updated: 2026-11-03 00:42 | section: business | by: Press Release
+[2026-11-03 15:46:49] NEW | bdnews24.com | Asian Cup postponed until December 2027, AFC says
+    link: https://bdnews24.com/sport/kxw1h4j819
+    published: 2026-11-03 15:41 | updated: 2026-11-03 15:41 | section: Sport | by: bdnews24.com
+[2026-11-03 15:46:49] NEW | The Financial Express | HSIA third-terminal deal holds 'contentious' hard terms
+    link: https://thefinancialexpress.com.bd/trade/hsia-third-terminal-deal-holds-contentious-hard-terms
+    published: 2026-11-03 08:39 | updated: 2026-11-03 08:39 | section: Trade
+[2026-11-03 15:46:50] NEW | The Financial Express | BTMA sets yarn price ceiling amid RMG exporters' worry
+    link: https://thefinancialexpress.com.bd/trade/btma-sets-yarn-price-ceiling-amid-rmg-exporters-worry
+    published: 2026-11-03 08:49 | updated: 2026-11-03 08:49 | section: Trade
+[2026-11-03 15:46:50] NEW | bdnews24.com | Prosecution to ask home ministry to enforce tribunal order on Hasina's assets  (also in The Financial Express)
+    link: https://bdnews24.com/bangladesh/m0lleheial
+    published: 2026-11-03 15:11 | updated: 2026-11-03 15:11 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:50] NEW | Dhaka Tribune | BGMEA, BKMEA call for collective action to secure RMG energy future
+    link: https://www.dhakatribune.com/business/423593/bgmea-bkmea-call-for-collective-action-to-secure
+    published: 2026-11-03 14:00 | updated: 2026-11-03 14:00 | section: business | by: Press Release
+[2026-11-03 15:46:51] NEW | New Age | Three more years, how much will we change?
+    link: https://www.newagebd.net/post/opinion/320710/three-more-years-how-much-will-we-change
+    published: 2026-11-03 01:00 | updated: 2026-11-03 01:07 | section: opinion | by: newagebd
+[2026-11-03 15:46:51] NEW | bdnews24.com | Hasina may try to spark unrest as long as she lives, says advisor Zahed
+    link: https://bdnews24.com/bangladesh/8b3e04ihd5
+    published: 2026-11-03 14:56 | updated: 2026-11-03 14:56 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:52] NEW | The Financial Express | Bangladesh, UAE stress early materialisation of CEPA to boost economic ties
+    link: https://thefinancialexpress.com.bd/economy/bangladesh-uae-stress-early-implementation-of-cepa
+    published: 2026-11-03 13:20 | updated: 2026-11-03 13:22 | section: Economy
+[2026-11-03 15:46:53] NEW | New Age | Workers’ demands warrant dialogue, not police brutality
+    link: https://www.newagebd.net/post/editorial/320709/workers-demands-warrant-dialogue-not-police-brutality
+    published: 2026-11-03 00:59 | updated: 2026-11-03 01:07 | section: editorial | by: newagebd
+[2026-11-03 15:46:53] NEW | bdnews24.com | Policeman attacked during worker protests in Mirpur
+    link: https://bdnews24.com/bangladesh/0z1e7du7nn
+    published: 2026-11-03 13:30 | updated: 2026-11-03 14:17 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:53] NEW | The Financial Express | Salahuddin warns of stern action against those instigating garment workers’ unrest
+    link: https://thefinancialexpress.com.bd/national/salahuddin-warns-of-stern-action-against-those-instigating-garment-workers-unrest
+    published: 2026-11-03 14:00 | updated: 2026-11-03 14:00 | section: National
+[2026-11-03 15:46:53] NEW | The Financial Express | Protesting garment workers attack police in Mirpur
+    link: https://thefinancialexpress.com.bd/national/protesting-garment-workers-attack-police-in-mirpur
+    published: 2026-11-03 13:41 | updated: 2026-11-03 14:47 | section: National
+[2026-11-03 15:46:54] NEW | bdnews24.com | Mirza Faisal Amin, Aliza Zaman sworn in as MPs in presence of PM
+    link: https://bdnews24.com/politics/q6jq0u36be
+    published: 2026-11-03 14:28 | updated: 2026-11-03 14:29 | section: Politics | by: bdnews24.com
+[2026-11-03 15:46:54] NEW | Dhaka Tribune | Police officer beaten during Mirpur labour protest
+    link: https://www.dhakatribune.com/bangladesh/dhaka/423607/police-officer-beaten-during-mirpur-labour-protest
+    published: 2026-11-03 15:37 | updated: 2026-11-03 15:37 | section: bangladesh/dhaka | by: Tribune Report
+[2026-11-03 15:46:55] NEW | New Age | Bangladesh, South Korea agree to form trade and investment working group
+    link: https://www.newagebd.net/post/trade-commerce/320766/bangladesh-south-korea-agree-to-form-trade-and-investment-working-group
+    published: 2026-11-03 13:14 | updated: 2026-11-03 14:49 | section: trade-commerce | by: newagebd
+[2026-11-03 15:46:55] NEW | The Financial Express | Solar, not quick rentals, to address power crisis: PM
+    link: https://thefinancialexpress.com.bd/national/solar-not-quick-rentals-to-address-power-crisis-pm
+    published: 2026-11-03 13:34 | updated: 2026-11-03 13:41 | section: National
+[2026-11-03 15:46:55] NEW | bdnews24.com | Private university student dies as lorry flips bus in Sitakunda, peers block highway
+    link: https://bdnews24.com/bangladesh/2bakvm4ucz
+    published: 2026-11-03 13:51 | updated: 2026-11-03 13:51 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:55] NEW | Dhaka Tribune | Why gold smuggling persists despite extensive surveillance at Dhaka airport
+    link: https://www.dhakatribune.com/bangladesh/crime/423603/why-gold-smuggling-persists-despite-extensive
+    published: 2026-11-03 15:11 | updated: 2026-11-03 15:11 | section: bangladesh/crime | by: Imran Ali
+[2026-11-03 15:46:56] NEW | The Financial Express | 33 ‘Awami League activists disguised as garment workers’ arrested: Police
+    link: https://thefinancialexpress.com.bd/national/33-al-activists-disguised-as-garment-workers-arrested-police
+    published: 2026-11-03 12:46 | updated: 2026-11-03 12:46 | section: National
+[2026-11-03 15:46:56] NEW | bdnews24.com | ACC sting catches Dhaka surveyor accepting part of ‘Tk 8mn bribe’  (also in The Financial Express)
+    link: https://bdnews24.com/bangladesh/5qrfvze65z
+    published: 2026-11-03 12:55 | updated: 2026-11-03 12:55 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:56] NEW | New Age | Bangladesh in bottom quarter of 82 economies for job growth at formal firms
+    link: https://www.newagebd.net/post/economy/320759/bangladesh-in-bottom-quarter-of-82-economies-for-job-growth-at-formal-firms
+    published: 2026-11-03 10:52 | updated: 2026-11-03 14:21 | section: economy | by: newagebd
+[2026-11-03 15:46:57] NEW | Dhaka Tribune | 75 killed in Khulna this year as extortion, gang violence surge
+    link: https://www.dhakatribune.com/bangladesh/nation/423600/75-killed-in-khulna-this-year-as-extortion-gang
+    published: 2026-11-03 14:42 | updated: 2026-11-03 14:42 | section: bangladesh/nation | by: Hedait Hossain
+[2026-11-03 15:46:57] NEW | The Financial Express | Addressing unrest in RMG sector
+    link: https://thefinancialexpress.com.bd/editorial/addressing-unrest-in-rmg-sector
+    published: 2026-11-03 00:33 | updated: 2026-11-03 00:33 | section: Editorial
+[2026-11-03 15:46:57] NEW | The Financial Express | Unrest in Sajek hills is unacceptable
+    link: https://thefinancialexpress.com.bd/columns/unrest-in-sajek-hills-is-unacceptable
+    published: 2026-11-03 00:28 | updated: 2026-11-03 00:28 | section: Columns
+[2026-11-03 15:46:57] NEW | bdnews24.com | Solar power will feed 3,000–4,000MW into grid before summer, says Tarique
+    link: https://bdnews24.com/bangladesh/1mmyrklo3i
+    published: 2026-11-03 13:19 | updated: 2026-11-03 13:19 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:46:58] NEW | New Age | Pvt sector credit growth hits 23-year low
+    link: https://www.newagebd.net/post/economy/320696/pvt-sector-credit-growth-hits-23-year-low
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:18 | section: economy | by: newagebd
+[2026-11-03 15:46:58] NEW | Dhaka Tribune | Govt targets adding 4,000MW of solar power to national grid before next summer
+    link: https://www.dhakatribune.com/bangladesh/power-energy/423591/govt-targets-adding-4-000mw-of-solar-power-to
+    published: 2026-11-03 14:26 | updated: 2026-11-03 14:26 | section: bangladesh/power-energy | by: Tribune Report
+[2026-11-03 15:46:59] NEW | The Financial Express | Will franchise buses also be commuter-friendly?
+    link: https://thefinancialexpress.com.bd/opinions/will-franchise-buses-also-be-commuter-friendly
+    published: 2026-11-03 00:23 | updated: 2026-11-03 00:23 | section: Opinions
+[2026-11-03 15:46:59] NEW | bdnews24.com | Police clear Gazipur highway after workers set fires
+    link: https://bdnews24.com/bangladesh/i133u835us
+    published: 2026-11-03 12:30 | updated: 2026-11-03 12:30 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:47:00] NEW | Dhaka Tribune | Supplementary report in Hadi murder case due on December 7
+    link: https://www.dhakatribune.com/bangladesh/court/423590/supplementary-report-in-hadi-murder-case-due-on
+    published: 2026-11-03 13:54 | updated: 2026-11-03 13:54 | section: bangladesh/court | by: Tribune Report
+[2026-11-03 15:47:00] NEW | New Age | 30th US trade show begins November 5
+    link: https://www.newagebd.net/post/trade-commerce/320695/30th-us-trade-show-begins-november-5
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:18 | section: trade-commerce | by: newagebd
+[2026-11-03 15:47:00] NEW | The Financial Express | America's $11 billion midterm election
+    link: https://thefinancialexpress.com.bd/views/americas-11-billion-midterm-election
+    published: 2026-11-03 00:17 | updated: 2026-11-03 00:17 | section: Views
+[2026-11-03 15:47:00] NEW | bdnews24.com | Lahore, Delhi choke as air pollution spikes in parts of South Asia
+    link: https://bdnews24.com/environment/z9mlg54h97
+    published: 2026-11-03 15:33 | updated: 2026-11-03 15:33 | section: Environment | by: bdnews24.com
+[2026-11-03 15:47:01] NEW | Dhaka Tribune | Kane would trade Ballon d'Or for Champions League trophy
+    link: https://www.dhakatribune.com/sport/football/423606/kane-would-trade-ballon-d-or-for-champions-league
+    published: 2026-11-03 15:24 | updated: 2026-11-03 15:24 | section: sport/football | by: AFP
+[2026-11-03 15:47:01] NEW | Dhaka Tribune | From Camp Nou holiday tour to UCL for Villa's McGinn
+    link: https://www.dhakatribune.com/sport/football/423604/from-camp-nou-holiday-tour-to-ucl-for-villa-s
+    published: 2026-11-03 15:21 | updated: 2026-11-03 15:21 | section: sport/football | by: AFP
+[2026-11-03 15:47:01] NEW | bdnews24.com | Tenerife striker Jesus de Miguel dies after collision in match
+    link: https://bdnews24.com/people/di71rtekp9
+    published: 2026-11-03 15:28 | updated: 2026-11-03 15:28 | section: People | by: bdnews24.com
+[2026-11-03 15:47:01] NEW | New Age | Shop owners seek 10:00pm closing time as sales fall
+    link: https://www.newagebd.net/post/trade-commerce/320694/shop-owners-seek-1000pm-closing-time-as-sales-fall
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:18 | section: trade-commerce | by: newagebd
+[2026-11-03 15:47:01] NEW | The Financial Express | Sept private sector credit growth dips further
+    link: https://thefinancialexpress.com.bd/economy/sept-private-sector-credit-growth-dips-further
+    published: 2026-11-03 08:21 | updated: 2026-11-03 08:39 | section: Economy
+[2026-11-03 15:47:02] NEW | Dhaka Tribune | Spanish footballer Jesus de Miguel dies after collision with goalkeeper
+    link: https://www.dhakatribune.com/sport/football/423602/spanish-footballer-jesus-de-miguel-dies-after
+    published: 2026-11-03 15:11 | updated: 2026-11-03 15:11 | section: sport/football | by: AFP
+[2026-11-03 15:47:03] NEW | bdnews24.com | Shah Rukh Khan greets fans from Mannat balcony on 61st birthday after skipping midnight ritual
+    link: https://bdnews24.com/entertainment/1dba36pyv7
+    published: 2026-11-03 12:44 | updated: 2026-11-03 12:44 | section: Entertainment | by: bdnews24.com
+[2026-11-03 15:47:03] NEW | Dhaka Tribune | Asian Cup latest event in Saudi Arabia to be postponed over safety
+    link: https://www.dhakatribune.com/sport/football/423598/asian-cup-latest-event-in-saudi-arabia-to-be
+    published: 2026-11-03 14:37 | updated: 2026-11-03 14:37 | section: sport/football | by: AFP
+[2026-11-03 15:47:04] NEW | Dhaka Tribune | Australia's Glenn Maxwell calls time on international career
+    link: https://www.dhakatribune.com/sport/cricket/423597/australia-s-glenn-maxwell-calls-time-on
+    published: 2026-11-03 14:33 | updated: 2026-11-03 14:33 | section: sport/cricket | by: AFP
+[2026-11-03 15:47:04] NEW | bdnews24.com | Oil edges up after report of US strike on Iran's Qeshm Island
+    link: https://bdnews24.com/business/8x823afv0e
+    published: 2026-11-03 11:01 | updated: 2026-11-03 11:00 | section: Business | by: bdnews24.com
+[2026-11-03 15:47:05] NEW | Dhaka Tribune | Injured Cobolli out of Paris in blow to ATP Finals hopes
+    link: https://www.dhakatribune.com/sport/tennis/423596/injured-cobolli-out-of-paris-in-blow-to-atp-finals
+    published: 2026-11-03 14:31 | updated: 2026-11-03 14:31 | section: sport/tennis | by: AFP
+[2026-11-03 15:47:05] NEW | bdnews24.com | Chinese stocks drop as Beijing's support measures disappoint
+    link: https://bdnews24.com/business/n2jgra58hn
+    published: 2026-11-03 10:39 | updated: 2026-11-03 10:39 | section: Business | by: bdnews24.com
+[2026-11-03 15:47:07] NEW | bdnews24.com | Keira Knightley says returning spy thriller 'Black Doves' balances humour and moral complexity
+    link: https://bdnews24.com/entertainment/a4yk7do1ys
+    published: 2026-11-03 10:24 | updated: 2026-11-03 10:24 | section: Entertainment | by: bdnews24.com
+[2026-11-03 15:47:07] NEW | The Daily Star | Is BNP losing control over its grassroots?
+    link: https://www.thedailystar.net/star-multimedia/news/bnp-losing-control-over-its-grassroots-4312556
+    published: 2026-11-03 00:00 | updated: 2026-11-01 10:20 | section: star-multimedia | by: Star Online Report
+[2026-11-03 15:47:08] NEW | bdnews24.com | Finland offers singles a free trip, a tasting menu and a blind date
+    link: https://bdnews24.com/lifestyle/l53c1fa8k1
+    published: 2026-11-03 11:24 | updated: 2026-11-03 11:25 | section: Lifestyle | by: bdnews24.com
+[2026-11-03 15:47:08] NEW | The Daily Star | 4 lakh students to retake exams in a month: Are boards ready?
+    link: https://www.thedailystar.net/star-multimedia/news/4-lakh-students-retake-exams-month-are-boards-ready-4312551
+    published: 2026-11-03 00:00 | updated: 2026-11-01 10:19 | section: star-multimedia | by: Star Online Report
+[2026-11-03 15:47:09] NEW | bdnews24.com | Evidence of red blood cells seen in dinosaur fossil from Brazil
+    link: https://bdnews24.com/science/3t4ms8wx8e
+    published: 2026-11-03 09:47 | updated: 2026-11-03 09:48 | section: Science | by: bdnews24.com
+[2026-11-03 15:47:09] NEW | Dhaka Tribune | Americans vote in midterms set to upend Trump presidency  (also in Prothom Alo)
+    link: https://www.dhakatribune.com/world/north-america/423605/americans-vote-in-midterms-set-to-upend-trump
+    published: 2026-11-03 15:22 | updated: 2026-11-03 15:22 | section: world/north-america | by: AFP
+[2026-11-03 15:47:09] NEW | The Daily Star | How to make shariah-based investments?
+    link: https://www.thedailystar.net/star-multimedia/news/how-make-shariah-based-investments-4312546
+    published: 2026-11-03 00:00 | updated: 2026-11-01 10:18 | section: star-multimedia | by: Star Online Report
+[2026-11-03 15:47:10] NEW | New Age | Everton beat Newcastle to pile pressure on Jaissle
+    link: https://www.newagebd.net/post/football/320752/everton-beat-newcastle-to-pile-pressure-on-jaissle
+    published: 2026-11-03 10:01 | updated: 2026-11-03 10:01 | section: football | by: newagebd
+[2026-11-03 15:47:10] NEW | bdnews24.com | Binance clients pull $4.7bn after hack as crypto world studies fallout
+    link: https://bdnews24.com/economy/ajiwd29mn9
+    published: 2026-11-03 00:53 | updated: 2026-11-03 00:53 | section: Economy | by: bdnews24.com
+[2026-11-03 15:47:10] NEW | The Daily Star | Workers’ unrest forces 200 factories to close in Savar, Ashulia: Industrial Police
+    link: https://www.thedailystar.net/news/news/workers-unrest-forces-200-factories-close-savar-ashulia-industrial-police-4314411
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:38 | section: - | by: The Daily Star
+[2026-11-03 15:47:11] NEW | The Daily Star | PM pays courtesy call on President after Japan visit
+    link: https://www.thedailystar.net/news/governance/news/pm-pays-courtesy-call-president-after-japan-visit-4314371
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:39 | section: governance
+[2026-11-03 15:47:12] NEW | New Age | Carrick shrugs off Man Utd sack talk ahead of Roma match
+    link: https://www.newagebd.net/post/football/320753/carrick-shrugs-off-man-utd-sack-talk-ahead-of-roma-match
+    published: 2026-11-03 10:10 | updated: 2026-11-03 10:10 | section: football | by: newagebd
+[2026-11-03 15:47:12] NEW | The Daily Star | Dhaka surveyor held while allegedly taking Tk 1 lakh bribe
+    link: https://www.thedailystar.net/news/crime-justice/news/dhaka-surveyor-held-while-allegedly-taking-tk-1-lakh-bribe-4314421
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:41 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:47:13] NEW | The Daily Star | Ex-ICT prosecutor leaves country as bribery probe remains incomplete
+    link: https://www.thedailystar.net/news/news/ex-ict-prosecutor-leaves-country-bribery-probe-remains-incomplete-4314376
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:47 | section: - | by: Sirajul Islam Rubel
+[2026-11-03 15:47:13] NEW | The Daily Star | Two newly elected MPs take oath
+    link: https://www.thedailystar.net/news/governance/news/two-newly-elected-mps-take-oath-4314386
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:54 | section: governance
+[2026-11-03 15:47:14] NEW | New Age | Kane would trade Ballon d'Or for Champions League trophy  (also in Dhaka Tribune)
+    link: https://www.newagebd.net/post/football/320754/kane-would-trade-ballon-dor-for-champions-league-trophy
+    published: 2026-11-03 10:14 | updated: 2026-11-03 10:14 | section: football | by: newagebd
+[2026-11-03 15:47:15] NEW | The Daily Star | SAFF Championship around the corner, but no one seems ready
+    link: https://www.thedailystar.net/sports/football/news/saff-championship-around-the-corner-no-one-seems-ready-4314361
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:00 | section: sports/football | by: Anisur Rahman
+[2026-11-03 15:47:15] NEW | New Age | When hosts become ghosts
+    link: https://www.newagebd.net/post/football/320707/when-hosts-become-ghosts
+    published: 2026-11-03 00:45 | updated: 2026-11-03 10:19 | section: football | by: newagebd
+[2026-11-03 15:47:15] NEW | The Daily Star | AFC postpones 2027 Asian Cup in Saudi Arabia due to ‘exceptional circumstances’
+    link: https://www.thedailystar.net/sports/football/news/afc-postpones-2027-asian-cup-saudi-arabia-due-exceptional-circumstances-4314396
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:31 | section: sports/football
+[2026-11-03 15:47:16] NEW | The Daily Star | US midterm election: Why it's important and races to watch
+    link: https://www.thedailystar.net/news/world/news/us-midterm-election-why-its-important-and-races-watch-4314401
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:32 | section: world | by: Deutsche Welle
+[2026-11-03 15:47:17] NEW | New Age | Chattogram close in on win
+    link: https://www.newagebd.net/post/cricket/320706/chattogram-close-in-on-win
+    published: 2026-11-03 00:44 | updated: 2026-11-03 10:19 | section: cricket | by: newagebd
+[2026-11-03 15:47:18] NEW | The Daily Star | LPG price hiked for long-term welfare: Zahed
+    link: https://www.thedailystar.net/news/news/lpg-price-hiked-long-term-welfare-zahed-4314366
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:37 | section: - | by: Star Online Report
+[2026-11-03 15:47:19] NEW | The Daily Star | Garment workers, police clash in Mirpur-11; teargas fired, several detained
+    link: https://www.thedailystar.net/news/crime-justice/news/garment-workers-police-clash-mirpur-11-teargas-fired-several-detained-4314356
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:24 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:47:19] NEW | New Age | ArtVentas concludes ‘A Collective Land Art Narrative’ in Bandarban
+    link: https://www.newagebd.net/post/photography-art-design/320732/artventas-concludes-a-collective-land-art-narrative-in-bandarban
+    published: 2026-11-03 04:29 | updated: 2026-11-03 04:32 | section: photography-art-design | by: newagebd
+[2026-11-03 15:47:20] NEW | The Daily Star | What to make of the US midterms
+    link: https://www.thedailystar.net/news-analysis/news/what-make-the-us-midterms-4313711
+    published: 2026-11-03 00:00 | updated: 2026-11-02 20:32 | section: news-analysis | by: Tanim Ahmed
+[2026-11-03 15:47:20] NEW | The Financial Express | BD, S'pore keen to boost co-op in AI, e-commerce, digital economy
+    link: https://thefinancialexpress.com.bd/trade/bd-spore-keen-to-boost-co-op-in-ai-e-commerce-digital-economy
+    published: 2026-11-03 10:54 | updated: 2026-11-03 10:54 | section: Trade
+[2026-11-03 15:47:21] NEW | New Age | Child artists paint, craft novel worlds as imagination comes alive
+    link: https://www.newagebd.net/post/photography-art-design/320733/child-artists-paint-craft-novel-worlds-as-imagination-comes-alive
+    published: 2026-11-03 04:30 | updated: 2026-11-03 04:30 | section: photography-art-design | by: newagebd
+[2026-11-03 15:47:21] NEW | The Daily Star | Govt eyes 3,000-4,000MW solar power addition before next summer: PM
+    link: https://www.thedailystar.net/news/governance/news/govt-eyes-3000-4000mw-solar-power-addition-next-summer-pm-4314301
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:01 | section: governance
+[2026-11-03 15:47:22] NEW | The Daily Star | Bangladesh, South Korea plan joint investment task force
+    link: https://www.thedailystar.net/business/news/bangladesh-south-korea-plan-joint-investment-task-force-4314296
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:53 | section: business | by: Star Business Report
+[2026-11-03 15:47:23] NEW | The Daily Star | Garment sector needs coordinated action on energy transition
+    link: https://www.thedailystar.net/business/news/garment-sector-needs-coordinated-action-energy-transition-4314381
+    published: 2026-11-03 00:00 | updated: 2026-11-03 14:50 | section: business | by: Star Business Desk
+[2026-11-03 15:47:24] NEW | New Age | Diplomats walk ramp to fund school meals across Bangladesh
+    link: https://www.newagebd.net/post/others1/320731/diplomats-walk-ramp-to-fund-school-meals-across-bangladesh
+    published: 2026-11-03 04:28 | updated: 2026-11-03 04:32 | section: others1 | by: newagebd
+[2026-11-03 15:47:24] NEW | The Daily Star | Blood on the Barred Walls: The 1975 Jail Killing Revisited
+    link: https://www.thedailystar.net/slow-reads/focus/news/blood-the-barred-walls-the-1975-jail-killing-revisited-3743131
+    published: 2026-11-03 00:35 | updated: 2026-11-03 01:41 | section: slow-reads/focus | by: Priyam Pritim Paul
+[2026-11-03 15:47:25] NEW | The Daily Star | The RMG sector must balance fair wages and industry competitiveness
+    link: https://www.thedailystar.net/opinion/views/news/the-rmg-sector-must-balance-fair-wages-and-industry-competitiveness-4312916
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:35 | section: opinion/views | by: Selim Raihan
+[2026-11-03 15:47:25] NEW | New Age | Dameer Khan releases music video for ‘Dhaka Love’
+    link: https://www.newagebd.net/post/music/320730/dameer-khan-releases-music-video-for-dhaka-love
+    published: 2026-11-03 04:26 | updated: 2026-11-03 04:32 | section: music | by: newagebd
+[2026-11-03 15:47:28] NEW | New Age | Irish bookshops help meet UK demand for Sally Rooney novels
+    link: https://www.newagebd.net/post/literature/320729/irish-bookshops-help-meet-uk-demand-for-sally-rooney-novels
+    published: 2026-11-03 04:19 | updated: 2026-11-03 04:32 | section: literature | by: newagebd
+[2026-11-03 15:47:29] NEW | bdnews24.com | 'Big Show' Maxwell announces international retirement
+    link: https://bdnews24.com/cricket/qbmfbtcl8v
+    published: 2026-11-03 09:04 | updated: 2026-11-03 09:04 | section: Cricket | by: bdnews24.com
+[2026-11-03 15:47:30] NEW | bdnews24.com | FIFA to grant access to documents from scrapped World Cup sell-off plan
+    link: https://bdnews24.com/sport/b7burma7kt
+    published: 2026-11-03 02:50 | updated: 2026-11-03 02:50 | section: Sport | by: bdnews24.com
+[2026-11-03 15:47:30] NEW | The Daily Star | Private sector credit growth slips to lowest on record
+    link: https://www.thedailystar.net/business/economy/news/private-sector-credit-growth-slips-lowest-record-4314001
+    published: 2026-11-03 00:00 | updated: 2026-11-03 00:29 | section: business/economy | by: Md Mehedi Hasan
+[2026-11-03 15:47:31] NEW | bdnews24.com | Bayern are doing well despite rollercoaster week, Kane says
+    link: https://bdnews24.com/sport/lrhpd7rhcu
+    published: 2026-11-03 02:24 | updated: 2026-11-03 02:24 | section: Sport | by: bdnews24.com
+[2026-11-03 15:47:31] NEW | The Daily Star | Why climate diplomacy matters for Bangladesh
+    link: https://www.thedailystar.net/slow-reads/geopolitical-insights/news/why-climate-diplomacy-matters-bangladesh-4312961
+    published: 2026-11-03 00:10 | updated: 2026-11-02 17:42 | section: slow-reads/geopolitical-insights | by: Mohammad Sofi Ullah
+[2026-11-03 15:47:32] NEW | New Age | Stolen luxury watch returned to Japan store with apology note
+    link: https://www.newagebd.net/post/asia/320780/stolen-luxury-watch-returned-to-japan-store-with-apology-note
+    published: 2026-11-03 15:20 | updated: 2026-11-03 15:20 | section: asia | by: newagebd
+[2026-11-03 15:47:32] NEW | bdnews24.com | Simeone salutes Kane's Ballon d'Or as in-form Atletico await Bayern
+    link: https://bdnews24.com/sport/49j76eqmhv
+    published: 2026-11-03 00:04 | updated: 2026-11-03 02:27 | section: Sport | by: bdnews24.com
+[2026-11-03 15:47:32] NEW | The Daily Star | Money market rates fell in Sept as liquidity eased
+    link: https://www.thedailystar.net/business/news/money-market-rates-fell-sept-liquidity-eased-4313901
+    published: 2026-11-03 00:00 | updated: 2026-11-02 21:39 | section: business | by: Star Business Report
+[2026-11-03 15:47:33] NEW | New Age | US strikes Iran's Qeshm island
+    link: https://www.newagebd.net/post/middle-east/320757/us-strikes-irans-qeshm-island
+    published: 2026-11-03 10:39 | updated: 2026-11-03 15:22 | section: middle-east | by: newagebd
+[2026-11-03 15:47:35] NEW | The Daily Star | 30 years of the other opinion
+    link: https://www.thedailystar.net/opinion/editorial/news/30-years-the-other-opinion-4314006
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:21 | section: opinion/editorial | by: The Daily Star
+[2026-11-03 15:47:35] NEW | New Age | Maldives ex-foreign minister arrested on sexual assault charge
+    link: https://www.newagebd.net/post/asia/320756/maldives-ex-foreign-minister-arrested-on-sexual-assault-charge
+    published: 2026-11-03 10:31 | updated: 2026-11-03 15:22 | section: asia | by: newagebd
+[2026-11-03 15:47:36] NEW | The Daily Star | How to put idle public assets to work
+    link: https://www.thedailystar.net/opinion/views/news/how-put-idle-public-assets-work-4314056
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:02 | section: opinion/views | by: Ashfaq Zaman
+[2026-11-03 15:47:37] NEW | New Age | One killed after helicopters collide in Nepal
+    link: https://www.newagebd.net/post/south-asia/320755/one-killed-after-helicopters-collide-in-nepal
+    published: 2026-11-03 10:26 | updated: 2026-11-03 14:21 | section: south-asia | by: newagebd
+[2026-11-03 15:47:37] NEW | The Daily Star | Sexual abuse in madrasas: Children must not pay the price for institutional silence
+    link: https://www.thedailystar.net/opinion/views/news/sexual-abuse-madrasas-children-must-not-pay-the-price-institutional-silence-4314036
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:58 | section: opinion/views | by: Shagufe Hossain
+[2026-11-03 15:47:38] NEW | New Age | French school protests resume
+    link: https://www.newagebd.net/post/europe/320703/french-school-protests-resume
+    published: 2026-11-03 00:30 | updated: 2026-11-03 14:05 | section: europe | by: newagebd
+[2026-11-03 15:47:38] NEW | The Daily Star | From Buriganga to the Sundarbans, BNP keeps contradicting its own environmental pledges
+    link: https://www.thedailystar.net/opinion/views/news/buriganga-the-sundarbans-bnp-keeps-contradicting-its-own-environmental-pledges-4314021
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:17 | section: opinion/views | by: Kallol Mustafa
+[2026-11-03 15:47:39] NEW | The Daily Star | The red-to-orange shift must not weaken safeguards in shipbreaking
+    link: https://www.thedailystar.net/opinion/views/news/the-red-orange-shift-must-not-weaken-safeguards-shipbreaking-4313216
+    published: 2026-11-03 00:00 | updated: 2026-11-02 18:23 | section: opinion/views | by: Ahamedul Karim Chowdhury
+[2026-11-03 15:47:39] NEW | New Age | Democrats, Trump hold final rallies before midterm elections
+    link: https://www.newagebd.net/post/north-america/320702/democrats-trump-hold-final-rallies-before-midterm-elections
+    published: 2026-11-03 00:28 | updated: 2026-11-03 14:05 | section: north-america | by: newagebd
+[2026-11-03 15:47:40] NEW | The Daily Star | Bangladesh’s demographic window narrowing amid job woes: World Bank
+    link: https://www.thedailystar.net/business/news/bangladeshs-demographic-window-narrowing-amid-job-woes-world-bank-4314271
+    published: 2026-11-03 00:00 | updated: 2026-11-03 11:55 | section: business | by: Star Business Report
+[2026-11-03 15:47:41] NEW | New Age | Philippine mountain town honours dead with fire
+    link: https://www.newagebd.net/post/asia/320700/philippine-mountain-town-honours-dead-with-fire
+    published: 2026-11-03 00:26 | updated: 2026-11-03 15:22 | section: asia | by: newagebd
+[2026-11-03 15:47:41] NEW | The Daily Star | Money market rates fell in Sept as liquidity eased
+    link: https://www.thedailystar.net/business/economy/news/money-market-rates-fell-sept-liquidity-eased-4313986
+    published: 2026-11-03 00:00 | updated: 2026-11-03 04:14 | section: business/economy | by: Star Business Report
+[2026-11-03 15:47:42] NEW | The Daily Star | Saif Powertec to run CCT for 3 more weeks
+    link: https://www.thedailystar.net/business/economy/news/saif-powertec-run-cct-3-more-weeks-4313981
+    published: 2026-11-03 00:00 | updated: 2026-11-03 01:21 | section: business/economy | by: Dwaipayan Barua
+[2026-11-03 15:47:44] NEW | The Daily Star | BTRC seeks Tk 21,250cr for spectrum renewal
+    link: https://www.thedailystar.net/business/economy/news/btrc-seeks-tk-21250cr-spectrum-renewal-4313996
+    published: 2026-11-03 00:00 | updated: 2026-11-03 00:31 | section: business/economy | by: Mahmudul Hasan
+[2026-11-03 15:47:45] NEW | The Financial Express | Learning to use AI responsibly: Inside the University of Alabama’s AI experience
+    link: https://thefinancialexpress.com.bd/views/learning-to-use-ai-responsibly-inside-the-university-of-alabamas-ai-experience
+    published: 2026-11-03 10:58 | updated: 2026-11-03 11:00 | section: Views
+[2026-11-03 15:47:45] NEW | The Daily Star | Efficient fans could cut peak power demand by 2,590MW
+    link: https://www.thedailystar.net/business/economy/news/efficient-fans-could-cut-peak-power-demand-2590mw-4313991
+    published: 2026-11-03 00:00 | updated: 2026-11-03 00:34 | section: business/economy | by: Asifur Rahman
+[2026-11-03 15:47:46] NEW | The Daily Star | Spanish footballer Jesus de Miguel dies after collision with goalkeeper  (also in Dhaka Tribune)
+    link: https://www.thedailystar.net/sports/football/news/spanish-footballer-jesus-de-miguel-dies-after-collision-goalkeeper-4314416
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:38 | section: sports/football
+[2026-11-03 15:47:46] NEW | bdnews24.com | ‘Percy Jackson’ Season 3 prepares for clash between gods and Titans in November
+    link: https://bdnews24.com/entertainment/rho74xyqzy
+    published: 2026-11-03 02:09 | updated: 2026-11-03 02:09 | section: Entertainment | by: bdnews24.com
+[2026-11-03 15:47:47] NEW | The Daily Star | No Marufa as Bangladesh announce squad for Emerging Nations Trophy
+    link: https://www.thedailystar.net/sports/cricket/news/no-marufa-bangladesh-announce-squad-emerging-nations-trophy-4314341
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:13 | section: sports/cricket | by: Sports Reporter
+[2026-11-03 15:47:47] NEW | The Daily Star | Cristiano Ronaldo Jr earns maiden Portugal U-17 call-up
+    link: https://www.thedailystar.net/sports/football/news/cristiano-ronaldo-jr-earns-maiden-portugal-u-17-call-4314321
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:38 | section: sports/football | by: Agencies
+[2026-11-03 15:47:48] NEW | New Age | SMUCT signs memo with Malaysia’s INTI Int’l Univ
+    link: https://www.newagebd.net/post/campus-bites/320743/smuct-signs-memo-with-malaysias-inti-intl-univ
+    published: 2026-11-03 05:15 | updated: 2026-11-03 05:15 | section: campus-bites | by: newagebd
+[2026-11-03 15:47:48] NEW | The Daily Star | From tourist to captain: McGinn's Camp Nou full-circle moment
+    link: https://www.thedailystar.net/sports/football/news/tourist-captain-mcginns-camp-nou-full-circle-moment-4314306
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:05 | section: sports/football
+[2026-11-03 15:47:49] NEW | The Daily Star | India-Pakistan 2027 World Cup clash triggers record 8.4 million ticket rush
+    link: https://www.thedailystar.net/sports/cricket/news/india-pakistan-2027-world-cup-clash-triggers-record-84-million-ticket-rush-4314261
+    published: 2026-11-03 00:00 | updated: 2026-11-03 10:56 | section: sports/cricket | by: Reuters
+[2026-11-03 15:47:51] NEW | The Daily Star | ‘Rokzana’ singer Shahed Ali in ICU after stroke, dengue diagnosis
+    link: https://www.thedailystar.net/culture/entertainment/news/rokzana-singer-shahed-ali-icu-after-stroke-dengue-diagnosis-4314311
+    published: 2026-11-03 00:00 | updated: 2026-11-03 12:18 | section: culture/entertainment | by: Arts & Entertainment Desk
+[2026-11-03 15:47:51] NEW | New Age | JnU celebrates 21st founding anniversary
+    link: https://www.newagebd.net/post/campus-bites/320735/jnu-celebrates-21st-founding-anniversary
+    published: 2026-11-03 04:51 | updated: 2026-11-03 05:12 | section: campus-bites | by: newagebd
+[2026-11-03 15:47:52] NEW | The Daily Star | Jennifer Lawrence, Ella Langley, Tyler Childers to feature on ‘Hunger Games’ companion album
+    link: https://www.thedailystar.net/culture/tv-film/news/jennifer-lawrence-ella-langley-tyler-childers-feature-hunger-games-companion-album-4314406
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:36 | section: culture/tv-film | by: Arts & Entertainment Desk
+[2026-11-03 15:47:53] NEW | The Daily Star | Shajal, Adhora Khan’s first film together set for December release
+    link: https://www.thedailystar.net/culture/tv-film/news/shajal-adhora-khans-first-film-together-set-december-release-4314391
+    published: 2026-11-03 00:00 | updated: 2026-11-03 15:31 | section: culture/tv-film | by: Arts & Entertainment Desk
+[2026-11-03 15:47:54] NEW | The Daily Star | Tahsan, Mehazabien to appear as guest judges on a reality show
+    link: https://www.thedailystar.net/culture/entertainment/news/tahsan-mehazabien-appear-guest-judges-reality-show-4314281
+    published: 2026-11-03 00:00 | updated: 2026-11-03 11:31 | section: culture/entertainment | by: Arts & Entertainment Desk
+[2026-11-03 15:47:55] NEW | The Daily Star | Once a Television favourite, what is Ratri’s life like in the US?
+    link: https://www.thedailystar.net/culture/entertainment/news/once-television-favourite-what-ratris-life-the-us-4314256
+    published: 2026-11-03 00:00 | updated: 2026-11-03 10:34 | section: culture/entertainment | by: Shah Alam Shazu
+[2026-11-03 15:47:56] NEW | The Daily Star | How to make an ordinary shirt look extraordinary
+    link: https://www.thedailystar.net/life-living/fashion-beauty/news/how-make-ordinary-shirt-look-extraordinary-4313801
+    published: 2026-11-03 00:00 | updated: 2026-11-02 19:34 | section: life-living/fashion-beauty | by: Mehdi Islam Mahi
+[2026-11-03 15:47:57] NEW | The Daily Star | Smear campaign exposes personal details of alleged interfaith couples in Bangladesh, investigation finds
+    link: https://www.thedailystar.net/news/technology/news/smear-campaign-exposes-personal-details-alleged-interfaith-couples-bangladesh-investigation-finds-4313671
+    published: 2026-11-03 00:00 | updated: 2026-11-03 13:23 | section: technology | by: Zarif Faiaz
+[2026-11-03 15:47:57] NEW | bdnews24.com | Australian outback data centre pulls timeline after regulator stalls
+    link: https://bdnews24.com/the-long-read/vnhegavjbh
+    published: 2026-11-03 09:41 | updated: 2026-11-03 09:41 | section: THE LONG READ | by: bdnews24.com
+[2026-11-03 15:47:58] NEW | The Daily Star | A guide to autumn styling in Dhaka
+    link: https://www.thedailystar.net/life-living/fashion-beauty/news/guide-autumn-styling-dhaka-4313796
+    published: 2026-11-03 00:00 | updated: 2026-11-02 19:25 | section: life-living/fashion-beauty | by: Sabrina N Bhuiyan
+[2026-11-03 15:47:59] NEW | The Daily Star | AI chatbots keep citing a man named ‘Elias Thorne’. He doesn’t exist
+    link: https://www.thedailystar.net/news/technology/news/ai-chatbots-keep-citing-man-named-elias-thorne-he-doesnt-exist-4313681
+    published: 2026-11-03 00:00 | updated: 2026-11-02 17:44 | section: technology | by: Zarif Faiaz
+[2026-11-03 15:48:00] NEW | Bangladesh Sangbad Sangstha | Bangladesh urges swift implementation of D-8 FTA, PTA | News Flash
+    link: https://www.bssnews.net/news-flash/441353
+    published: unknown | updated: 2026-11-03 09:45 | section: news-flash
+[2026-11-03 15:48:00] NEW | The Daily Star | How to effortlessly style shades of blue
+    link: https://www.thedailystar.net/life-living/fashion-beauty/news/how-effortlessly-style-shades-blue-4313786
+    published: 2026-11-03 00:00 | updated: 2026-11-02 19:17 | section: life-living/fashion-beauty | by: Samayla Mahjabin Koishy
+[2026-11-03 15:48:00] NEW | Bangladesh Sangbad Sangstha | US strikes Iran's Qeshm island: Wall Street Journal | News Flash
+    link: https://www.bssnews.net/news-flash/441320
+    published: unknown | updated: 2026-11-03 09:09 | section: news-flash
+[2026-11-03 15:48:01] NEW | The Daily Star | What came before the big bang?
+    link: https://www.thedailystar.net/news/technology/news/what-came-the-big-bang-4313701
+    published: 2026-11-03 00:00 | updated: 2026-11-02 17:44 | section: technology | by: Zarif Faiaz
+[2026-11-03 15:48:02] NEW | The Daily Star | The sun, the moon and the stories we wear
+    link: https://www.thedailystar.net/life-living/fashion-beauty/news/the-sun-the-moon-and-the-stories-we-wear-4313771
+    published: 2026-11-03 00:00 | updated: 2026-11-02 19:07 | section: life-living/fashion-beauty | by: Mahabub Siddique Tajvee
+[2026-11-03 15:48:03] NEW | The Daily Star | Hello, stranger! Why talking to unknown people makes my heart full
+    link: https://www.thedailystar.net/life-living/news/hello-stranger-why-talking-unknown-people-makes-my-heart-full-4312831
+    published: 2026-11-03 00:00 | updated: 2026-11-01 18:11 | section: life-living | by: Wara Karim
+[2026-11-03 15:48:04] NEW | The Daily Star | Is AI making you stupid? Scientists have a reason to worry
+    link: https://www.thedailystar.net/life-living/news/ai-making-you-stupid-scientists-have-reason-worry-4312051
+    published: 2026-11-03 00:00 | updated: 2026-10-31 20:25 | section: life-living | by: Farhana Faiza
+[2026-11-03 15:48:04] NEW | New Age | New York reports first measles death in 30 years
+    link: https://www.newagebd.net/post/childrens-health/320775/new-york-reports-first-measles-death-in-30-years
+    published: 2026-11-03 14:32 | updated: 2026-11-03 14:32 | section: childrens-health | by: newagebd
+[2026-11-03 15:48:05] NEW | The Daily Star | Kaftans and Coords: Your pre-winter wardrobe guide
+    link: https://www.thedailystar.net/life-living/fashion-beauty/news/kaftans-and-coords-your-pre-winter-wardrobe-guide-4312826
+    published: 2026-11-03 00:00 | updated: 2026-11-01 18:06 | section: life-living/fashion-beauty | by: K T Humaira
+[2026-11-03 15:48:06] NEW | The Daily Star | Plastic monster statue at Cox’s Bazar raises awareness of pollution
+    link: https://www.thedailystar.net/life-living/news/plastic-monster-statue-coxs-bazar-raises-awareness-pollution-4310501
+    published: 2026-11-03 00:00 | updated: 2026-10-29 15:12 | section: life-living | by: Mokammel Shuvo
+[2026-11-03 15:48:06] NEW | New Age | Dengue, measles claim nine more lives
+    link: https://www.newagebd.net/post/childrens-health/320748/dengue-measles-claim-nine-more-lives
+    published: 2026-11-03 05:22 | updated: 2026-11-03 14:33 | section: childrens-health | by: newagebd
+[2026-11-03 15:48:07] NEW | The Daily Star | Turning candid wedding moments into lasting memory
+    link: https://www.thedailystar.net/life-living/news/turning-candid-wedding-moments-lasting-memory-4312816
+    published: 2026-11-03 00:00 | updated: 2026-11-01 17:53 | section: life-living | by: Ayman Anika
+[2026-11-03 15:48:07] NEW | The Daily Star | HSC results should prompt a rethink of how we teach and assess
+    link: https://www.thedailystar.net/opinion/views/news/hsc-results-should-prompt-rethink-how-we-teach-and-assess-4313231
+    published: 2026-11-03 00:00 | updated: 2026-11-02 17:17 | section: opinion/views | by: MM Shahidul Hassan
+[2026-11-03 15:48:08] NEW | The Daily Star | Bangladesh at a crossroads: data sovereignty, energy shortages and the race for AI
+    link: https://www.thedailystar.net/business/news/bangladesh-crossroads-data-sovereignty-energy-shortages-and-the-race-ai-4313481
+    published: 2026-11-03 00:00 | updated: 2026-11-02 11:29 | section: business | by: Syed Almas Kabir
+[2026-11-03 15:48:09] NEW | The Daily Star | Remittance inflow grows but stays below $3b for fifth month
+    link: https://www.thedailystar.net/business/news/remittance-inflow-grows-stays-below-3b-fifth-month-4313136
+    published: 2026-11-03 00:00 | updated: 2026-11-02 18:00 | section: business | by: Md Mehedi Hasan
+[2026-11-03 15:48:10] NEW | Dhaka Tribune | PM calls for funding to support young innovators
+    link: https://www.dhakatribune.com/bangladesh/423589/pm-calls-for-funding-to-support-young-innovators
+    published: 2026-11-03 13:28 | updated: 2026-11-03 13:28 | section: bangladesh | by: Tribune Report
+[2026-11-03 15:48:11] NEW | The Daily Star | US midterms: Why Bangladesh has a stake in the result
+    link: https://www.thedailystar.net/slow-reads/geopolitical-insights/news/us-midterms-why-bangladesh-has-stake-the-result-4312081
+    published: 2026-11-03 00:10 | updated: 2026-11-01 10:10 | section: slow-reads/geopolitical-insights | by: Ayesha Tariq
+[2026-11-03 15:48:12] NEW | Dhaka Tribune | Fresh clashes erupt as garment worker protests continue in Ashulia
+    link: https://www.dhakatribune.com/bangladesh/423588/clashes-tear-gas-as-garment-worker-protests
+    published: 2026-11-03 12:28 | updated: 2026-11-03 12:28 | section: bangladesh | by: Ariful Islam Sabbir
+[2026-11-03 15:48:12] NEW | The Daily Star | LDC graduation: Bangladesh sets reform targets for EU, UN to watch
+    link: https://www.thedailystar.net/news/bangladesh/news/ldc-graduation-bangladesh-sets-reform-targets-eu-un-watch-4312371
+    published: 2026-11-03 00:00 | updated: 2026-11-01 10:09 | section: bangladesh | by: Rejaul Karim Byron
+[2026-11-03 15:48:13] NEW | Dhaka Tribune | Clashes erupt in Mirpur for third consecutive day
+    link: https://www.dhakatribune.com/bangladesh/dhaka/423586/clashes-erupt-in-mirpur-for-third-consecutive-day
+    published: 2026-11-03 11:40 | updated: 2026-11-03 11:40 | section: bangladesh/dhaka | by: Tribune Report
+[2026-11-03 15:48:14] NEW | The Daily Star | Can wind power work in Bangladesh?
+    link: https://www.thedailystar.net/slow-reads/big-picture/news/can-wind-power-work-bangladesh-4313251
+    published: 2026-11-03 00:25 | updated: 2026-11-02 00:44 | section: slow-reads/big-picture | by: Shahriar Ahmed Chowdhury 
+[2026-11-03 15:48:14] NEW | Dhaka Tribune | Crude bomb explodes beneath Agargaon metro station
+    link: https://www.dhakatribune.com/bangladesh/dhaka/423577/crude-bomb-explodes-beneath-agargaon-metro-station
+    published: 2026-11-03 00:12 | updated: 2026-11-03 00:12 | section: bangladesh/dhaka | by: Tribune Report
+[2026-11-03 15:48:20] NEW | The Daily Star | Why Bangladesh must look beyond great-power rivalry in the Bay of Bengal
+    link: https://www.thedailystar.net/slow-reads/geopolitical-insights/news/why-bangladesh-must-look-beyond-great-power-rivalry-the-bay-bengal-4312101
+    published: 2026-11-03 00:10 | updated: 2026-11-01 03:35 | section: slow-reads/geopolitical-insights | by: Zillur Rahman
+[2026-11-03 15:48:23] NEW | The Daily Star | Govt bets Tk 2,320cr on jute revival
+    link: https://www.thedailystar.net/news/bangladesh/news/govt-bets-tk-2320cr-jute-revival-4311086
+    published: 2026-11-03 00:00 | updated: 2026-10-31 10:13 | section: bangladesh | by: Mohiuddin Alamgir and Sukanta Halder
+[2026-11-03 15:48:24] NEW | The Daily Star | Bangladesh gets 3 more years for LDC graduation
+    link: https://www.thedailystar.net/news/bangladesh/news/bangladesh-gets-3-more-years-ldc-graduation-4311091
+    published: 2026-11-03 00:00 | updated: 2026-10-30 20:24 | section: bangladesh | by: Refayet Ullah Mirdha
+[2026-11-03 15:48:26] NEW | The Daily Star | Secondary Schools: As classrooms thin out, govt sleeps on
+    link: https://www.thedailystar.net/news/education/news/secondary-schools-classrooms-thin-out-govt-sleeps-4310296
+    published: 2026-11-03 00:00 | updated: 2026-10-29 09:55 | section: education | by: Mohiuddin Alamgir
+[2026-11-03 15:48:27] NEW | The Daily Star | Mob killings persist despite pledges of action
+    link: https://www.thedailystar.net/news/crime-justice/news/mob-killings-persist-despite-pledges-action-4310291
+    published: 2026-11-03 00:00 | updated: 2026-10-29 09:15 | section: crime-justice | by: Dipan Nandy
+[2026-11-03 15:48:31] NEW | The Daily Star | Why Bangladesh needs a new growth model
+    link: https://www.thedailystar.net/slow-reads/big-picture/news/why-bangladesh-needs-new-growth-model-4305801
+    published: 2026-11-03 00:25 | updated: 2026-10-25 11:19 | section: slow-reads/big-picture | by: M.G. Quibria
+[2026-11-03 15:48:34] NEW | The Daily Star | In foreign jails, with little help from missions
+    link: https://www.thedailystar.net/news/bangladesh/news/foreign-jails-little-help-missions-4305941
+    published: 2026-11-03 00:00 | updated: 2026-10-24 09:27 | section: bangladesh | by: Dipan Nandy
+[2026-11-03 15:48:35] NEW | The Daily Star | Will foreign firms run all four Chattogram port terminals?
+    link: https://www.thedailystar.net/business/economy/news/will-foreign-firms-run-all-four-chattogram-port-terminals-4305216
+    published: 2026-11-03 00:00 | updated: 2026-10-23 10:09 | section: business/economy | by: Dwaipayan Barua
+[2026-11-03 15:48:36] NEW | The Daily Star | Govt plans Tk 21,900cr digital makeover for schools
+    link: https://www.thedailystar.net/news/bangladesh/news/govt-plans-tk-21900cr-digital-makeover-schools-4305456
+    published: 2026-11-03 00:00 | updated: 2026-10-23 04:06 | section: bangladesh | by: Mohiuddin Alamgir and Arafat Rahaman
+[2026-11-03 15:48:37] NEW | New Age | IIUC student killed in road accident, students block Dhaka-Ctg highway
+    link: https://www.newagebd.net/post/country/320781/iiuc-student-killed-in-road-accident-students-block-dhaka-ctg-highway
+    published: 2026-11-03 15:28 | updated: 2026-11-03 15:28 | section: country | by: newagebd
+[2026-11-03 15:48:37] NEW | The Daily Star | Remittance and fuel: Bangladesh's double exposure to the Gulf crisis
+    link: https://www.thedailystar.net/news/world/middle-east/news/remittance-and-fuel-bangladeshs-double-exposure-the-gulf-crisis-4297721
+    published: 2026-11-03 00:00 | updated: 2026-10-13 18:43 | section: world/middle-east | by: Tanim Ahmed
+[2026-11-03 15:48:38] NEW | The Daily Star | Indian national held with gold paste worth Tk 1.55 crore at Satkhira border
+    link: https://www.thedailystar.net/news/crime-justice/news/indian-national-held-gold-paste-worth-tk-155-crore-satkhira-border-4314251
+    published: 2026-11-03 00:00 | updated: 2026-11-03 10:01 | section: crime-justice
+[2026-11-03 15:48:39] NEW | The Daily Star | Khulna sees four killings in 3 days
+    link: https://www.thedailystar.net/news/crime-justice/news/khulna-sees-four-killings-3-days-4314196
+    published: 2026-11-03 00:00 | updated: 2026-11-03 08:53 | section: crime-justice
+[2026-11-03 15:48:39] NEW | New Age | BGB uses body-worn cameras to monitor labour unrest
+    link: https://www.newagebd.net/post/law-order/320772/bgb-uses-body-worn-cameras-to-monitor-labour-unrest
+    published: 2026-11-03 13:50 | updated: 2026-11-03 15:36 | section: law-order | by: newagebd
+[2026-11-03 15:48:40] NEW | bdnews24.com | Nearly 800,000 higher education seats expected to remain vacant
+    link: https://bdnews24.com/bangladesh/v3xxcxoq9j
+    published: 2026-11-03 01:17 | updated: 2026-11-03 02:36 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:48:40] NEW | The Daily Star | Clashes, blockades continue on 3rd day of RMG unrest
+    link: https://www.thedailystar.net/news/crime-justice/news/clashes-blockades-continue-3rd-day-rmg-unrest-4314151
+    published: 2026-11-03 00:00 | updated: 2026-11-03 08:12 | section: crime-justice | by: Star Report
+[2026-11-03 15:48:40] NEW | New Age | Mirza Faisal Amin, Eliza Zaman sworn in as MPs
+    link: https://www.newagebd.net/post/country/320771/mirza-faisal-amin-eliza-zaman-sworn-in-as-mps
+    published: 2026-11-03 13:38 | updated: 2026-11-03 14:10 | section: country | by: newagebd
+[2026-11-03 15:48:41] NEW | bdnews24.com | No savings, mounting debts: Why Bangladesh garment workers want Tk 30,000
+    link: https://bdnews24.com/bangladesh/rmg8dkz9f2
+    published: 2026-11-03 02:06 | updated: 2026-11-03 02:35 | section: Bangladesh | by: bdnews24.com
+[2026-11-03 15:48:42] NEW | New Age | Former whip Nazrul Islam Babu’s APS arrested in Dhaka
+    link: https://www.newagebd.net/post/law-order/320770/former-whip-nazrul-islam-babus-aps-arrested-in-dhaka
+    published: 2026-11-03 13:28 | updated: 2026-11-03 15:02 | section: law-order | by: newagebd
+[2026-11-03 15:48:42] NEW | The Daily Star | July memorial set on fire in Jashore
+    link: https://www.thedailystar.net/news/crime-justice/news/july-memorial-set-fire-jashore-4313896
+    published: 2026-11-03 00:00 | updated: 2026-11-02 21:32 | section: crime-justice
+[2026-11-03 15:48:43] NEW | The Daily Star | SC forms inquiry committee to probe irregularities in 18 HC verdicts on primary teacher recruitment
+    link: https://www.thedailystar.net/news/crime-justice/news/sc-forms-inquiry-committee-probe-irregularities-18-hc-verdicts-primary-teacher-recruitment-4313856
+    published: 2026-11-03 00:00 | updated: 2026-11-02 20:23 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:48:43] NEW | New Age | Washington to mediate talks with Kyiv and Moscow in Abu Dhabi, says Witkoff
+    link: https://www.newagebd.net/post/north-america/320769/washington-to-mediate-talks-with-kyiv-and-moscow-in-abu-dhabi-says-witkoff
+    published: 2026-11-03 13:26 | updated: 2026-11-03 15:02 | section: north-america | by: newagebd
+[2026-11-03 15:48:44] NEW | The Financial Express | Cyclone Murasu makes landfall on India's eastern coast
+    link: https://thefinancialexpress.com.bd/world/cyclone-murasu-makes-landfall-on-indias-eastern-coast
+    published: 2026-11-03 09:25 | updated: 2026-11-03 09:25 | section: World
+[2026-11-03 15:48:45] NEW | The Daily Star | ACC approves three cases against Salman, son Shayan over alleged Tk 1,121cr embezzlement
+    link: https://www.thedailystar.net/news/crime-justice/news/acc-approves-three-cases-against-salman-son-shayan-over-alleged-tk-1121cr-embezzlement-4313846
+    published: 2026-11-03 00:00 | updated: 2026-11-02 20:18 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:48:45] NEW | New Age | Police can shoot to kill only under lawful circumstances: adviser Zahed
+    link: https://www.newagebd.net/post/country/320768/police-can-shoot-to-kill-only-under-lawful-circumstances-adviser-zahed
+    published: 2026-11-03 13:26 | updated: 2026-11-03 15:02 | section: country | by: newagebd
+[2026-11-03 15:48:46] NEW | The Daily Star | SC upholds HC bail order for ex-MP Akhtaruzzaman, no bar to release
+    link: https://www.thedailystar.net/news/politics/news/sc-upholds-hc-bail-order-ex-mp-akhtaruzzaman-no-bar-release-4313781
+    published: 2026-11-03 00:00 | updated: 2026-11-02 19:12 | section: politics | by: Star Online Report
+[2026-11-03 15:48:47] NEW | New Age | Former Chhatra League leader found dead in rented flat in Gazipur
+    link: https://www.newagebd.net/post/country/320767/former-chhatra-league-leader-found-dead-in-rented-flat-in-gazipur
+    published: 2026-11-03 13:19 | updated: 2026-11-03 15:02 | section: country | by: newagebd
+[2026-11-03 15:48:47] NEW | The Daily Star | 'Domestic, foreign conspiracies' behind garment unrest, senior police officials say
+    link: https://www.thedailystar.net/news/crime-justice/news/domestic-foreign-conspiracies-behind-garment-unrest-senior-police-officials-say-4313776
+    published: 2026-11-03 00:00 | updated: 2026-11-02 21:22 | section: crime-justice
+[2026-11-03 15:48:48] NEW | New Age | Bangladesh urges D-8 to finalise and implement FTA, PTA frameworks
+    link: https://www.newagebd.net/post/foreign-affairs/320764/bangladesh-urges-d-8-to-finalise-and-implement-fta-pta-frameworks
+    published: 2026-11-03 12:33 | updated: 2026-11-03 14:21 | section: foreign-affairs | by: newagebd
+[2026-11-03 15:48:48] NEW | The Daily Star | ACC sues ex-Banshkhali mayor over 174 building plan approvals
+    link: https://www.thedailystar.net/news/crime-justice/news/acc-sues-ex-banshkhali-mayor-over-174-building-plan-approvals-4313761
+    published: 2026-11-03 00:00 | updated: 2026-11-02 18:57 | section: crime-justice
+[2026-11-03 15:48:49] NEW | bdnews24.com | Renaissance Dhaka GM calls for clear goals, investment to unlock hotel industry potential
+    link: https://bdnews24.com/business/3cm5tlpv0z
+    published: 2026-11-03 00:28 | updated: 2026-11-03 00:28 | section: Business | by: bdnews24.com
+[2026-11-03 15:48:49] NEW | The Daily Star | Two bodies recovered from river as Khulna sees four killings in three days
+    link: https://www.thedailystar.net/news/crime-justice/news/two-bodies-recovered-river-khulna-sees-four-killings-three-days-4313726
+    published: 2026-11-03 00:00 | updated: 2026-11-02 18:06 | section: crime-justice
+[2026-11-03 15:48:49] NEW | New Age | Closed garment factories to reopen soon, says home minister
+    link: https://www.newagebd.net/post/country/320763/closed-garment-factories-to-reopen-soon-says-home-minister
+    published: 2026-11-03 12:43 | updated: 2026-11-03 14:21 | section: country | by: newagebd
+[2026-11-03 15:48:51] NEW | The Daily Star | Youth lands in jail over alleged rape of 10-year-old in Jhenaidah
+    link: https://www.thedailystar.net/news/crime-justice/news/youth-lands-jail-over-alleged-rape-10-year-old-jhenaidah-4313686
+    published: 2026-11-03 00:00 | updated: 2026-11-02 17:37 | section: crime-justice
+[2026-11-03 15:48:51] NEW | New Age | Take to the streets with cylinders to protest: Patwary
+    link: https://www.newagebd.net/post/politics/320762/take-to-the-streets-with-cylinders-to-protest-patwary
+    published: 2026-11-03 11:35 | updated: 2026-11-03 15:02 | section: politics | by: newagebd
+[2026-11-03 15:48:52] NEW | The Daily Star | ICT prosecution submits formal charge against seven AL leaders
+    link: https://www.thedailystar.net/news/crime-justice/news/ict-prosecution-submits-formal-charge-against-seven-al-leaders-4313591
+    published: 2026-11-03 00:00 | updated: 2026-11-02 15:10 | section: crime-justice | by: Star Online Report 
+[2026-11-03 15:48:53] NEW | bdnews24.com | Trump approval near career low ahead of elections, Reuters/Ipsos poll finds
+    link: https://bdnews24.com/world/l-midterms
+    published: 2026-11-03 10:53 | updated: 2026-11-03 10:53 | section: World | by: bdnews24.com
+[2026-11-03 15:48:53] NEW | New Age | 4 garment factories declare holidays amid fresh unrest in Ashulia, Savar
+    link: https://www.newagebd.net/post/country/320761/4-garment-factories-declare-holidays-amid-fresh-unrest-in-ashulia-savar
+    published: 2026-11-03 11:31 | updated: 2026-11-03 14:49 | section: country | by: newagebd
+[2026-11-03 15:48:53] NEW | The Daily Star | 131 deadlines missed, Sagar-Runi families still wait for justice
+    link: https://www.thedailystar.net/news/crime-justice/news/131-deadlines-missed-sagar-runi-families-still-wait-justice-4313496
+    published: 2026-11-03 00:00 | updated: 2026-11-02 11:58 | section: crime-justice | by: Emrul Hasan Bappi and Ashutsoh Sarkar
+[2026-11-03 15:48:54] NEW | bdnews24.com | US strategy links Myanmar peace talks to rare-earth access
+    link: https://bdnews24.com/world/p796ymmsc4
+    published: 2026-11-03 10:43 | updated: 2026-11-03 10:43 | section: World | by: bdnews24.com
+[2026-11-03 15:48:54] NEW | New Age | Security tightened in Gazipur, Narayanganj as garment workers continue protest
+    link: https://www.newagebd.net/post/country/320760/security-tightened-in-gazipur-narayanganj-as-garment-workers-continue-protest
+    published: 2026-11-03 11:11 | updated: 2026-11-03 14:49 | section: country | by: newagebd
+[2026-11-03 15:48:55] NEW | The Daily Star | Mirpur protest: Man arrested over burning of police vehicle
+    link: https://www.thedailystar.net/news/crime-justice/news/mirpur-protest-man-arrested-over-burning-police-vehicle-4313471
+    published: 2026-11-03 00:00 | updated: 2026-11-02 11:28 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:48:55] NEW | bdnews24.com | US to mediate trilateral talks with Ukraine, Russia in Abu Dhabi next week, US envoy says
+    link: https://bdnews24.com/world/em99qus7ds
+    published: 2026-11-03 10:42 | updated: 2026-11-03 10:42 | section: World | by: bdnews24.com
+[2026-11-03 15:48:56] NEW | The Daily Star | Another friend of Tahsif placed on remand
+    link: https://www.thedailystar.net/news/crime-justice/news/another-friend-tahsif-placed-remand-4313286
+    published: 2026-11-03 00:00 | updated: 2026-11-02 07:54 | section: crime-justice | by: Dipan Nandy
+[2026-11-03 15:48:56] NEW | New Age | 4 burned in garment factory compressor explosion in Narayanganj
+    link: https://www.newagebd.net/post/country/320751/4-burned-in-garment-factory-compressor-explosion-in-narayanganj
+    published: 2026-11-03 09:51 | updated: 2026-11-03 14:49 | section: country | by: newagebd
+[2026-11-03 15:48:58] NEW | The Daily Star | Khulna Tanti Dal leader hacked to death
+    link: https://www.thedailystar.net/news/crime-justice/news/khulna-tanti-dal-leader-hacked-death-4313316
+    published: 2026-11-03 00:00 | updated: 2026-11-02 08:05 | section: crime-justice
+[2026-11-03 15:48:58] NEW | Dhaka Tribune | Everton beat Newcastle to pile pressure on Jaissle  (also in New Age)
+    link: https://www.dhakatribune.com/sport/football/423595/everton-beat-newcastle-to-pile-pressure-on-jaissle
+    published: 2026-11-03 14:10 | updated: 2026-11-03 14:10 | section: sport/football | by: AFP
+[2026-11-03 15:48:58] NEW | New Age | Dhaka hopes for Ganges water sharing treaty: Shama Obaed
+    link: https://www.newagebd.net/post/foreign-affairs/320750/dhaka-hopes-for-ganges-water-sharing-treaty-shama-obaed
+    published: 2026-11-03 05:25 | updated: 2026-11-03 13:11 | section: foreign-affairs | by: newagebd
+[2026-11-03 15:48:59] NEW | The Daily Star | Two confess in journalist Alif murder case
+    link: https://www.thedailystar.net/news/crime-justice/news/two-confess-journalist-alif-murder-case-4313321
+    published: 2026-11-03 00:00 | updated: 2026-11-02 03:43 | section: crime-justice
+[2026-11-03 15:49:00] NEW | New Age | PM for comprehensive preparations to address earthquake risks
+    link: https://www.newagebd.net/post/country/320749/pm-for-comprehensive-preparations-to-address-earthquake-risks
+    published: 2026-11-03 05:23 | updated: 2026-11-03 05:23 | section: country | by: newagebd
+[2026-11-03 15:49:00] NEW | The Daily Star | Khulna Tanti Dal leader hacked to death at his business establishment
+    link: https://www.thedailystar.net/news/crime-justice/news/khulna-tanti-dal-leader-hacked-death-his-business-establishment-4313021
+    published: 2026-11-03 00:00 | updated: 2026-11-01 22:10 | section: crime-justice
+[2026-11-03 15:49:02] NEW | The Daily Star | 65 outlaws surrender before SRB in Sirajganj
+    link: https://www.thedailystar.net/news/crime-justice/news/65-outlaws-surrender-srb-sirajganj-4312981
+    published: 2026-11-03 00:00 | updated: 2026-11-01 21:14 | section: crime-justice
+[2026-11-03 15:49:02] NEW | bdnews24.com | Snapchat settles with two teens during trial testing claims social media caused depression, eating disorders
+    link: https://bdnews24.com/technology/ovqm8duab9
+    published: 2026-11-03 00:58 | updated: 2026-11-03 00:58 | section: Technology | by: bdnews24.com
+[2026-11-03 15:49:02] NEW | New Age | Cabinet approves 29 public days for 2027
+    link: https://www.newagebd.net/post/country/320747/cabinet-approves-29-public-days-for-2027
+    published: 2026-11-03 05:21 | updated: 2026-11-03 05:21 | section: country | by: newagebd
+[2026-11-03 15:49:03] NEW | The Daily Star | Two confess in journalist Alif's murder
+    link: https://www.thedailystar.net/news/crime-justice/news/two-confess-journalist-alifs-murder-4312976
+    published: 2026-11-03 00:00 | updated: 2026-11-01 21:13 | section: crime-justice
+[2026-11-03 15:49:04] NEW | New Age | Motorcycles to have front number plates
+    link: https://www.newagebd.net/post/country/320746/motorcycles-to-have-front-number-plates
+    published: 2026-11-03 05:19 | updated: 2026-11-03 05:19 | section: country | by: newagebd
+[2026-11-03 15:49:05] NEW | The Daily Star | Parties run on power-centric business model: TIB
+    link: https://www.thedailystar.net/news/politics/political-parties/news/parties-run-power-centric-business-model-tib-4312921
+    published: 2026-11-03 00:00 | updated: 2026-11-01 20:21 | section: politics/political-parties | by: Star Online Report
+[2026-11-03 15:49:06] NEW | New Age | Most city corpns yet to start e-rickshaw reg
+    link: https://www.newagebd.net/post/country/320745/most-city-corpns-yet-to-start-e-rickshaw-reg
+    published: 2026-11-03 05:17 | updated: 2026-11-03 05:17 | section: country | by: newagebd
+[2026-11-03 15:49:06] NEW | The Daily Star | Man hacked to death in Dhaka’s Lalbagh
+    link: https://www.thedailystar.net/news/crime-justice/news/man-hacked-death-dhakas-lalbagh-4312911
+    published: 2026-11-03 00:00 | updated: 2026-11-01 19:23 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:49:07] NEW | New Age | Bangladesh, US launch joint disaster response training exercise
+    link: https://www.newagebd.net/post/country/320744/bangladesh-us-launch-joint-disaster-response-training-exercise
+    published: 2026-11-03 05:16 | updated: 2026-11-03 10:09 | section: country | by: newagebd
+[2026-11-03 15:49:08] NEW | The Daily Star | Case filed over attack on 1971 war crimes witness’s home in Sunamganj
+    link: https://www.thedailystar.net/news/crime-justice/news/case-filed-over-attack-1971-war-crimes-witnesss-home-sunamganj-4312861
+    published: 2026-11-03 00:00 | updated: 2026-11-01 18:37 | section: crime-justice
+[2026-11-03 15:49:09] NEW | New Age | Madrassah founder arrested for ‘raping student’
+    link: https://www.newagebd.net/post/country/320742/madrassah-founder-arrested-for-raping-student
+    published: 2026-11-03 05:14 | updated: 2026-11-03 05:14 | section: country | by: newagebd
+[2026-11-03 15:49:10] NEW | The Daily Star | Showkat Aziz Russell sent to jail after surrender in Purbachal plot corruption case
+    link: https://www.thedailystar.net/news/crime-justice/corruption/news/showkat-aziz-russell-sent-jail-after-surrender-purbachal-plot-corruption-case-4312841
+    published: 2026-11-03 00:00 | updated: 2026-11-01 19:35 | section: crime-justice/corruption | by: Star Online Report
+[2026-11-03 15:49:10] NEW | New Age | BMU holds discussion on former VC MA Hadi
+    link: https://www.newagebd.net/post/country/320741/bmu-holds-discussion-on-former-vc-ma-hadi
+    published: 2026-11-03 05:13 | updated: 2026-11-03 05:13 | section: country | by: newagebd
+[2026-11-03 15:49:11] NEW | The Daily Star | Students out on streets after dusk will face arrest: Chattogram Range DIG
+    link: https://www.thedailystar.net/news/crime-justice/news/students-out-streets-after-dusk-will-face-arrest-chattogram-range-dig-4312756
+    published: 2026-11-03 00:00 | updated: 2026-11-01 16:57 | section: crime-justice
+[2026-11-03 15:49:12] NEW | New Age | Goal to generate 3-4 thousand MW of solar power next summer: Amit
+    link: https://www.newagebd.net/post/country/320740/goal-to-generate-3-4-thousand-mw-of-solar-power-next-summer-amit
+    published: 2026-11-03 05:09 | updated: 2026-11-03 05:09 | section: country | by: newagebd
+[2026-11-03 15:49:12] NEW | The Daily Star | Tahsif Souri death: Friend Disha placed on four-day remand
+    link: https://www.thedailystar.net/news/crime-justice/news/tahsif-souri-death-friend-disha-placed-four-day-remand-4312711
+    published: 2026-11-03 00:00 | updated: 2026-11-01 16:43 | section: crime-justice | by: Star Online Report 
+[2026-11-03 15:49:13] NEW | The Daily Star | Romance, family feuds, social media: What drove 1,689 children from home in Barishal division
+    link: https://www.thedailystar.net/news/crime-justice/news/romance-family-feuds-social-media-what-drove-1689-children-home-barishal-division-4312651
+    published: 2026-11-03 00:00 | updated: 2026-11-01 13:12 | section: crime-justice | by: ​​Sushanta Ghosh
+[2026-11-03 15:49:14] NEW | New Age | Panthakunja Park ramp work continues amid legal dispute
+    link: https://www.newagebd.net/post/country/320739/panthakunja-park-ramp-work-continues-amid-legal-dispute
+    published: 2026-11-03 05:03 | updated: 2026-11-03 05:03 | section: country | by: newagebd
+[2026-11-03 15:49:14] NEW | The Daily Star | Retired army officer Abdul Hafiz detained from Banani
+    link: https://www.thedailystar.net/news/crime-justice/news/retired-army-officer-abdul-hafiz-detained-banani-4312591
+    published: 2026-11-03 00:00 | updated: 2026-11-01 11:35 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:49:16] NEW | New Age | HC asks govt to implement 2020 air pollution directives
+    link: https://www.newagebd.net/post/country/320738/hc-asks-govt-to-implement-2020-air-pollution-directives
+    published: 2026-11-03 05:01 | updated: 2026-11-03 05:01 | section: country | by: newagebd
+[2026-11-03 15:49:16] NEW | The Daily Star | Two unidentified bodies found in Jashore
+    link: https://www.thedailystar.net/news/crime-justice/news/two-unidentified-bodies-found-jashore-4312586
+    published: 2026-11-03 00:00 | updated: 2026-11-01 11:32 | section: crime-justice
+[2026-11-03 15:49:17] NEW | New Age | SAU students again vandalise old trade fair ground structures
+    link: https://www.newagebd.net/post/education/320737/sau-students-again-vandalise-old-trade-fair-ground-structures
+    published: 2026-11-03 05:00 | updated: 2026-11-03 05:00 | section: education | by: newagebd
+[2026-11-03 15:49:17] NEW | The Daily Star | Youth stabbed to death in Khulna
+    link: https://www.thedailystar.net/news/crime-justice/news/youth-stabbed-death-khulna-4312516
+    published: 2026-11-03 00:00 | updated: 2026-11-01 09:11 | section: crime-justice
+[2026-11-03 15:49:19] NEW | The Daily Star | Alif Murder: 2 more suspects detained
+    link: https://www.thedailystar.net/news/crime-justice/news/alif-murder-2-more-suspects-detained-4312426
+    published: 2026-11-03 00:00 | updated: 2026-11-01 06:16 | section: crime-justice
+[2026-11-03 15:49:19] NEW | New Age | Mymensingh ‘Iron House’ decays
+    link: https://www.newagebd.net/post/country/320736/mymensingh-iron-house-decays
+    published: 2026-11-03 04:55 | updated: 2026-11-03 04:55 | section: country | by: newagebd
+[2026-11-03 15:49:19] NEW | The Daily Star | Addl DIG Abdullah Al Jahir suspended over DJ party
+    link: https://www.thedailystar.net/news/crime-justice/news/addl-dig-abdullah-al-jahir-suspended-over-dj-party-4312431
+    published: 2026-11-03 00:00 | updated: 2026-11-01 06:17 | section: crime-justice | by: Staff correspondent
+[2026-11-03 15:49:20] NEW | New Age | DoE disconnects 10 factories’ electricity for pollution
+    link: https://www.newagebd.net/post/country/320734/doe-disconnects-10-factories-electricity-for-pollution
+    published: 2026-11-03 04:49 | updated: 2026-11-03 04:49 | section: country | by: newagebd
+[2026-11-03 15:49:21] NEW | The Daily Star | Mob violence claims 32 lives in October: MSF
+    link: https://www.thedailystar.net/news/crime-justice/news/mob-violence-claims-32-lives-october-msf-4312486
+    published: 2026-11-03 00:00 | updated: 2026-11-01 06:04 | section: crime-justice | by: Staff Correspondent
+[2026-11-03 15:49:22] NEW | The Daily Star | Tahsif’s death: Police claim they found evidence against Dip
+    link: https://www.thedailystar.net/news/crime-justice/news/tahsifs-death-police-claim-they-found-evidence-against-dip-4312361
+    published: 2026-11-03 00:00 | updated: 2026-11-01 11:47 | section: crime-justice | by: Dipan Nandy
+[2026-11-03 15:49:22] NEW | New Age | Protests, strikes disrupt road communications in 3 districts
+    link: https://www.newagebd.net/post/country/320728/protests-strikes-disrupt-road-communications-in-3-districts
+    published: 2026-11-03 02:04 | updated: 2026-11-03 02:04 | section: country | by: newagebd
+[2026-11-03 15:49:24] NEW | New Age | Eliza elected MP to reserved women’s seat
+    link: https://www.newagebd.net/post/country/320727/eliza-elected-mp-to-reserved-womens-seat
+    published: 2026-11-03 02:03 | updated: 2026-11-03 02:03 | section: country | by: newagebd
+[2026-11-03 15:49:24] NEW | The Daily Star | Addl DIG Abdullah Al Jahir suspended over DJ party at Purbachal house
+    link: https://www.thedailystar.net/news/crime-justice/news/addl-dig-abdullah-al-jahir-suspended-over-dj-party-purbachal-house-4312056
+    published: 2026-11-03 00:00 | updated: 2026-10-31 20:52 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:49:25] NEW | New Age | MP’s son put on two-day fresh remand
+    link: https://www.newagebd.net/post/politics/320726/mps-son-put-on-two-day-fresh-remand
+    published: 2026-11-03 02:01 | updated: 2026-11-03 11:45 | section: politics | by: newagebd
+[2026-11-03 15:49:25] NEW | The Daily Star | Journalist Alif murder: 2 more detained
+    link: https://www.thedailystar.net/news/crime-justice/news/journalist-alif-murder-2-more-detained-4312041
+    published: 2026-11-03 00:00 | updated: 2026-10-31 20:33 | section: crime-justice
+[2026-11-03 15:49:27] NEW | The Daily Star | Boro Sazzad's aide arrested over Tk 50 lakh extortion threat in Ctg
+    link: https://www.thedailystar.net/news/crime-justice/news/boro-sazzads-aide-arrested-over-tk-50-lakh-extortion-threat-ctg-4312031
+    published: 2026-11-03 00:00 | updated: 2026-10-31 20:15 | section: crime-justice
+[2026-11-03 15:49:27] NEW | New Age | Agri minister warns district authorities, dealers of punitive action
+    link: https://www.newagebd.net/post/country/320725/agri-minister-warns-district-authorities-dealers-of-punitive-action
+    published: 2026-11-03 01:58 | updated: 2026-11-03 01:58 | section: country | by: newagebd
+[2026-11-03 15:49:28] NEW | The Daily Star | Tahsif murder: Friend Dip placed on four-day remand
+    link: https://www.thedailystar.net/news/crime-justice/news/tahsif-murder-friend-dip-placed-four-day-remand-4311916
+    published: 2026-11-03 00:00 | updated: 2026-10-31 16:55 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:49:30] NEW | The Daily Star | Tahsif’s friend Dip arrested after father files murder case
+    link: https://www.thedailystar.net/news/crime-justice/news/tahsifs-friend-dip-shown-arrested-after-father-files-murder-case-4311821
+    published: 2026-11-03 00:00 | updated: 2026-10-31 12:28 | section: crime-justice | by: Star Online Report
+[2026-11-03 15:49:32] NEW | New Age | ACC okays 3 cases against Salman F Rahman, 36 others
+    link: https://www.newagebd.net/post/country/320723/acc-okays-3-cases-against-salman-f-rahman-36-others
+    published: 2026-11-03 01:51 | updated: 2026-11-03 15:02 | section: country | by: newagebd
+[2026-11-03 15:49:34] NEW | New Age | Govt eyes 90pc e-health card coverage in 6 dists by May
+    link: https://www.newagebd.net/post/country/320722/govt-eyes-90pc-e-health-card-coverage-in-6-dists-by-may
+    published: 2026-11-03 01:49 | updated: 2026-11-03 14:21 | section: country | by: newagebd
+[2026-11-03 15:49:35] NEW | New Age | Govt, owners, workers hope to settle new wage by December
+    link: https://www.newagebd.net/post/country/320721/govt-owners-workers-hope-to-settle-new-wage-by-december
+    published: 2026-11-03 01:44 | updated: 2026-11-03 15:00 | section: country | by: newagebd
+[2026-11-03 15:49:36] NEW | New Age | Iran ready to reopen Hormuz in two days if US agrees to demands
+    link: https://www.newagebd.net/post/middle-east/320720/iran-ready-to-reopen-hormuz-in-two-days-if-us-agrees-to-demands
+    published: 2026-11-03 01:43 | updated: 2026-11-03 14:05 | section: middle-east | by: newagebd
+[2026-11-03 15:49:38] NEW | New Age | Democrat backs Republican in Michigan Senate race shock
+    link: https://www.newagebd.net/post/north-america/320719/democrat-backs-republican-in-michigan-senate-race-shock
+    published: 2026-11-03 01:40 | updated: 2026-11-03 14:05 | section: north-america | by: newagebd
+[2026-11-03 15:49:39] NEW | New Age | Fridge cyberattack hits supermarkets across Europe
+    link: https://www.newagebd.net/post/europe/320718/fridge-cyberattack-hits-supermarkets-across-europe
+    published: 2026-11-03 01:38 | updated: 2026-11-03 15:22 | section: europe | by: newagebd
+[2026-11-03 15:49:41] NEW | New Age | Shootings become routine in Khulna, 75 murders this year
+    link: https://www.newagebd.net/post/country/320717/shootings-become-routine-in-khulna-75-murders-this-year
+    published: 2026-11-03 01:36 | updated: 2026-11-03 14:05 | section: country | by: newagebd
+[2026-11-03 15:54:53] NEW | The Business Standard | Over 300 factories close as workers clash with cops in Ashulia, Gazipur, Mirpur, attempt to blockade roads
+    link: https://www.tbsnews.net/economy/rmg/rmg-unrest-continues-gazipur-ashulia-bgb-deployed-police-fire-tear-gas-1591016
+    published: 2026-11-03 11:00 | updated: 2026-11-03 15:43 | section: economy/rmg | by: TBS Report
+[2026-11-03 15:55:04] NEW | The Business Standard | 690 RMG factories halt production as violence drags on for 3rd day
+    link: https://www.tbsnews.net/economy/rmg/690-rmg-factories-halt-production-violence-drags-3rd-day-1590891
+    published: 2026-11-03 00:10 | updated: 2026-11-03 00:22 | section: economy/rmg | by: TBS Report
+[2026-11-03 15:55:24] NEW | The Business Standard | Protesters beat police constable after finding him isolated in Mirpur
+    link: https://www.tbsnews.net/bangladesh/garment-workers-beat-police-constable-after-finding-him-isolated-mirpur-1591201
+    published: 2026-11-03 14:10 | updated: 2026-11-03 14:18 | section: bangladesh | by: TBS Report
+[2026-11-03 15:55:35] NEW | The Business Standard | Govt sympathetic to garment workers' demands: PM's information adviser
+    link: https://www.tbsnews.net/bangladesh/govt-sympathetic-garment-workers-demands-pms-information-adviser-1591226
+    published: 2026-11-03 14:25 | updated: 2026-11-03 14:29 | section: bangladesh | by: TBS Report
+[2026-11-03 15:55:45] NEW | The Business Standard | Jubo Dal, Chhatra Dal march in Mirpur to 'prevent sabotage' amid RMG unrest
+    link: https://www.tbsnews.net/bangladesh/jubo-dal-chhatra-dal-march-mirpur-prevent-sabotage-amid-rmg-unrest-1591246
+    published: 2026-11-03 15:00 | updated: 2026-11-03 15:07 | section: bangladesh | by: TBS Report
+[2026-11-03 15:55:55] NEW | The Business Standard | PM pays courtesy call on President after Japan visit  (also in The Daily Star)
+    link: https://www.tbsnews.net/bangladesh/pm-pays-courtesy-call-president-after-japan-visit-1591231
+    published: 2026-11-03 14:35 | updated: 2026-11-03 14:47 | section: bangladesh | by: UNB
+[2026-11-03 15:56:05] NEW | The Business Standard | Vested group fueling anarchy under guise of labour protests: DNCC administrator
+    link: https://www.tbsnews.net/bangladesh/vested-group-fueling-anarchy-under-guise-labour-protests-dncc-administrator-1591271
+    published: 2026-11-03 15:25 | updated: 2026-11-03 15:29 | section: bangladesh | by: TBS Report
+[2026-11-03 15:56:15] NEW | The Business Standard | Surveyor caught taking Tk1 lakh bribe for land mutation
+    link: https://www.tbsnews.net/bangladesh/surveyor-caught-taking-tk1-lakh-bribe-land-mutation-1591266
+    published: 2026-11-03 15:20 | updated: 2026-11-03 15:28 | section: bangladesh | by: TBS Report
+[2026-11-03 15:56:25] NEW | The Business Standard | RMG unrest: Metro rail services at Mirpur-10, 11 stations disrupted for 40 minutes
+    link: https://www.tbsnews.net/bangladesh/metro-rail-services-mirpur-10-11-stations-resume-after-40-minute-suspension-1591191
+    published: 2026-11-03 13:45 | updated: 2026-11-03 14:37 | section: bangladesh | by: TBS Report
+[2026-11-03 15:56:36] NEW | The Business Standard | BNP delegation leaves for Seoul to attend ICAPP conference on 4-7 Nov
+    link: https://www.tbsnews.net/bangladesh/bnp-delegation-leaves-seoul-attend-icapp-conference-4-7-nov-1591261
+    published: 2026-11-03 15:20 | updated: 2026-11-03 15:28 | section: bangladesh | by: TBS Report
+[2026-11-03 15:56:46] NEW | The Business Standard | Solar, not quick rentals, to address power crisis: PM  (also in The Financial Express)
+    link: https://www.tbsnews.net/bangladesh/solar-not-quick-rentals-address-power-crisis-pm-1591206
+    published: 2026-11-03 14:10 | updated: 2026-11-03 14:39 | section: bangladesh | by: BSS
+[2026-11-03 15:56:56] NEW | The Business Standard | Singapore backs Khalilur Rahman's efforts to strengthen UN
+    link: https://www.tbsnews.net/foreign-policy/singapore-backs-khalilur-rahmans-efforts-strengthen-un-1591251
+    published: 2026-11-03 15:20 | updated: 2026-11-03 15:23 | section: foreign-policy | by: TBS Report
+[2026-11-03 15:57:06] NEW | The Business Standard | 'Fuel of the poor' LPG soars in Pakistan, forcing rickshaw drivers to cut meals
+    link: https://www.tbsnews.net/world/south-asia/fuel-poor-lpg-soars-pakistan-forcing-rickshaw-drivers-cut-meals-1591216
+    published: 2026-11-03 14:15 | updated: 2026-11-03 14:24 | section: world/south-asia | by: Reuters
+[2026-11-03 15:57:17] NEW | The Business Standard | Production suspended at 306 garment factories until 11am today
+    link: https://www.tbsnews.net/bangladesh/production-suspended-306-garment-factories-until-11am-today-1591171
+    published: 2026-11-03 13:25 | updated: 2026-11-03 13:46 | section: bangladesh | by: TBS Report
+[2026-11-03 15:57:27] NEW | The Business Standard | BTRC proposes 20-year spectrum allocation, revised fees
+    link: https://www.tbsnews.net/bangladesh/btrc-proposes-20-year-spectrum-allocation-revised-fees-1590986
+    published: 2026-11-03 11:00 | updated: 2026-11-03 12:25 | section: bangladesh | by: Shaikh Abdullah
+[2026-11-03 15:58:59] NEW | The Business Standard | শ্রমিক বিক্ষোভ: আশুলিয়া, মিরপুর, গাজীপুরে সংঘর্ষ; ১২ প্লাটুন বিজিবি মোতায়েন; বন্ধ ৩০০-র বেশি কারখানা
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560376
+    published: 2026-11-03 10:50 | updated: 2026-11-03 14:01 | section: bangla/bangladesh | by: টিবিএস রিপোর্ট
+[2026-11-03 15:59:09] NEW | The Business Standard | ছাদে সৌরবিদ্যুৎ স্থাপনে অর্থায়ন করতে ১,৫০০ কোটি টাকার সবুজ তহবিল বরাদ্দ
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560411
+    published: 2026-11-03 12:40 | updated: 2026-11-03 12:39 | section: bangla/bangladesh | by: সাজ্জাদ হোসেন
+[2026-11-03 15:59:19] NEW | The Business Standard | মিরপুরে পুলিশ সদস্যকে একা পেয়ে বেধড়ক পেটালেন আন্দোলনকারীরা
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560491
+    published: 2026-11-03 13:55 | updated: 2026-11-03 14:20 | section: bangla/bangladesh | by: টিবিএস রিপোর্ট
+[2026-11-03 15:59:30] NEW | The Business Standard | মিরপুরে শ্রমিকদের আন্দোলনে ‘নাশকতা ঠেকাতে’ স্টাম্প ও লাঠিসোঁটা হাতে যুবদল-ছাত্রদল নেতাকর্মীদের অবস্থান
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560501
+    published: 2026-11-03 14:35 | updated: 2026-11-03 14:36 | section: bangla/bangladesh | by: টিবিএস রিপোর্ট
+[2026-11-03 15:59:40] NEW | The Business Standard | শ্রমিকদের উসকানি দিয়ে পরিস্থিতি অস্থিতিশীল করার চেষ্টা করলে তা কঠোর হাতে দমন করা হবে: স্বরাষ্ট্রমন্ত্রী
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560516
+    published: 2026-11-03 14:50 | updated: 2026-11-03 15:00 | section: bangla/bangladesh | by: বাসস
+[2026-11-03 15:59:50] NEW | The Business Standard | রাষ্ট্রপতির সঙ্গে প্রধানমন্ত্রীর সৌজন্য সাক্ষাৎ
+    link: https://www.tbsnews.net/bangla/bangladesh/news-details-560506
+    published: 2026-11-03 14:35 | updated: 2026-11-03 14:42 | section: bangla/bangladesh | by: বাসস
+[2026-11-03 16:00:41] NEW | The Business Standard | Hasina will never let us live in peace: information adviser
+    link: https://www.tbsnews.net/videos/hasina-will-never-let-us-live-peace-information-adviser-1591236
+    published: 2026-11-03 14:45 | updated: 2026-11-03 14:48 | section: videos | by: TBS Report
+[2026-11-03 16:00:51] NEW | The Business Standard | North Korea denies being behind record $6.3bn Binance hack
+    link: https://www.tbsnews.net/videos/north-korea-denies-being-behind-record-63bn-binance-hack-1591211
+    published: 2026-11-03 14:10 | updated: 2026-11-03 14:15 | section: videos | by: TBS Report
+[2026-11-03 16:01:02] NEW | The Business Standard | US military strikes Iran as explosions rock Qeshm Island near Strait of Hormuz
+    link: https://www.tbsnews.net/videos/us-military-strikes-iran-explosions-rock-qeshm-island-near-strait-hormuz-1591176
+    published: 2026-11-03 13:25 | updated: 2026-11-03 13:30 | section: videos | by: TBS Report
+[2026-11-03 16:01:12] NEW | The Business Standard | Who pays for the Gazipur BRT fiasco?
+    link: https://www.tbsnews.net/features/panorama/who-pays-gazipur-brt-fiasco-1590921
+    published: 2026-11-03 02:10 | updated: 2026-11-03 09:46 | section: features/panorama | by: Sabbir Ahmad
+[2026-11-03 16:03:57] NEW | The Business Standard | The backbone bleeds: Why Bangladesh’s RMG unrest was foreseeable
+    link: https://www.tbsnews.net/thoughts/backbone-bleeds-why-bangladeshs-rmg-unrest-was-foreseeable-1590926
+    published: 2026-11-03 06:40 | updated: 2026-11-03 09:47 | section: thoughts | by: Simon Mohsin
+[2026-11-03 16:04:18] NEW | The Business Standard | Bangladesh has two decades to harness demographic dividend, says World Bank
+    link: https://www.tbsnews.net/economy/bangladesh-has-two-decades-harness-demographic-dividend-says-world-bank-1591001
+    published: 2026-11-03 10:40 | updated: 2026-11-03 11:08 | section: economy | by: TBS Report
