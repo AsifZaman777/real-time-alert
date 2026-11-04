@@ -1,0 +1,19 @@
+{
+  "name": "BigWarn — Bangladesh Real-Time Local Disruption Alerts",
+  "short_name": "BigWarn Edge",
+  "description": "Privacy-first edge mobile alert PWA & real-time Bangladesh news stream powered by Apache Spark & Lakehouse ELT",
+  "start_url": "/?tab=edge",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0b6b4f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

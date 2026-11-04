@@ -1,0 +1,8 @@
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+# Optional Stage 2-4 Big Data / Lakehouse dependencies:
+# kafka-python>=2.0.2
+# pyspark>=3.5.0
+# delta-spark>=3.1.0
+# pyarrow>=15.0.0
+
