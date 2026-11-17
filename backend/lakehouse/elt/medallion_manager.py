@@ -19,6 +19,18 @@ def _norm_key(headline: str) -> str:
     return re.sub(r"[^\w]+", " ", headline.lower(), flags=re.UNICODE).strip()[:65]
 
 
+EVENT_SEVERITY: dict[str, tuple[str, str]] = {
+    "blockade": ("CRITICAL", "#EF4444"),
+    "strike": ("CRITICAL", "#EF4444"),
+    "clash": ("CRITICAL", "#EF4444"),
+    "fire": ("CRITICAL", "#EF4444"),
+    "accident": ("HIGH", "#F59E0B"),
+    "procession": ("HIGH", "#F59E0B"),
+    "waterlogging": ("MODERATE", "#3B82F6"),
+    "power_outage": ("MODERATE", "#3B82F6"),
+}
+
+
 class MedallionLakehouseManager:
     """Materializes and queries Bronze (raw), Silver (cleansed/enriched), and Gold
     (multi-source corroborated area alerts) layers for the ELT pipeline."""
@@ -108,9 +120,22 @@ class MedallionLakehouseManager:
         gold_alerts: list[dict[str, Any]] = []
         for cid, cl in event_clusters.items():
             num_sources = len(cl["sources"])
-            # Veracity / Credibility score per Section 4 of the Proposal PDF
+            # Veracity / Credibility score: base 0.45 + 0.18 per distinct source + 0.08 bilingual corroboration
             credibility_score = min(0.99, round(0.45 + 0.18 * num_sources + (0.08 if len(cl["languages"]) > 1 else 0.0), 2))
-            status = "CONFIRMED" if num_sources >= 2 else "UNCONFIRMED (Single Source)"
+            veracity_percent = int(round(credibility_score * 100))
+            if num_sources >= 3:
+                status = "VERIFIED (Multi-Source)"
+                veracity_tier = "HIGH"
+            elif num_sources == 2:
+                status = "CONFIRMED"
+                veracity_tier = "MEDIUM"
+            else:
+                status = "UNCONFIRMED (Single Source)"
+                veracity_tier = "LOW"
+
+            severity, color = EVENT_SEVERITY.get(cl["event_type"], ("MODERATE", "#6B7280"))
+            source_word = "newspaper/portal" if num_sources == 1 else "newspapers/portals"
+
             gold_alerts.append(
                 {
                     "cluster_id": cid,
@@ -120,8 +145,13 @@ class MedallionLakehouseManager:
                     "lat": cl["lat"],
                     "lon": cl["lon"],
                     "event_type": cl["event_type"],
+                    "severity": severity,
+                    "color": color,
                     "credibility_score": credibility_score,
+                    "veracity_percent": veracity_percent,
+                    "veracity_tier": veracity_tier,
                     "veracity_status": status,
+                    "veracity_summary": f"Verified by {num_sources} {source_word}",
                     "source_count": num_sources,
                     "sources": sorted(cl["sources"]),
                     "languages": sorted(cl["languages"]),
@@ -135,9 +165,21 @@ class MedallionLakehouseManager:
 
         gold_alerts.sort(key=lambda x: (x["source_count"], x["credibility_score"]), reverse=True)
 
-        # Persist Gold snapshot to Lakehouse Gold directory
+        # Persist Bronze, Silver, and Gold snapshots to Lakehouse directories
+        bronze_file = self.bronze_dir / f"bronze_articles_{day}.jsonl"
+        silver_file = self.silver_dir / f"silver_disruptions_{day}.jsonl"
         gold_file = self.gold_dir / f"gold_alerts_{day}.json"
         try:
+            if raw_items and not bronze_file.exists():
+                bronze_file.write_text(
+                    "\n".join(json.dumps(r, ensure_ascii=False) for r in raw_items) + "\n",
+                    encoding="utf-8",
+                )
+            if silver_records:
+                silver_file.write_text(
+                    "\n".join(json.dumps(s, ensure_ascii=False) for s in silver_records) + "\n",
+                    encoding="utf-8",
+                )
             gold_file.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError:
             pass

@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, now_dhaka, settings
+from backend.app.services.route_service import filter_alerts_for_route
 from backend.ingestion.enrichment.taxonomy import extract_disruption_tags
 from backend.ingestion.sources.registry import get_all_sources_metadata
 from backend.lakehouse.elt.medallion_manager import MedallionLakehouseManager
@@ -26,6 +27,7 @@ class StreamService:
         self.poc_logdir = PROJECT_ROOT / "news-live-POC" / "logs"
         self.primary_logdir.mkdir(parents=True, exist_ok=True)
         self.lakehouse = MedallionLakehouseManager()
+        self._lakehouse_cache: dict[str, tuple[tuple[str, int, float], dict[str, Any]]] = {}
 
     def _candidate_logdirs(self) -> list[Path]:
         dirs = [self.primary_logdir]
@@ -123,6 +125,68 @@ class StreamService:
         }
 
     def get_lakehouse_elt(self, day: str) -> dict[str, Any]:
-        _, items = self.read_items(day, after=0, enrich_legacy=True)
-        return self.lakehouse.build_medallion_snapshot(items, day)
+        resolved_day = self.resolve_day(day)
+        path = self._resolve_file(f"news_stream_{resolved_day}.jsonl")
+        if path and path.exists():
+            st = path.stat()
+            sig = (str(path), st.st_size, st.st_mtime)
+            cached = self._lakehouse_cache.get(resolved_day)
+            if cached and cached[0] == sig:
+                return cached[1]
+            _, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
+            snapshot = self.lakehouse.build_medallion_snapshot(items, resolved_day)
+            self._lakehouse_cache[resolved_day] = (sig, snapshot)
+            return snapshot
+        _, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
+        return self.lakehouse.build_medallion_snapshot(items, resolved_day)
+
+    def resolve_day(self, day: str | None) -> str:
+        """Resolves 'latest' (or missing) to the most recent day that actually has stream data."""
+        if day and day != "latest" and DAY_RE.match(day):
+            return day
+        for d in self.list_days():
+            p = self._resolve_file(f"news_stream_{d}.jsonl")
+            if p and p.stat().st_size > 0:
+                return d
+        return self.today_str()
+
+    def get_map_alerts(self, day: str | None = None) -> dict[str, Any]:
+        snapshot = self.get_lakehouse_elt(day or "latest")
+        return {
+            "date": snapshot["date"],
+            "layers": snapshot["layers"],
+            "total_alerts": len(snapshot["gold_alerts"]),
+            "alerts": snapshot["gold_alerts"],
+            "area_metadata": snapshot["area_metadata"],
+        }
+
+    def get_route_alerts(
+        self,
+        day: str | None,
+        cur_lat: float,
+        cur_lon: float,
+        dest_lat: float,
+        dest_lon: float,
+        todo: str = "",
+        radius_km: float = 2.5,
+        include_map: bool = False,
+    ) -> dict[str, Any]:
+        snapshot = self.get_lakehouse_elt(day or "latest")
+        filtered = filter_alerts_for_route(
+            gold_alerts=snapshot["gold_alerts"],
+            cur_lat=cur_lat,
+            cur_lon=cur_lon,
+            dest_lat=dest_lat,
+            dest_lon=dest_lon,
+            todo_text=todo,
+            radius_km=radius_km,
+        )
+        result = {
+            "date": snapshot["date"],
+            "layers": snapshot["layers"],
+            **filtered,
+        }
+        if include_map:
+            result["map_alerts"] = snapshot["gold_alerts"]
+        return result
 

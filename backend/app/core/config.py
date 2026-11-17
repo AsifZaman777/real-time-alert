@@ -33,7 +33,7 @@ def now_dhaka() -> datetime:
 class Settings:
     app_name: str = "BigWarn Real-Time Disruption Alert Backend"
     version: str = "2.0.0"
-    api_host: str = os.getenv("BIGWARN_API_HOST", "127.0.0.1")
+    api_host: str = os.getenv("BIGWARN_API_HOST", "0.0.0.0")
     api_port: int = int(os.getenv("BIGWARN_API_PORT", "8765"))
 
     # Storage paths

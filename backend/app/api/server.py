@@ -9,6 +9,7 @@ import argparse
 import json
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -28,8 +29,8 @@ from backend.ingestion.sources.registry import get_all_sources_metadata  # noqa:
 
 def make_api_handler(service: StreamService):
     class ApiHandler(BaseHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
+        def log_message(self, format, *args):
+            print(f"[BigWarn API] {self.client_address[0]} - {format % args}")
 
         def _send(self, code: int, body: bytes, ctype: str) -> None:
             self.send_response(code)
@@ -79,20 +80,108 @@ def make_api_handler(service: StreamService):
             elif path in ("/api/sources", "/api/v1/sources"):
                 self._json({"total": 45, "sources": get_all_sources_metadata()})
             elif path in ("/api/lakehouse", "/api/v1/lakehouse"):
-                day = (q.get("date") or [service.today_str()])[0]
-                if not DAY_RE.match(day):
+                day = (q.get("date") or ["latest"])[0]
+                if day != "latest" and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
                 self._json(service.get_lakehouse_elt(day))
+            elif path in ("/api/alerts/map", "/api/v1/alerts/map"):
+                day = (q.get("date") or ["latest"])[0]
+                if day != "latest" and not DAY_RE.match(day):
+                    return self._send(400, b"bad date", "text/plain")
+                self._json(service.get_map_alerts(day))
+            elif path in ("/api/alerts/route", "/api/v1/alerts/route"):
+                day = (q.get("date") or ["latest"])[0]
+                if day != "latest" and not DAY_RE.match(day):
+                    return self._send(400, b"bad date", "text/plain")
+                try:
+                    cur_lat = float((q.get("cur_lat") or ["23.7461"])[0])
+                    cur_lon = float((q.get("cur_lon") or ["90.3742"])[0])
+                    dest_lat = float((q.get("dest_lat") or ["23.7330"])[0])
+                    dest_lon = float((q.get("dest_lon") or ["90.4172"])[0])
+                    radius_km = float((q.get("radius_km") or ["2.5"])[0])
+                except ValueError:
+                    return self._send(400, b"bad coordinates", "text/plain")
+                todo = (q.get("todo") or [""])[0]
+                include_map = (q.get("include_map") or ["0"])[0] in ("1", "true", "yes")
+                self._json(
+                    service.get_route_alerts(
+                        day=day,
+                        cur_lat=cur_lat,
+                        cur_lon=cur_lon,
+                        dest_lat=dest_lat,
+                        dest_lon=dest_lon,
+                        todo=todo,
+                        radius_km=radius_km,
+                        include_map=include_map,
+                    )
+                )
+            elif path in ("/api/stream/alerts", "/api/v1/stream/alerts"):
+                self._handle_sse_alerts(q)
             elif path in ("/api/health", "/api/v1/health"):
                 self._json({"status": "ok", "service": settings.app_name, "version": settings.version})
             else:
                 self._send(404, b"not found", "text/plain")
+
+        def _handle_sse_alerts(self, q: dict[str, list[str]]) -> None:
+            day = (q.get("date") or ["latest"])[0]
+            has_route = "cur_lat" in q and "cur_lon" in q and "dest_lat" in q and "dest_lon" in q
+            try:
+                cur_lat = float((q.get("cur_lat") or ["23.7461"])[0])
+                cur_lon = float((q.get("cur_lon") or ["90.3742"])[0])
+                dest_lat = float((q.get("dest_lat") or ["23.7330"])[0])
+                dest_lon = float((q.get("dest_lon") or ["90.4172"])[0])
+                radius_km = float((q.get("radius_km") or ["2.5"])[0])
+            except ValueError:
+                return self._send(400, b"bad coordinates", "text/plain")
+            todo = (q.get("todo") or [""])[0]
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+
+            last_sig = None
+            try:
+                for _ in range(120):
+                    if has_route:
+                        payload = service.get_route_alerts(day, cur_lat, cur_lon, dest_lat, dest_lon, todo, radius_km)
+                        map_data = service.get_map_alerts(day)
+                        payload["map_alerts"] = map_data["alerts"]
+                        event_name = "route_alerts"
+                    else:
+                        payload = service.get_map_alerts(day)
+                        event_name = "map_alerts"
+
+                    sig = (payload.get("date"), payload.get("layers", {}).get("bronze", {}).get("record_count"))
+                    if sig != last_sig:
+                        last_sig = sig
+                        msg = f"event: {event_name}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                        self.wfile.write(msg.encode("utf-8"))
+                    else:
+                        self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+                    time.sleep(3.0)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
 
     return ApiHandler
 
 
 def create_server(logdir: Path | None = None, port: int = settings.api_port, host: str = settings.api_host) -> ThreadingHTTPServer:
     service = StreamService(primary_logdir=logdir)
+    # Pre-warm latest Medallion Lakehouse snapshot so first mobile request is instant
+    try:
+        snap = service.get_lakehouse_elt("latest")
+        print(
+            f"[BigWarn ELT] Warmed {snap['date']}: "
+            f"Bronze={snap['layers']['bronze']['record_count']} -> "
+            f"Silver={snap['layers']['silver']['record_count']} -> "
+            f"Gold={snap['layers']['gold']['alert_clusters']} clusters"
+        )
+    except Exception as exc:
+        print(f"[BigWarn ELT] Warmup skipped: {exc}")
     return ThreadingHTTPServer((host, port), make_api_handler(service))
 
 

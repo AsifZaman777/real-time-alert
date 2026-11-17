@@ -65,12 +65,15 @@ spark_checkpoints/
 backend/data/logs/*.log
 backend/data/logs/*.jsonl
 backend/data/lakehouse/**
+backend/lakehouse/storage/**
 backend/data/seen_urls.json
 !backend/data/lakehouse/.gitkeep
 !backend/data/logs/.gitkeep
 
 # POC runtime artifacts
 news-live-POC/seen_urls.json
+news-live-POC/logs/*.log
+news-live-POC/logs/*.jsonl
 
 # ------------------------------------------------------------------------------
 # 3. Node.js & Next.js 14 (Frontend / PWA)
@@ -96,6 +99,23 @@ lerna-debug.log*
 # Next.js telemetry / bundle analysis
 .next-analytics
 *.tsbuildinfo
+
+# ------------------------------------------------------------------------------
+# 3b. React Native / Expo Mobile App
+# ------------------------------------------------------------------------------
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/.npm-cache/
+mobile/dist/
+mobile/web-build/
+mobile/ios/
+mobile/android/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
 
 # ------------------------------------------------------------------------------
 # 4. Environment Variables & Secrets
