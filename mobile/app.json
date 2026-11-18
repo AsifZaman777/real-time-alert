@@ -17,7 +17,8 @@
         "ACCESS_FINE_LOCATION",
         "POST_NOTIFICATIONS",
         "VIBRATE"
-      ]
+      ],
+      "package": "com.anonymous.bigwarnmobile"
     },
     "plugins": [
       "expo-notifications"
