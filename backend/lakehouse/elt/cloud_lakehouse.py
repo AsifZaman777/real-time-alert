@@ -5,13 +5,13 @@ to cloud object storage, and restores Yesterday + Today streams on ephemeral con
 """
 from __future__ import annotations
 
+import json
 import threading
 import urllib.request
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from backend.app.core.config import now_dhaka, settings
+from backend.app.core.config import active_two_day_window, now_dhaka, settings
 
 
 class CloudLakehouseConnector:
@@ -57,13 +57,19 @@ class CloudLakehouseConnector:
             "last_error": self.last_error,
         }
 
+    def upload_files_sync(self, files: list[tuple[str, Path, str]]) -> bool:
+        """Synchronously pushes archive files (blocking on lock) and returns True if uploaded cleanly."""
+        if not self.is_cloud_enabled or not files:
+            return not self.is_cloud_enabled
+        return self._push_worker(list(files), blocking=True)
+
     def upload_files_async(self, files: list[tuple[str, Path, str]]) -> None:
         """Asynchronously pushes arbitrary archive files (e.g. timestamped Gold/Silver/Bronze .txt) to Cloud Storage."""
         if not self.is_cloud_enabled or not files:
             return
         threading.Thread(
             target=self._push_worker,
-            args=(list(files),),
+            args=(list(files), False),
             daemon=True,
         ).start()
 
@@ -75,7 +81,7 @@ class CloudLakehouseConnector:
         gold_file: Path,
         extra_archives: list[tuple[str, Path, str]] | None = None,
     ) -> None:
-        """Asynchronously pushes Bronze, Silver, Gold, and 48h archive files to Cloud Lakehouse."""
+        """Asynchronously pushes Bronze, Silver, Gold, raw active 2-day streams, and seen_urls to Cloud Lakehouse."""
         if not self.is_cloud_enabled:
             return
         files_to_push = [
@@ -85,13 +91,13 @@ class CloudLakehouseConnector:
         ] + (extra_archives or [])
         threading.Thread(
             target=self._push_worker,
-            args=(files_to_push,),
+            args=(files_to_push, False),
             daemon=True,
         ).start()
 
-    def _push_worker(self, files_to_push: list[tuple[str, Path, str]]) -> None:
-        if not self._lock.acquire(blocking=False):
-            return
+    def _push_worker(self, files_to_push: list[tuple[str, Path, str]], blocking: bool = False) -> bool:
+        if not self._lock.acquire(blocking=blocking):
+            return False
         try:
             if self.provider == "azure_adls":
                 self._upload_to_azure(files_to_push)
@@ -101,38 +107,95 @@ class CloudLakehouseConnector:
             self.last_sync_at = now_dhaka().isoformat()
             self.last_sync_status = "SYNCED_TO_CLOUD"
             self.last_error = None
+            return True
         except Exception as exc:
             self.last_sync_status = "CLOUD_SYNC_ERROR"
             self.last_error = str(exc)[:160]
+            return False
         finally:
             self._lock.release()
 
-    def restore_last_48h_from_cloud(self, logs_dir: Path) -> int:
+    @staticmethod
+    def _merge_jsonl_records(remote_bytes: bytes, local_target: Path) -> tuple[int, str]:
+        """Merges R2 backup records with any local records, deduplicated by URL/headline."""
+        seen: set[str] = set()
+        merged: list[str] = []
+        for raw_text in (
+            remote_bytes.decode("utf-8", errors="replace"),
+            local_target.read_text(encoding="utf-8", errors="replace") if local_target.exists() else "",
+        ):
+            for ln in raw_text.splitlines():
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    obj = json.loads(ln)
+                    key = obj.get("url") or f"{obj.get('source','')}:{obj.get('headline','')}"
+                except ValueError:
+                    key = ln
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(ln)
+        return len(merged), ("\n".join(merged) + "\n" if merged else "")
+
+    def restore_last_48h_from_cloud(
+        self, logs_dir: Path, active_days: list[str] | None = None
+    ) -> int:
         """
-        Restores Yesterday + Today Bronze stream files from Cloud Storage into logs_dir
-        on startup (crucial for ephemeral cloud containers like Render Free Tier).
-        Returns the number of files restored.
+        Restores missing/interrupted news streams for the active 2-day (48h) window and
+        seen_urls state from Cloudflare R2 / Cloud Storage, merging cleanly by URL.
         """
         if not self.is_cloud_enabled:
             return 0
         logs_dir.mkdir(parents=True, exist_ok=True)
-        now = now_dhaka()
-        days = [(now - timedelta(days=1)).strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")]
+        days = active_days or list(active_two_day_window())
         restored = 0
 
         for day in days:
             local_target = logs_dir / f"news_stream_{day}.jsonl"
-            if local_target.exists() and local_target.stat().st_size > 0:
-                continue
-            remote_key = f"bronze/date={day}/bronze_articles_{day}.jsonl"
-            try:
-                data = self._download_bytes(remote_key)
-                if data:
-                    local_target.write_bytes(data)
-                    restored += 1
-                    print(f"[CloudLakehouse] Restored {remote_key} ({len(data)} bytes) -> {local_target.name}")
-            except Exception:
-                pass
+            for remote_key in (
+                f"raw_streams/news_stream_{day}.jsonl",
+                f"bronze/date={day}/bronze_articles_{day}.jsonl",
+            ):
+                try:
+                    data = self._download_bytes(remote_key)
+                    if not data:
+                        continue
+                    count, merged_text = self._merge_jsonl_records(data, local_target)
+                    local_cnt = sum(
+                        1
+                        for ln in (
+                            local_target.read_text(encoding="utf-8", errors="replace").splitlines()
+                            if local_target.exists()
+                            else []
+                        )
+                        if ln.strip()
+                    )
+                    if count > local_cnt and merged_text:
+                        local_target.write_text(merged_text, encoding="utf-8")
+                        restored += 1
+                        print(
+                            f"[CloudLakehouse] Restored {remote_key} ({count} records, was {local_cnt}) -> {local_target.name}"
+                        )
+                    break
+                except Exception:
+                    continue
+
+        # Also restore seen_urls.json so scraper resumes without missing/duplicating URLs
+        seen_local = logs_dir.parent / "seen_urls.json"
+        try:
+            seen_bytes = self._download_bytes("state/seen_urls.json")
+            if seen_bytes:
+                remote_seen = json.loads(seen_bytes.decode("utf-8"))
+                local_seen = (
+                    json.loads(seen_local.read_text(encoding="utf-8")) if seen_local.exists() else {}
+                )
+                if isinstance(remote_seen, dict) and isinstance(local_seen, dict):
+                    merged_seen = {**remote_seen, **local_seen}
+                    if len(merged_seen) > len(local_seen):
+                        seen_local.write_text(json.dumps(merged_seen), encoding="utf-8")
+        except Exception:
+            pass
         return restored
 
     def _download_bytes(self, remote_key: str) -> bytes | None:

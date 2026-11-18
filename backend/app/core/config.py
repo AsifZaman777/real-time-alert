@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 DHAKA = timezone(timedelta(hours=6))  # Bangladesh Standard Time (UTC+6)
 DHAKA_TZ = DHAKA
+TWO_DAY_EPOCH = date(2026, 11, 18)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_ROOT.parent
@@ -47,6 +48,21 @@ DEFAULT_UA = (
 def now_dhaka() -> datetime:
     """Returns current timestamp in Dhaka timezone (UTC+6)."""
     return datetime.now(DHAKA)
+
+
+def active_two_day_window(ref_day: str | None = None) -> tuple[str, str]:
+    """Returns the current deterministic 2-day (48h) window (day1_str, day2_str) anchored to TWO_DAY_EPOCH."""
+    if ref_day:
+        try:
+            ref_d = datetime.strptime(ref_day, "%Y-%m-%d").date()
+        except ValueError:
+            ref_d = now_dhaka().date()
+    else:
+        ref_d = now_dhaka().date()
+    cycle_idx = (ref_d - TWO_DAY_EPOCH).days // 2
+    start_d = TWO_DAY_EPOCH + timedelta(days=cycle_idx * 2)
+    end_d = start_d + timedelta(days=1)
+    return start_d.strftime("%Y-%m-%d"), end_d.strftime("%Y-%m-%d")
 
 
 @dataclass(frozen=True)

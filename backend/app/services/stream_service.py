@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, now_dhaka, settings
+from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, active_two_day_window, now_dhaka, settings
 from backend.app.services.route_service import filter_alerts_for_route
 from backend.ingestion.enrichment.taxonomy import extract_disruption_tags
 from backend.ingestion.sources.registry import get_all_sources_metadata
+from backend.lakehouse.elt.cloud_lakehouse import cloud_connector
 from backend.lakehouse.elt.medallion_manager import MedallionLakehouseManager
 
 DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -47,34 +48,76 @@ class StreamService:
         base = datetime.strptime(ref_day, "%Y-%m-%d") if ref_day and DAY_RE.match(ref_day) else now_dhaka()
         return (base - timedelta(days=1)).strftime("%Y-%m-%d")
 
+    def ensure_window_restored(self) -> int:
+        """If active 2-day window logs are missing/lost mid-run, restore and merge from Cloudflare R2."""
+        active_days = list(active_two_day_window())
+        today = self.today_str()
+        missing_active = any(
+            d <= today and (
+                not (self.primary_logdir / f"news_stream_{d}.jsonl").exists()
+                or (self.primary_logdir / f"news_stream_{d}.jsonl").stat().st_size == 0
+            )
+            for d in active_days
+        )
+        if not missing_active or not cloud_connector.is_cloud_enabled:
+            return 0
+        restored = cloud_connector.restore_last_48h_from_cloud(self.primary_logdir, active_days)
+        if restored > 0:
+            self._lakehouse_cache.clear()
+        return restored
+
     def rotate_older_than_48h(self) -> list[str]:
-        """Archives completed (>48h) streams with all Gold, Silver, and Bronze data into a
-        timestamped .txt file (synced to Cloudflare R2 if enabled), then removes the old active
-        news/cache files so the pipeline continues cleanly from the active 48h window."""
-        keep_days = {self.today_str(), self.yesterday_str()}
-        archived: list[str] = []
+        """When the 2-day (48h) window advances to a new 2-day cycle, exports ALL expired
+        Bronze + Silver + Gold data into one timestamped .txt archive in Cloudflare R2,
+        then clears stale local active news & caches so the new 2-day stream starts fresh."""
+        keep_days = set(active_two_day_window())
+        stale_files: list[tuple[str, Path]] = []
+        for p in sorted(self.primary_logdir.glob("news_stream_*.jsonl")):
+            m = FILE_RE.match(p.name)
+            if m and m.group(1) not in keep_days:
+                stale_files.append((m.group(1), p))
+
+        if not stale_files:
+            return []
+
         archive_dir = self.lakehouse.archive_48h_dir
         archive_dir.mkdir(parents=True, exist_ok=True)
-        for p in list(self.primary_logdir.glob("news_stream_*.jsonl")):
-            m = FILE_RE.match(p.name)
-            if not m:
-                continue
-            d_str = m.group(1)
-            if d_str not in keep_days:
-                try:
-                    _, expired_items = self.read_items(d_str, after=0, enrich_legacy=False)
-                    self.lakehouse.archive_expired_day_to_txt(d_str, expired_items)
+        stale_days = [d for d, _ in stale_files]
+        cycle_label = f"{stale_days[0]}_to_{stale_days[-1]}" if len(stale_days) > 1 else stale_days[0]
 
-                    # Clear old active raw stream, log, and bronze/silver/gold caches older than 48h
-                    p.unlink(missing_ok=True)
-                    (self.primary_logdir / f"news_stream_{d_str}.log").unlink(missing_ok=True)
-                    (self.lakehouse.bronze_dir / f"bronze_articles_{d_str}.jsonl").unlink(missing_ok=True)
-                    (self.lakehouse.silver_dir / f"silver_disruptions_{d_str}.jsonl").unlink(missing_ok=True)
-                    (self.lakehouse.gold_dir / f"gold_alerts_{d_str}.json").unlink(missing_ok=True)
-                    (archive_dir / f"stream_48h_{d_str}.txt").unlink(missing_ok=True)
-                    archived.append(d_str)
-                except OSError:
-                    pass
+        seen_urls: set[str] = set()
+        combined_items: list[dict[str, Any]] = []
+        for d_str in stale_days:
+            _, items = self.read_items(d_str, after=0, enrich_legacy=False)
+            for it in items:
+                u = it.get("url") or f"{it.get('source','')}:{it.get('headline','')}"
+                if u not in seen_urls:
+                    seen_urls.add(u)
+                    combined_items.append(it)
+
+        uploaded = True
+        if combined_items:
+            _, uploaded = self.lakehouse.archive_cycle_to_txt(cycle_label, stale_days[-1], combined_items)
+
+        if not uploaded:
+            return []
+
+        archived: list[str] = []
+        for d_str, p in stale_files:
+            try:
+                p.unlink(missing_ok=True)
+                (self.primary_logdir / f"news_stream_{d_str}.log").unlink(missing_ok=True)
+                (self.lakehouse.bronze_dir / f"bronze_articles_{d_str}.jsonl").unlink(missing_ok=True)
+                (self.lakehouse.silver_dir / f"silver_disruptions_{d_str}.jsonl").unlink(missing_ok=True)
+                (self.lakehouse.gold_dir / f"gold_alerts_{d_str}.json").unlink(missing_ok=True)
+                (archive_dir / f"stream_48h_{d_str}.txt").unlink(missing_ok=True)
+                archived.append(d_str)
+            except OSError:
+                pass
+
+        if archived:
+            self._lakehouse_cache.clear()
+            self.lakehouse._tag_cache.clear()
         return archived
 
     def list_days(self) -> list[str]:
@@ -164,11 +207,11 @@ class StreamService:
         }
 
     def read_48h_rolling_items(self, ref_day: str, enrich_legacy: bool = False) -> list[dict[str, Any]]:
-        """Reads Yesterday + Today streams (continuous 48-hour sliding window), deduplicated by URL."""
-        yest = self.yesterday_str(ref_day)
+        """Reads all days in the active 2-day (48h) window, deduplicated by URL."""
+        d1, d2 = active_two_day_window(ref_day)
         seen_urls: set[str] = set()
         combined: list[dict[str, Any]] = []
-        for d in (yest, ref_day):
+        for d in (d1, d2):
             _, items = self.read_items(d, after=0, enrich_legacy=enrich_legacy)
             for it in items:
                 u = it.get("url") or f"{it.get('source','')}:{it.get('headline','')}"
@@ -187,16 +230,19 @@ class StreamService:
 
     def get_lakehouse_elt(self, day: str) -> dict[str, Any]:
         use_48h = (not day or day in ("latest", "48h"))
+        if use_48h:
+            self.ensure_window_restored()
         resolved_day = self.resolve_day(day)
         cache_key = f"48h:{resolved_day}" if use_48h else resolved_day
 
-        p_today = self._resolve_file(f"news_stream_{resolved_day}.jsonl")
-        p_yest = self._resolve_file(f"news_stream_{self.yesterday_str(resolved_day)}.jsonl") if use_48h else None
+        d1, d2 = active_two_day_window(resolved_day)
+        p_d1 = self._resolve_file(f"news_stream_{d1}.jsonl") if use_48h else self._resolve_file(f"news_stream_{resolved_day}.jsonl")
+        p_d2 = self._resolve_file(f"news_stream_{d2}.jsonl") if use_48h else None
         sig = (
-            str(p_today) if p_today else "",
-            p_today.stat().st_size if p_today and p_today.exists() else 0,
-            str(p_yest) if p_yest else "",
-            p_yest.stat().st_size if p_yest and p_yest.exists() else 0,
+            str(p_d1) if p_d1 else "",
+            p_d1.stat().st_size if p_d1 and p_d1.exists() else 0,
+            str(p_d2) if p_d2 else "",
+            p_d2.stat().st_size if p_d2 and p_d2.exists() else 0,
         )
 
         now_t = time.monotonic()

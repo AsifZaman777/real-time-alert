@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.app.core.config import settings
+from backend.app.core.config import active_two_day_window, settings
 from backend.ingestion.enrichment.taxonomy import AREA_METADATA, extract_disruption_tags
 from backend.lakehouse.elt.cloud_lakehouse import cloud_connector
 
@@ -289,12 +289,13 @@ class MedallionLakehouseManager:
         bronze_count = len(raw_items)
         silver_records, gold_alerts = self._compute_layers(raw_items, day)
 
-        # Persist Bronze, Silver, Gold, and 48h TXT/JSONL archive asynchronously so API responses return in <5ms
+        # Persist Bronze, Silver, Gold, active raw streams, and 48h TXT archive asynchronously (<5ms API)
         self._persist_snapshot_async(day, raw_items, silver_records, gold_alerts)
+        d1, d2 = active_two_day_window(day)
 
         return {
             "date": day,
-            "window": "48h_rolling (yesterday + today)",
+            "window": f"2d_cycle ({d1} to {d2})",
             "cloud_lakehouse": cloud_connector.get_status_metadata(),
             "layers": {
                 "bronze": {
@@ -362,24 +363,26 @@ class MedallionLakehouseManager:
             )
         return "\n".join(lines) + "\n"
 
-    def archive_expired_day_to_txt(self, expired_day: str, raw_items: list[dict[str, Any]]) -> Path:
+    def archive_cycle_to_txt(
+        self, cycle_label: str, ref_day: str, raw_items: list[dict[str, Any]]
+    ) -> tuple[Path, bool]:
         """
-        Before clearing expired (>48h) news locally, exports all Gold, Silver, and Bronze layers
-        into a timestamped .txt archive and pushes it to Cloudflare R2 / configured cloud storage.
+        Before clearing a completed (>2-day / 48h) window locally, exports all Gold, Silver,
+        and Bronze layers into a timestamped .txt archive and pushes it synchronously to R2.
         """
         now_dt = datetime.now(DHAKA_TZ)
         ts_slug = now_dt.strftime("%Y%m%d_%H%M%S")
-        silver_records, gold_alerts = self._compute_layers(raw_items, expired_day)
+        silver_records, gold_alerts = self._compute_layers(raw_items, ref_day)
         report_txt = self._format_txt_report(
-            expired_day, raw_items, silver_records, gold_alerts, now_dt.isoformat()
+            cycle_label, raw_items, silver_records, gold_alerts, now_dt.isoformat()
         )
         self.archive_48h_dir.mkdir(parents=True, exist_ok=True)
-        txt_path = self.archive_48h_dir / f"medallion_archive_{expired_day}_{ts_slug}.txt"
+        txt_path = self.archive_48h_dir / f"medallion_2day_{cycle_label}_{ts_slug}.txt"
         txt_path.write_text(report_txt, encoding="utf-8")
-        cloud_connector.upload_files_async([
-            (f"archives/{expired_day}/{txt_path.name}", txt_path, "text/plain; charset=utf-8")
+        uploaded = cloud_connector.upload_files_sync([
+            (f"archives/{cycle_label}/{txt_path.name}", txt_path, "text/plain; charset=utf-8")
         ])
-        return txt_path
+        return txt_path, uploaded
 
     def _persist_snapshot_async(
         self,
@@ -415,7 +418,17 @@ class MedallionLakehouseManager:
                 )
                 txt_archive.write_text(report_txt, encoding="utf-8")
 
-                extra = [(f"archive_48h/{txt_archive.name}", txt_archive, "text/plain; charset=utf-8")]
+                extra: list[tuple[str, Path, str]] = [
+                    (f"archive_48h/{txt_archive.name}", txt_archive, "text/plain; charset=utf-8")
+                ]
+                for d in active_two_day_window(day):
+                    raw_p = settings.logs_dir / f"news_stream_{d}.jsonl"
+                    if raw_p.exists() and raw_p.stat().st_size > 0:
+                        extra.append((f"raw_streams/{raw_p.name}", raw_p, "application/x-ndjson"))
+                seen_p = settings.logs_dir.parent / "seen_urls.json"
+                if seen_p.exists() and seen_p.stat().st_size > 0:
+                    extra.append(("state/seen_urls.json", seen_p, "application/json"))
+
                 cloud_connector.sync_medallion_files_async(
                     day, bronze_file, silver_file, gold_file, extra_archives=extra
                 )

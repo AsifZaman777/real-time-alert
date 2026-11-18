@@ -232,6 +232,7 @@ def main() -> None:
                 round_no += 1
                 try:
                     service.rotate_older_than_48h()
+                    service.ensure_window_restored()
                     ctx_bundle = run_crawler_round(log_dir, ctx_bundle=ctx_bundle, round_no=round_no)
                     service.get_lakehouse_elt("latest")
                     export_static_public_feed(service, export_dir)
