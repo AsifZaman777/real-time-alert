@@ -190,3 +190,135 @@ class StreamService:
             result["map_alerts"] = snapshot["gold_alerts"]
         return result
 
+    def get_public_feed(
+        self,
+        day: str | None = "latest",
+        layer: str = "gold",
+        area: str | None = None,
+        event_type: str | None = None,
+        lang: str | None = None,
+        recent_hours: float | None = None,
+        after: int = 0,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """
+        Public Open-Source Stream & Feed Query Engine.
+        Allows external developers, researchers, and apps to consume Bronze, Silver, or Gold
+        Bangladesh news and threat streams with rich filtering and cursor pagination.
+        """
+        resolved_day = self.resolve_day(day)
+        snapshot = self.get_lakehouse_elt(resolved_day)
+        layer_norm = (layer or "gold").lower().strip()
+        max_age_min = int(recent_hours * 60) if recent_hours is not None and recent_hours > 0 else None
+
+        if layer_norm == "bronze":
+            total_raw, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
+            records = items
+        elif layer_norm == "silver":
+            silver_file = self.lakehouse.silver_dir / f"silver_disruptions_{resolved_day}.jsonl"
+            records = []
+            if silver_file.exists():
+                try:
+                    for line in silver_file.read_text(encoding="utf-8").splitlines():
+                        if line.strip():
+                            records.append(json.loads(line))
+                except Exception:
+                    pass
+            if not records:
+                _, raw_items = self.read_items(resolved_day, after=0, enrich_legacy=True)
+                records = [r for r in raw_items if r.get("is_disruption")]
+        else:
+            layer_norm = "gold"
+            records = list(snapshot.get("gold_alerts", []))
+
+        # Apply optional filters (area, event_type, lang, recent_hours)
+        filtered: list[dict[str, Any]] = []
+        area_q = area.strip().lower() if area else None
+        ev_q = event_type.strip().lower() if event_type else None
+        lang_q = lang.strip().lower() if lang else None
+
+        for rec in records:
+            if area_q:
+                rec_area = str(rec.get("area") or rec.get("primary_area") or "").lower()
+                rec_locs = [str(x).lower() for x in (rec.get("locations") or [])]
+                if area_q != rec_area and area_q not in rec_locs:
+                    continue
+            if ev_q:
+                rec_ev = str(rec.get("event_type") or "").lower()
+                rec_evs = [str(x).lower() for x in (rec.get("event_types") or [])]
+                if ev_q != rec_ev and ev_q not in rec_evs:
+                    continue
+            if lang_q:
+                rec_lang = str(rec.get("lang") or "").lower()
+                rec_langs = [str(x).lower() for x in (rec.get("languages") or [])]
+                if lang_q != rec_lang and lang_q not in rec_langs:
+                    continue
+            if max_age_min is not None:
+                age_m = int(rec.get("age_minutes", 9999))
+                if age_m > max_age_min:
+                    continue
+            filtered.append(rec)
+
+        total_matched = len(filtered)
+        sliced = filtered[after : after + max(1, min(limit, 1000))]
+        return {
+            "feed": "BigWarn Open Threat & News Stream",
+            "version": settings.version,
+            "date": resolved_day,
+            "layer": layer_norm,
+            "filters": {
+                "area": area,
+                "event_type": event_type,
+                "lang": lang,
+                "recent_hours": recent_hours,
+            },
+            "total_matched": total_matched,
+            "after": after,
+            "count": len(sliced),
+            "next_cursor": after + len(sliced) if (after + len(sliced)) < total_matched else None,
+            "items": sliced,
+        }
+
+    def format_rss_xml(self, feed_data: dict[str, Any]) -> str:
+        """Formats a public feed payload as an RSS 2.0 + GeoRSS XML stream."""
+        import html as html_mod
+
+        items_xml: list[str] = []
+        for it in feed_data.get("items", [])[:100]:
+            if "cluster_id" in it:
+                title = f"[{str(it.get('event_type','')).upper()} • {it.get('area')}] {it.get('sample_headline','')}"
+                link = (it.get("articles") or [{}])[0].get("url") or "https://github.com/bigwarn"
+                desc = f"{it.get('veracity_summary','')} ({it.get('veracity_percent')}%) — Area: {it.get('area')}, {it.get('city')}"
+                pub = it.get("last_updated") or ""
+                lat, lon = it.get("lat"), it.get("lon")
+            else:
+                title = it.get("headline") or "News Item"
+                link = it.get("url") or "https://github.com/bigwarn"
+                desc = it.get("description") or (it.get("body") or "")[:280]
+                pub = it.get("published") or it.get("ingested_at") or ""
+                lat, lon = it.get("lat"), it.get("lon")
+
+            geo_tag = f"<georss:point>{lat} {lon}</georss:point>" if lat is not None and lon is not None else ""
+            items_xml.append(
+                f"    <item>\n"
+                f"      <title>{html_mod.escape(str(title))}</title>\n"
+                f"      <link>{html_mod.escape(str(link))}</link>\n"
+                f"      <description>{html_mod.escape(str(desc))}</description>\n"
+                f"      <pubDate>{html_mod.escape(str(pub))}</pubDate>\n"
+                f"      {geo_tag}\n"
+                f"    </item>"
+            )
+
+        body_items = "\n".join(items_xml)
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<rss version="2.0" xmlns:georss="http://www.georss.org/georss">\n'
+            "  <channel>\n"
+            "    <title>BigWarn Bangladesh Real-Time Threat &amp; Disruption Stream</title>\n"
+            "    <link>http://localhost:8765/api/v1/stream/feed</link>\n"
+            "    <description>Live open-source Medallion Lakehouse feed from 45 Bangladeshi news portals</description>\n"
+            f"{body_items}\n"
+            "  </channel>\n"
+            "</rss>\n"
+        )
+

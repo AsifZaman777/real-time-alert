@@ -117,10 +117,94 @@ def make_api_handler(service: StreamService):
                 )
             elif path in ("/api/stream/alerts", "/api/v1/stream/alerts"):
                 self._handle_sse_alerts(q)
+            elif path in ("/api/stream/feed", "/api/v1/stream/feed", "/feed"):
+                self._handle_public_feed(q)
+            elif path in ("/api/feed.rss", "/api/v1/feed.rss", "/feed.rss"):
+                self._handle_public_feed(q, default_format="rss", default_layer="gold")
+            elif path in ("/api/feed.jsonl", "/api/v1/feed.jsonl", "/feed.jsonl"):
+                self._handle_public_feed(q, default_format="ndjson", default_layer="silver")
+            elif path in ("/api/stream/live", "/api/v1/stream/live"):
+                self._handle_public_feed(q, default_format="sse", default_layer="silver")
             elif path in ("/api/health", "/api/v1/health"):
                 self._json({"status": "ok", "service": settings.app_name, "version": settings.version})
             else:
                 self._send(404, b"not found", "text/plain")
+
+        def _handle_public_feed(
+            self,
+            q: dict[str, list[str]],
+            default_format: str = "json",
+            default_layer: str = "gold",
+        ) -> None:
+            day = (q.get("date") or ["latest"])[0]
+            layer = (q.get("layer") or [default_layer])[0]
+            fmt = (q.get("format") or [default_format])[0].lower().strip()
+            area = (q.get("area") or [None])[0]
+            event_type = (q.get("event_type") or [None])[0]
+            lang = (q.get("lang") or [None])[0]
+            try:
+                recent_hours = float(q["recent_hours"][0]) if "recent_hours" in q else None
+                after = max(0, int((q.get("after") or ["0"])[0]))
+                limit = max(1, min(1000, int((q.get("limit") or ["100"])[0])))
+            except ValueError:
+                return self._send(400, b"invalid query parameters", "text/plain")
+
+            if fmt == "sse":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                seen_ids: set[str] = set()
+                try:
+                    for _ in range(180):
+                        feed_data = service.get_public_feed(
+                            day=day,
+                            layer=layer,
+                            area=area,
+                            event_type=event_type,
+                            lang=lang,
+                            recent_hours=recent_hours,
+                            after=0,
+                            limit=limit,
+                        )
+                        emitted = 0
+                        for item in feed_data.get("items", []):
+                            uid = str(item.get("cluster_id") or item.get("url") or item.get("headline") or "")
+                            if uid and uid not in seen_ids:
+                                seen_ids.add(uid)
+                                msg = f"event: {feed_data['layer']}_item\ndata: {json.dumps(item, ensure_ascii=False)}\n\n"
+                                self.wfile.write(msg.encode("utf-8"))
+                                emitted += 1
+                        if emitted == 0:
+                            self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush()
+                        time.sleep(3.0)
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    pass
+                return
+
+            feed_data = service.get_public_feed(
+                day=day,
+                layer=layer,
+                area=area,
+                event_type=event_type,
+                lang=lang,
+                recent_hours=recent_hours,
+                after=after,
+                limit=limit,
+            )
+
+            if fmt in ("ndjson", "jsonl"):
+                lines = "\n".join(json.dumps(it, ensure_ascii=False) for it in feed_data.get("items", [])) + "\n"
+                self._send(200, lines.encode("utf-8"), "application/x-ndjson; charset=utf-8")
+            elif fmt in ("rss", "xml"):
+                xml_str = service.format_rss_xml(feed_data)
+                self._send(200, xml_str.encode("utf-8"), "application/rss+xml; charset=utf-8")
+            else:
+                self._json(feed_data)
 
         def _handle_sse_alerts(self, q: dict[str, list[str]]) -> None:
             day = (q.get("date") or ["latest"])[0]
