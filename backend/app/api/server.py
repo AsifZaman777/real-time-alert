@@ -17,11 +17,8 @@ from urllib.parse import parse_qs, urlparse
 ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-POC_DIR = ROOT_DIR / "news-live-POC"
-if str(POC_DIR) not in sys.path:
-    sys.path.insert(0, str(POC_DIR))
 
-import news_dashboard as legacy_dashboard  # noqa: E402
+from backend.app.api import dashboard_ui as legacy_dashboard  # noqa: E402
 from backend.app.core.config import settings  # noqa: E402
 from backend.app.services.stream_service import DAY_RE, StreamService  # noqa: E402
 from backend.ingestion.sources.registry import get_all_sources_metadata  # noqa: E402

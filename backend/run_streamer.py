@@ -11,15 +11,11 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
-POC_DIR = ROOT_DIR / "news-live-POC"
-if str(POC_DIR) not in sys.path:
-    sys.path.insert(0, str(POC_DIR))
 
 from backend.app.core.config import settings  # noqa: E402
-import live_news_stream  # noqa: E402
+from backend.ingestion.scraper import live_news_stream  # noqa: E402
 
 if __name__ == "__main__":
     if "--out-dir" not in sys.argv:
         sys.argv.extend(["--out-dir", str(settings.data_dir)])
     live_news_stream.main()
-

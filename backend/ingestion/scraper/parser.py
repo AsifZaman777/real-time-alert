@@ -3,14 +3,7 @@ Article HTML/JSON-LD/Meta Parser & Bilingual Date Normalizer.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-POC_DIR = Path(__file__).resolve().parents[3] / "news-live-POC"
-if str(POC_DIR) not in sys.path:
-    sys.path.insert(0, str(POC_DIR))
-
-from live_news_stream import (  # noqa: E402
+from backend.ingestion.scraper.live_news_stream import (
     PUBLISHED_LABEL,
     UPDATED_LABEL,
     art_key,
@@ -39,4 +32,3 @@ __all__ = [
     "parse_iso",
     "parse_text_date",
 ]
-

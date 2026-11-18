@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-11-18T14:35:57.166795+06:00",
+  "date": "2026-11-18",
+  "active_3h_gold_clusters": 34,
+  "recent_6h_silver_articles": 279,
+  "cloud_lakehouse": {
+    "provider": "local_medallion",
+    "cloud_enabled": false,
+    "bronze_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\bronze",
+    "silver_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\silver",
+    "gold_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\gold",
+    "last_sync_at": null,
+    "sync_status": "LOCAL_CACHE_ACTIVE",
+    "last_error": null
+  },
+  "endpoints": {
+    "gold_json": "gold_alerts_latest.json",
+    "silver_jsonl": "silver_stream_latest.jsonl",
+    "georss_xml": "feed.rss"
+  }
+}

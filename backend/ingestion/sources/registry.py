@@ -4,15 +4,12 @@ Provides site definitions, regex compilers, and lookup helpers.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# Reuse the verified 45-site definitions from the POC or define directly
-POC_DIR = Path(__file__).resolve().parents[3] / "news-live-POC"
-if str(POC_DIR) not in sys.path:
-    sys.path.insert(0, str(POC_DIR))
-
-from live_news_stream import NOT_CATEGORY, SECTION_STOP, SITE_DEFS, compile_sites  # noqa: E402
+from backend.ingestion.scraper.live_news_stream import (
+    NOT_CATEGORY,
+    SECTION_STOP,
+    SITE_DEFS,
+    compile_sites,
+)
 
 
 def get_all_sources_metadata() -> list[dict]:
@@ -32,4 +29,3 @@ def get_all_sources_metadata() -> list[dict]:
 
 
 __all__ = ["SITE_DEFS", "NOT_CATEGORY", "SECTION_STOP", "compile_sites", "get_all_sources_metadata"]
-
