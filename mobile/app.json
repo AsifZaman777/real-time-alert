@@ -4,24 +4,33 @@
     "slug": "bigwarn-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B1120"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "BigWarn uses your current location to filter road blockades and strikes along your route."
+        "NSLocationWhenInUseUsageDescription": "BigWarn uses your current location to filter road threats and blockades along your route."
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B1120"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "POST_NOTIFICATIONS",
         "VIBRATE"
       ],
-      "package": "com.anonymous.bigwarnmobile"
+      "package": "com.bigwarn.edge"
     },
-    "plugins": [
-      "expo-notifications"
-    ]
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
   }
 }
