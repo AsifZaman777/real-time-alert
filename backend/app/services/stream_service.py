@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -27,7 +30,9 @@ class StreamService:
         self.poc_logdir = PROJECT_ROOT / "news-live-POC" / "logs"
         self.primary_logdir.mkdir(parents=True, exist_ok=True)
         self.lakehouse = MedallionLakehouseManager()
-        self._lakehouse_cache: dict[str, tuple[tuple[str, int, float], dict[str, Any]]] = {}
+        self._lakehouse_cache: dict[str, tuple[tuple[Any, ...], float, dict[str, Any]]] = {}
+        self._refreshing: set[str] = set()
+        self._cache_ttl_sec = 20.0
 
     def _candidate_logdirs(self) -> list[Path]:
         dirs = [self.primary_logdir]
@@ -37,6 +42,38 @@ class StreamService:
 
     def today_str(self) -> str:
         return now_dhaka().strftime("%Y-%m-%d")
+
+    def yesterday_str(self, ref_day: str | None = None) -> str:
+        base = datetime.strptime(ref_day, "%Y-%m-%d") if ref_day and DAY_RE.match(ref_day) else now_dhaka()
+        return (base - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    def rotate_older_than_48h(self) -> list[str]:
+        """Persists raw stream files older than 48h into archive_48h/ (.txt & .jsonl) so the next
+        48-hour continuous stream stays lean and bounded."""
+        keep_days = {self.today_str(), self.yesterday_str()}
+        archived: list[str] = []
+        archive_dir = self.lakehouse.archive_48h_dir
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        for p in list(self.primary_logdir.glob("news_stream_*.jsonl")):
+            m = FILE_RE.match(p.name)
+            if not m:
+                continue
+            d_str = m.group(1)
+            if d_str not in keep_days:
+                target_jsonl = archive_dir / p.name
+                try:
+                    if not target_jsonl.exists():
+                        p.replace(target_jsonl)
+                    else:
+                        p.unlink(missing_ok=True)
+                    log_p = self.primary_logdir / f"news_stream_{d_str}.log"
+                    if log_p.exists():
+                        target_txt = archive_dir / f"news_stream_{d_str}.txt"
+                        log_p.replace(target_txt)
+                    archived.append(d_str)
+                except OSError:
+                    pass
+        return archived
 
     def list_days(self) -> list[str]:
         days = {self.today_str()}
@@ -124,25 +161,73 @@ class StreamService:
             "configured_sources": get_all_sources_metadata(),
         }
 
+    def read_48h_rolling_items(self, ref_day: str, enrich_legacy: bool = False) -> list[dict[str, Any]]:
+        """Reads Yesterday + Today streams (continuous 48-hour sliding window), deduplicated by URL."""
+        yest = self.yesterday_str(ref_day)
+        seen_urls: set[str] = set()
+        combined: list[dict[str, Any]] = []
+        for d in (yest, ref_day):
+            _, items = self.read_items(d, after=0, enrich_legacy=enrich_legacy)
+            for it in items:
+                u = it.get("url") or f"{it.get('source','')}:{it.get('headline','')}"
+                if u not in seen_urls:
+                    seen_urls.add(u)
+                    combined.append(it)
+        return combined
+
+    def _compute_lakehouse_snapshot(self, cache_key: str, resolved_day: str, use_48h: bool) -> dict[str, Any]:
+        if use_48h:
+            items = self.read_48h_rolling_items(resolved_day)
+        else:
+            _, items = self.read_items(resolved_day, after=0, enrich_legacy=False)
+        snapshot = self.lakehouse.build_medallion_snapshot(items, resolved_day)
+        return snapshot
+
     def get_lakehouse_elt(self, day: str) -> dict[str, Any]:
+        use_48h = (not day or day in ("latest", "48h"))
         resolved_day = self.resolve_day(day)
-        path = self._resolve_file(f"news_stream_{resolved_day}.jsonl")
-        if path and path.exists():
-            st = path.stat()
-            sig = (str(path), st.st_size, st.st_mtime)
-            cached = self._lakehouse_cache.get(resolved_day)
-            if cached and cached[0] == sig:
-                return cached[1]
-            _, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
-            snapshot = self.lakehouse.build_medallion_snapshot(items, resolved_day)
-            self._lakehouse_cache[resolved_day] = (sig, snapshot)
-            return snapshot
-        _, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
-        return self.lakehouse.build_medallion_snapshot(items, resolved_day)
+        cache_key = f"48h:{resolved_day}" if use_48h else resolved_day
+
+        p_today = self._resolve_file(f"news_stream_{resolved_day}.jsonl")
+        p_yest = self._resolve_file(f"news_stream_{self.yesterday_str(resolved_day)}.jsonl") if use_48h else None
+        sig = (
+            str(p_today) if p_today else "",
+            p_today.stat().st_size if p_today and p_today.exists() else 0,
+            str(p_yest) if p_yest else "",
+            p_yest.stat().st_size if p_yest and p_yest.exists() else 0,
+        )
+
+        now_t = time.monotonic()
+        cached = self._lakehouse_cache.get(cache_key)
+        if cached:
+            c_sig, c_ts, c_snap = cached
+            if c_sig == sig:
+                return c_snap
+            # If cache is still within TTL OR a background refresh is running, return immediately (<1ms)!
+            if (now_t - c_ts) < self._cache_ttl_sec or cache_key in self._refreshing:
+                return c_snap
+
+            # Spawn non-blocking background rebuild so phone/browser requests NEVER stall
+            self._refreshing.add(cache_key)
+
+            def _bg_rebuild() -> None:
+                try:
+                    snap = self._compute_lakehouse_snapshot(cache_key, resolved_day, use_48h)
+                    self._lakehouse_cache[cache_key] = (sig, time.monotonic(), snap)
+                finally:
+                    self._refreshing.discard(cache_key)
+
+            threading.Thread(target=_bg_rebuild, daemon=True, name="bigwarn-elt-refresh").start()
+            return c_snap
+
+        # Cold start (first call only)
+        snapshot = self._compute_lakehouse_snapshot(cache_key, resolved_day, use_48h)
+        self._lakehouse_cache[cache_key] = (sig, now_t, snapshot)
+        return snapshot
 
     def resolve_day(self, day: str | None) -> str:
-        """Resolves 'latest' (or missing) to the most recent day that actually has stream data."""
-        if day and day != "latest" and DAY_RE.match(day):
+        """Resolves 'latest' / '48h' (or missing) to the most recent day that actually has stream data."""
+        if day and day not in ("latest", "48h") and DAY_RE.match(day):
             return day
         for d in self.list_days():
             p = self._resolve_file(f"news_stream_{d}.jsonl")
@@ -206,14 +291,17 @@ class StreamService:
         Allows external developers, researchers, and apps to consume Bronze, Silver, or Gold
         Bangladesh news and threat streams with rich filtering and cursor pagination.
         """
+        use_48h = (not day or day in ("latest", "48h"))
         resolved_day = self.resolve_day(day)
-        snapshot = self.get_lakehouse_elt(resolved_day)
+        snapshot = self.get_lakehouse_elt(day or "latest")
         layer_norm = (layer or "gold").lower().strip()
         max_age_min = int(recent_hours * 60) if recent_hours is not None and recent_hours > 0 else None
 
         if layer_norm == "bronze":
-            total_raw, items = self.read_items(resolved_day, after=0, enrich_legacy=True)
-            records = items
+            if use_48h:
+                records = self.read_48h_rolling_items(resolved_day, enrich_legacy=True)
+            else:
+                _, records = self.read_items(resolved_day, after=0, enrich_legacy=True)
         elif layer_norm == "silver":
             silver_file = self.lakehouse.silver_dir / f"silver_disruptions_{resolved_day}.jsonl"
             records = []
@@ -225,7 +313,10 @@ class StreamService:
                 except Exception:
                     pass
             if not records:
-                _, raw_items = self.read_items(resolved_day, after=0, enrich_legacy=True)
+                if use_48h:
+                    raw_items = self.read_48h_rolling_items(resolved_day, enrich_legacy=True)
+                else:
+                    _, raw_items = self.read_items(resolved_day, after=0, enrich_legacy=True)
                 records = [r for r in raw_items if r.get("is_disruption")]
         else:
             layer_norm = "gold"

@@ -94,7 +94,7 @@ def fetch_osrm_routes(
             f"?overview=full&geometries=geojson&alternatives=true&steps=true"
         )
         req = urllib.request.Request(url, headers={"User-Agent": "BigWarnEdge/2.0"})
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
+        with urllib.request.urlopen(req, timeout=1.8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             for rt in data.get("routes", []):
                 raw_coords = rt.get("geometry", {}).get("coordinates", [])

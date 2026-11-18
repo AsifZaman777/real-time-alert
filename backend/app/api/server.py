@@ -78,17 +78,17 @@ def make_api_handler(service: StreamService):
                 self._json({"total": 45, "sources": get_all_sources_metadata()})
             elif path in ("/api/lakehouse", "/api/v1/lakehouse"):
                 day = (q.get("date") or ["latest"])[0]
-                if day != "latest" and not DAY_RE.match(day):
+                if day not in ("latest", "48h") and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
                 self._json(service.get_lakehouse_elt(day))
             elif path in ("/api/alerts/map", "/api/v1/alerts/map"):
                 day = (q.get("date") or ["latest"])[0]
-                if day != "latest" and not DAY_RE.match(day):
+                if day not in ("latest", "48h") and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
                 self._json(service.get_map_alerts(day))
             elif path in ("/api/alerts/route", "/api/v1/alerts/route"):
                 day = (q.get("date") or ["latest"])[0]
-                if day != "latest" and not DAY_RE.match(day):
+                if day not in ("latest", "48h") and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
                 try:
                     cur_lat = float((q.get("cur_lat") or ["23.7461"])[0])
@@ -112,6 +112,15 @@ def make_api_handler(service: StreamService):
                         include_map=include_map,
                     )
                 )
+            elif path in ("/api/archive/48h", "/api/v1/archive/48h"):
+                archive_dir = service.lakehouse.archive_48h_dir
+                txt_files = sorted(archive_dir.glob("*.txt"), reverse=True)
+                if txt_files and (q.get("format") or [""])[0] == "txt":
+                    return self._send(200, txt_files[0].read_bytes(), "text/plain; charset=utf-8")
+                self._json({
+                    "archive_dir": str(archive_dir),
+                    "files": [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(archive_dir.glob("*"), reverse=True)],
+                })
             elif path in ("/api/stream/alerts", "/api/v1/stream/alerts"):
                 self._handle_sse_alerts(q)
             elif path in ("/api/stream/feed", "/api/v1/stream/feed", "/feed"):

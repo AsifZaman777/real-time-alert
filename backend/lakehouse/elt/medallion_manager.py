@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -86,24 +87,44 @@ class MedallionLakehouseManager:
         self.bronze_dir = bronze_dir
         self.silver_dir = silver_dir
         self.gold_dir = gold_dir
-        for d in (self.bronze_dir, self.silver_dir, self.gold_dir):
+        self.archive_48h_dir = settings.logs_dir / "archive_48h"
+        for d in (self.bronze_dir, self.silver_dir, self.gold_dir, self.archive_48h_dir):
             d.mkdir(parents=True, exist_ok=True)
+        self._tag_cache: dict[str, dict[str, Any]] = {}
+        self._persist_lock = threading.Lock()
 
     def build_medallion_snapshot(self, raw_items: list[dict[str, Any]], day: str) -> dict[str, Any]:
-        """Executes in-memory ELT transformation over a day's Bronze records to produce
-        Silver (enriched + deduplicated) and Gold (corroborated area alerts) tables."""
+        """Executes in-memory ELT transformation over Bronze records (single-day or 48h rolling)
+        to produce Silver (enriched + deduplicated) and Gold (corroborated area alerts) tables."""
         bronze_count = len(raw_items)
         silver_records: list[dict[str, Any]] = []
         event_clusters: dict[str, dict[str, Any]] = {}
         now_dhaka = datetime.now(DHAKA_TZ)
 
+        if len(self._tag_cache) > 25000:
+            self._tag_cache.clear()
+
         for item in raw_items:
-            # Always evaluate with the context-aware clause-level threat & location extractor
-            tags = extract_disruption_tags(
-                item.get("headline", ""),
-                item.get("description", ""),
-                item.get("body", ""),
-            )
+            cache_k = item.get("url") or item.get("headline") or ""
+            tags = self._tag_cache.get(cache_k) if cache_k else None
+            if tags is None:
+                if "location_events" in item and isinstance(item.get("location_events"), dict):
+                    tags = {
+                        "event_types": item.get("event_types", []),
+                        "locations": item.get("locations", []),
+                        "location_events": item.get("location_events", {}),
+                        "time_windows": item.get("time_windows", []),
+                        "is_disruption": item.get("is_disruption", False),
+                    }
+                else:
+                    tags = extract_disruption_tags(
+                        item.get("headline", ""),
+                        item.get("description", ""),
+                        item.get("body", ""),
+                    )
+                if cache_k:
+                    self._tag_cache[cache_k] = tags
+
             item = {**item, **tags}
 
             if not item.get("is_disruption") or not item.get("event_types") or not item.get("locations"):
@@ -261,28 +282,12 @@ class MedallionLakehouseManager:
             reverse=True,
         )
 
-        # Persist Bronze, Silver, and Gold snapshots to Lakehouse directories
-        bronze_file = self.bronze_dir / f"bronze_articles_{day}.jsonl"
-        silver_file = self.silver_dir / f"silver_disruptions_{day}.jsonl"
-        gold_file = self.gold_dir / f"gold_alerts_{day}.json"
-        try:
-            if raw_items:
-                bronze_file.write_text(
-                    "\n".join(json.dumps(r, ensure_ascii=False) for r in raw_items) + "\n",
-                    encoding="utf-8",
-                )
-            if silver_records:
-                silver_file.write_text(
-                    "\n".join(json.dumps(s, ensure_ascii=False) for s in silver_records) + "\n",
-                    encoding="utf-8",
-                )
-            gold_file.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
-            cloud_connector.sync_medallion_files_async(day, bronze_file, silver_file, gold_file)
-        except OSError:
-            pass
+        # Persist Bronze, Silver, Gold, and 48h TXT/JSONL archive asynchronously so API responses return in <5ms
+        self._persist_snapshot_async(day, raw_items, silver_records, gold_alerts)
 
         return {
             "date": day,
+            "window": "48h_rolling (yesterday + today)",
             "cloud_lakehouse": cloud_connector.get_status_metadata(),
             "layers": {
                 "bronze": {
@@ -310,4 +315,60 @@ class MedallionLakehouseManager:
                 k: {"lat": v["lat"], "lon": v["lon"], "city": v["city"]} for k, v in AREA_METADATA.items()
             },
         }
+
+    def _persist_snapshot_async(
+        self,
+        day: str,
+        raw_items: list[dict[str, Any]],
+        silver_records: list[dict[str, Any]],
+        gold_alerts: list[dict[str, Any]],
+    ) -> None:
+        if not self._persist_lock.acquire(blocking=False):
+            return
+
+        def _worker() -> None:
+            try:
+                bronze_file = self.bronze_dir / f"bronze_articles_{day}.jsonl"
+                silver_file = self.silver_dir / f"silver_disruptions_{day}.jsonl"
+                gold_file = self.gold_dir / f"gold_alerts_{day}.json"
+                txt_archive = self.archive_48h_dir / f"stream_48h_{day}.txt"
+
+                if raw_items:
+                    bronze_file.write_text(
+                        "\n".join(json.dumps(r, ensure_ascii=False) for r in raw_items) + "\n",
+                        encoding="utf-8",
+                    )
+                if silver_records:
+                    silver_file.write_text(
+                        "\n".join(json.dumps(s, ensure_ascii=False) for s in silver_records) + "\n",
+                        encoding="utf-8",
+                    )
+                gold_file.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
+
+                # Persist human-readable 48-hour log/txt digest before rolling to next cycle
+                txt_lines = [
+                    f"=== BigWarn 48-Hour Rolling Threat & News Log ({day}) ===",
+                    f"Total Bronze Articles: {len(raw_items)} | Silver Threats: {len(silver_records)} | Gold Clusters: {len(gold_alerts)}",
+                    "",
+                ]
+                for it in raw_items[-1000:]:
+                    ts = it.get("published") or it.get("ingested_at") or ""
+                    evs = ",".join(it.get("event_types") or [])
+                    locs = ",".join(it.get("locations") or [])
+                    badge = f" [{evs} | {locs}]" if (evs or locs) else ""
+                    txt_lines.append(
+                        f"[{ts}] {it.get('source', 'Unknown')} | {it.get('headline', '')}{badge} | {it.get('url', '')}"
+                    )
+                txt_archive.write_text("\n".join(txt_lines) + "\n", encoding="utf-8")
+
+                extra = [(f"archive_48h/{txt_archive.name}", txt_archive, "text/plain; charset=utf-8")]
+                cloud_connector.sync_medallion_files_async(
+                    day, bronze_file, silver_file, gold_file, extra_archives=extra
+                )
+            except OSError:
+                pass
+            finally:
+                self._persist_lock.release()
+
+        threading.Thread(target=_worker, daemon=True, name="bigwarn-lakehouse-persist").start()
 

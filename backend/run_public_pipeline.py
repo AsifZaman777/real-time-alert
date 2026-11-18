@@ -154,7 +154,7 @@ def run_crawler_round(log_dir: Path, ctx_bundle: tuple | None = None, round_no: 
     else:
         ctx, sites = ctx_bundle
 
-    with ThreadPoolExecutor(max_workers=min(12, max(1, len(sites)))) as pool:
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(sites)))) as pool:
         futures = [
             (s, pool.submit(streamer.safe_scrape, ctx, s, round_no, round_no == 1))
             for s in sites
@@ -207,12 +207,15 @@ def main() -> None:
 
     log_dir = Path(args.logs)
     export_dir = Path(args.export_dir)
+    # Restore Yesterday + Today (48h window) from Cloud Storage if container restarted
+    cloud_connector.restore_last_48h_from_cloud(log_dir)
     service = StreamService(primary_logdir=log_dir)
 
     if args.one_shot:
         if args.crawl_now:
             print("[BigWarn Pipeline] Running 45-portal crawl round...")
             run_crawler_round(log_dir)
+        service.rotate_older_than_48h()
         meta = export_static_public_feed(service, export_dir)
         print(
             f"[BigWarn Pipeline] Exported public feeds to {export_dir.resolve()}:\n"
@@ -228,8 +231,9 @@ def main() -> None:
             while True:
                 round_no += 1
                 try:
-                    export_static_public_feed(service, export_dir)
+                    service.rotate_older_than_48h()
                     ctx_bundle = run_crawler_round(log_dir, ctx_bundle=ctx_bundle, round_no=round_no)
+                    service.get_lakehouse_elt("latest")
                     export_static_public_feed(service, export_dir)
                 except Exception as e:
                     import traceback

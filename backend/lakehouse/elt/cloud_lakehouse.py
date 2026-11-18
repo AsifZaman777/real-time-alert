@@ -1,12 +1,13 @@
 """
 Cloud Lakehouse Connector (Azure ADLS Gen2, AWS S3 / Cloudflare R2, and Spark Cloud URIs).
-Syncs Bronze, Silver, and Gold Medallion tables to cloud object storage while keeping
-a local high-speed cache for sub-millisecond edge route queries.
+Syncs Bronze, Silver, Gold, and 48-hour Rolling Stream Archives (.jsonl + .txt/.log)
+to cloud object storage, and restores Yesterday + Today streams on ephemeral container startup.
 """
 from __future__ import annotations
 
 import threading
 import urllib.request
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -62,13 +63,14 @@ class CloudLakehouseConnector:
         bronze_file: Path,
         silver_file: Path,
         gold_file: Path,
+        extra_archives: list[tuple[str, Path, str]] | None = None,
     ) -> None:
-        """Asynchronously pushes Bronze, Silver, and Gold partitions to the configured Cloud Lakehouse."""
+        """Asynchronously pushes Bronze, Silver, Gold, and 48h archive files to Cloud Lakehouse."""
         if not self.is_cloud_enabled:
             return
         t = threading.Thread(
             target=self._sync_worker,
-            args=(day, bronze_file, silver_file, gold_file),
+            args=(day, bronze_file, silver_file, gold_file, extra_archives or []),
             daemon=True,
         )
         t.start()
@@ -79,6 +81,7 @@ class CloudLakehouseConnector:
         bronze_file: Path,
         silver_file: Path,
         gold_file: Path,
+        extra_archives: list[tuple[str, Path, str]],
     ) -> None:
         if not self._lock.acquire(blocking=False):
             return
@@ -87,7 +90,8 @@ class CloudLakehouseConnector:
                 (f"bronze/date={day}/{bronze_file.name}", bronze_file, "application/x-ndjson"),
                 (f"silver/date={day}/{silver_file.name}", silver_file, "application/x-ndjson"),
                 (f"gold/date={day}/{gold_file.name}", gold_file, "application/json"),
-            ]
+            ] + extra_archives
+
             if self.provider == "azure_adls":
                 self._upload_to_azure(files_to_push)
             elif self.provider in ("s3", "s3_r2", "cloudflare_r2", "minio"):
@@ -102,8 +106,71 @@ class CloudLakehouseConnector:
         finally:
             self._lock.release()
 
+    def restore_last_48h_from_cloud(self, logs_dir: Path) -> int:
+        """
+        Restores Yesterday + Today Bronze stream files from Cloud Storage into logs_dir
+        on startup (crucial for ephemeral cloud containers like Render Free Tier).
+        Returns the number of files restored.
+        """
+        if not self.is_cloud_enabled:
+            return 0
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        now = now_dhaka()
+        days = [(now - timedelta(days=1)).strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")]
+        restored = 0
+
+        for day in days:
+            local_target = logs_dir / f"news_stream_{day}.jsonl"
+            if local_target.exists() and local_target.stat().st_size > 0:
+                continue
+            remote_key = f"bronze/date={day}/bronze_articles_{day}.jsonl"
+            try:
+                data = self._download_bytes(remote_key)
+                if data:
+                    local_target.write_bytes(data)
+                    restored += 1
+                    print(f"[CloudLakehouse] Restored {remote_key} ({len(data)} bytes) -> {local_target.name}")
+            except Exception:
+                pass
+        return restored
+
+    def _download_bytes(self, remote_key: str) -> bytes | None:
+        if self.provider == "azure_adls":
+            if settings.azure_storage_sas_url:
+                base_url, _, sas_token = settings.azure_storage_sas_url.partition("?")
+                target_url = f"{base_url.rstrip('/')}/{remote_key}?{sas_token}"
+                req = urllib.request.Request(target_url, method="GET")
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    return resp.read()
+            from azure.storage.blob import BlobServiceClient  # type: ignore
+
+            client = (
+                BlobServiceClient.from_connection_string(settings.azure_storage_connection_string)
+                if settings.azure_storage_connection_string
+                else BlobServiceClient(
+                    account_url=f"https://{settings.azure_storage_account}.blob.core.windows.net",
+                    credential=settings.azure_storage_key,
+                )
+            )
+            blob = client.get_blob_client(container=settings.azure_container, blob=remote_key)
+            if blob.exists():
+                return blob.download_blob().readall()
+        elif self.provider in ("s3", "s3_r2", "cloudflare_r2", "minio"):
+            import boto3  # type: ignore
+
+            s3_kwargs: dict[str, Any] = {
+                "aws_access_key_id": settings.aws_access_key_id,
+                "aws_secret_access_key": settings.aws_secret_access_key,
+                "region_name": settings.s3_region or "auto",
+            }
+            if settings.s3_endpoint_url:
+                s3_kwargs["endpoint_url"] = settings.s3_endpoint_url
+            s3 = boto3.client("s3", **s3_kwargs)
+            obj = s3.get_object(Bucket=settings.s3_bucket, Key=remote_key)
+            return obj["Body"].read()
+        return None
+
     def _upload_to_azure(self, items: list[tuple[str, Path, str]]) -> None:
-        # 1. Zero-dependency SAS URL upload (works immediately with an Azure Container SAS URL)
         if settings.azure_storage_sas_url:
             base_url, _, sas_token = settings.azure_storage_sas_url.partition("?")
             base_url = base_url.rstrip("/")
@@ -126,7 +193,6 @@ class CloudLakehouseConnector:
                     _ = resp.status
             return
 
-        # 2. Azure SDK upload via Connection String or Account Key
         from azure.storage.blob import BlobServiceClient  # type: ignore
 
         if settings.azure_storage_connection_string:
