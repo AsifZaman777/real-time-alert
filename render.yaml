@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bigwarn-public-stream
+    runtime: python
+    plan: free
+    healthCheckPath: /api/v1/health
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python backend/run_public_pipeline.py --host 0.0.0.0 --interval 240
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: BIGWARN_CLOUD_PROVIDER
+        value: local
