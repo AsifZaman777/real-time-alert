@@ -82,7 +82,12 @@ function detectDevHost(): string | null {
 
 const detectedHost = detectDevHost() || "192.168.0.104";
 
-export const DEFAULT_API_BASE_URL = `http://${detectedHost}:8765`;
+const envApiUrl = (process.env.EXPO_PUBLIC_API_URL || "").trim().replace(/\/+$/, "");
+const envCloudUrl = (process.env.EXPO_PUBLIC_CLOUD_API_URL || "").trim().replace(/\/+$/, "");
+
+export const LOCAL_API_BASE_URL = `http://${detectedHost}:8765`;
+export const CLOUD_API_BASE_URL = envCloudUrl || envApiUrl || LOCAL_API_BASE_URL;
+export const DEFAULT_API_BASE_URL = envApiUrl || LOCAL_API_BASE_URL;
 
 export const DHAKA_PRESETS: Record<string, Coordinates> = {
   Dhanmondi: { lat: 23.7461, lon: 90.3742, label: "Dhanmondi" },

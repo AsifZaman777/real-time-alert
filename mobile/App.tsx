@@ -15,7 +15,12 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { DEFAULT_API_BASE_URL, DHAKA_PRESETS } from "./src/config/api";
+import {
+  CLOUD_API_BASE_URL,
+  DEFAULT_API_BASE_URL,
+  DHAKA_PRESETS,
+  LOCAL_API_BASE_URL,
+} from "./src/config/api";
 import {
   Coordinates,
   GoldAlert,
@@ -151,7 +156,7 @@ export default function App() {
 
   const fetchAlerts = useCallback(async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
       const cleanBase = apiUrl.trim().replace(/\/+$/, "");
       const routeParams = new URLSearchParams({
@@ -409,9 +414,21 @@ export default function App() {
                 onChangeText={setApiUrl}
                 autoCapitalize="none"
                 autoCorrect={false}
-                placeholder="http://192.168.0.104:8765"
+                placeholder={LOCAL_API_BASE_URL}
                 placeholderTextColor="#64748B"
               />
+              <TouchableOpacity
+                onPress={() => setApiUrl(CLOUD_API_BASE_URL)}
+                style={styles.applyBtn}
+              >
+                <Text style={styles.applyText}>Cloud</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setApiUrl(LOCAL_API_BASE_URL)}
+                style={[styles.applyBtn, { backgroundColor: "#334155" }]}
+              >
+                <Text style={[styles.applyText, { color: "#E2E8F0" }]}>Local</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={fetchAlerts} style={styles.applyBtn}>
                 <Text style={styles.applyText}>Sync</Text>
               </TouchableOpacity>
