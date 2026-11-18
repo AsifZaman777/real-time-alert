@@ -5,11 +5,137 @@
     <link>http://localhost:8765/api/v1/stream/feed</link>
     <description>Live open-source Medallion Lakehouse feed from 45 Bangladeshi news portals</description>
     <item>
-      <title>[MURDER • Mirpur] রাজধানীতে নারী পোশাকশ্রমিককে কুপিয়ে হত্যা</title>
-      <link>https://www.jugantor.com/capital/1186189</link>
-      <description>Verified by 3 newspapers/portals (99%) — Area: Mirpur, Dhaka</description>
-      <pubDate>2026-11-18T14:33:49+06:00</pubDate>
+      <title>[FIRE • Gazipur] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 27 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>23.9999 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[BLOCKADE • Gazipur] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 14 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>23.9999 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Gazipur] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 14 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>23.9999 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[BLOCKADE • Mymensingh] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 13 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>24.7471 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Mymensingh] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 8 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>24.7471 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[FIRE • Mymensingh] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 6 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>24.7471 90.4203</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Tongi] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Tongi, Gazipur</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>23.8973 90.4026</georss:point>
+    </item>
+    <item>
+      <title>[BLOCKADE • Tongi] শ্রমিক-পুলিশ সংঘর্ষ, সাউন্ড গ্রেনেড নিক্ষেপ</title>
+      <link>https://www.jugantor.com/country-news/1186194</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Tongi, Gazipur</description>
+      <pubDate>2026-11-18T14:48:57+06:00</pubDate>
+      <georss:point>23.8973 90.4026</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Mirpur] মিরপুরে পোশাকশ্রমিক-পুলিশ সংঘর্ষ, টিয়ারশেল, সাউন্ড গ্রেনেড নিক্ষেপ - MZamin</title>
+      <link>https://www.mzamin.com/article/61008</link>
+      <description>Verified by 29 newspapers/portals (99%) — Area: Mirpur, Dhaka</description>
+      <pubDate>2026-11-18T14:44:20+06:00</pubDate>
       <georss:point>23.8069 90.3687</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Chattogram] চট্টগ্রাম-কক্সবাজার মহাসড়কে দুই ট্রাকের সংঘর্ষ, আহত ৪</title>
+      <link>https://www.deshrupantor.com/736113/%E0%A6%9A%E0%A6%9F%E0%A7%8D%E0%A6%9F%E0%A6%97%E0%A7%8D%E0%A6%B0%E0%A6%BE%E0%A6%AE-%E0%A6%95%E0%A6%95%E0%A7%8D%E0%A6%B8%E0%A6%AC%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0-%E0%A6%AE%E0%A6%B9%E0%A6%BE%E0%A6%B8%E0%A7%9C%E0%A6%95%E0%A7%87-%E0%A6%A6%E0%A7%81%E0%A6%87-%E0%A6%9F%E0%A7%8D%E0%A6%B0%E0%A6%BE%E0%A6%95%E0%A7%87%E0%A6%B0-%E0%A6%B8%E0%A6%82%E0%A6%98%E0%A6%B0%E0%A7%8D%E0%A6%B7</link>
+      <description>Verified by 6 newspapers/portals (99%) — Area: Chattogram, Chattogram</description>
+      <pubDate>2026-11-18T14:40:36+06:00</pubDate>
+      <georss:point>22.3569 91.7832</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Cox&#x27;s Bazar] চট্টগ্রাম-কক্সবাজার মহাসড়কে দুই ট্রাকের সংঘর্ষ, আহত ৪</title>
+      <link>https://www.deshrupantor.com/736113/%E0%A6%9A%E0%A6%9F%E0%A7%8D%E0%A6%9F%E0%A6%97%E0%A7%8D%E0%A6%B0%E0%A6%BE%E0%A6%AE-%E0%A6%95%E0%A6%95%E0%A7%8D%E0%A6%B8%E0%A6%AC%E0%A6%BE%E0%A6%9C%E0%A6%BE%E0%A6%B0-%E0%A6%AE%E0%A6%B9%E0%A6%BE%E0%A6%B8%E0%A7%9C%E0%A6%95%E0%A7%87-%E0%A6%A6%E0%A7%81%E0%A6%87-%E0%A6%9F%E0%A7%8D%E0%A6%B0%E0%A6%BE%E0%A6%95%E0%A7%87%E0%A6%B0-%E0%A6%B8%E0%A6%82%E0%A6%98%E0%A6%B0%E0%A7%8D%E0%A6%B7</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Cox&#x27;s Bazar, Cox&#x27;s Bazar</description>
+      <pubDate>2026-11-18T14:40:36+06:00</pubDate>
+      <georss:point>21.4272 92.0058</georss:point>
+    </item>
+    <item>
+      <title>[FIRE • Mohakhali] মহাখালীর সাততলা বস্তিতে আগুন: শতাধিক পরিবারের বসতঘর ক্ষতিগ্রস্ত হওয়ার আশঙ্কা</title>
+      <link>https://www.tbsnews.net/bangla/bangladesh/news-details-567176</link>
+      <description>Verified by 35 newspapers/portals (99%) — Area: Mohakhali, Dhaka</description>
+      <pubDate>2026-11-18T14:40:00+06:00</pubDate>
+      <georss:point>23.7778 90.4052</georss:point>
+    </item>
+    <item>
+      <title>[MURDER • Cumilla] রাতে মায়ের ওষুধ আনতে গিয়ে নিখোঁজ, সকালে ধানক্ষেতে মিলল মরদেহ</title>
+      <link>https://www.ntvbd.com/bangladesh/news-1838581</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Cumilla, Cumilla</description>
+      <pubDate>2026-11-18T14:40:00+06:00</pubDate>
+      <georss:point>23.4607 91.1809</georss:point>
+    </item>
+    <item>
+      <title>[MURDER • Narayanganj] নারায়ণগঞ্জের ফতুল্লায় হামলা-ভাঙচুরের ভিডিও ধারণ করায় যুবককে কুপিয়ে হত্যা</title>
+      <link>https://www.tbsnews.net/bangla/bangladesh/news-details-567181</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Narayanganj, Narayanganj</description>
+      <pubDate>2026-11-18T14:40:00+06:00</pubDate>
+      <georss:point>23.6238 90.5</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Narayanganj] নারায়ণগঞ্জের ফতুল্লায় হামলা-ভাঙচুরের ভিডিও ধারণ করায় যুবককে কুপিয়ে হত্যা</title>
+      <link>https://www.tbsnews.net/bangla/bangladesh/news-details-567181</link>
+      <description>Verified by 1 newspaper/portal (63%) — Area: Narayanganj, Narayanganj</description>
+      <pubDate>2026-11-18T14:40:00+06:00</pubDate>
+      <georss:point>23.6238 90.5</georss:point>
+    </item>
+    <item>
+      <title>[MURDER • Mirpur] রূপনগরে নারী পোশাকশ্রমিককে কুপিয়ে জখম</title>
+      <link>https://www.dhakapost.com/national/498900</link>
+      <description>Verified by 4 newspapers/portals (99%) — Area: Mirpur, Dhaka</description>
+      <pubDate>2026-11-18T14:39:19+06:00</pubDate>
+      <georss:point>23.8069 90.3687</georss:point>
+    </item>
+    <item>
+      <title>[GUNFIRE • Rajshahi] ককটেল বিস্ফোরণের মামলায় খেলনা পিস্তলসহ যুবক গ্রেপ্তার</title>
+      <link>https://bangla.dhakatribune.com/bangladesh/113341/%E0%A6%95%E0%A6%95%E0%A6%9F%E0%A7%87%E0%A6%B2-%E0%A6%AC%E0%A6%BF%E0%A6%B8%E0%A7%8D%E0%A6%AB%E0%A7%8B%E0%A6%B0%E0%A6%A3%E0%A7%87%E0%A6%B0-%E0%A6%AE%E0%A6%BE%E0%A6%AE%E0%A6%B2%E0%A6%BE%E0%A7%9F-%E0%A6%96%E0%A7%87%E0%A6%B2%E0%A6%A8%E0%A6%BE-%E0%A6%AA%E0%A6%BF%E0%A6%B8%E0%A7%8D%E0%A6%A4%E0%A6%B2%E0%A6%B8%E0%A6%B9-%E0%A6%AF%E0%A7%81%E0%A6%AC%E0%A6%95</link>
+      <description>Verified by 11 newspapers/portals (99%) — Area: Rajshahi, Rajshahi</description>
+      <pubDate>2026-11-18T14:37:46+06:00</pubDate>
+      <georss:point>24.3745 88.6042</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Savar] উত্তপ্ত সাভার-আশুলিয়া শিল্পাঞ্চল, কারখানায় ভাঙচুর-লুটপাট</title>
+      <link>https://www.ntvbd.com/bangladesh/news-1838577</link>
+      <description>Verified by 8 newspapers/portals (99%) — Area: Savar, Dhaka</description>
+      <pubDate>2026-11-18T14:35:00+06:00</pubDate>
+      <georss:point>23.8583 90.2667</georss:point>
+    </item>
+    <item>
+      <title>[CLASH • Ashulia] উত্তপ্ত সাভার-আশুলিয়া শিল্পাঞ্চল, কারখানায় ভাঙচুর-লুটপাট</title>
+      <link>https://www.ntvbd.com/bangladesh/news-1838577</link>
+      <description>Verified by 7 newspapers/portals (99%) — Area: Ashulia, Dhaka</description>
+      <pubDate>2026-11-18T14:35:00+06:00</pubDate>
+      <georss:point>23.901 90.3245</georss:point>
     </item>
     <item>
       <title>[BLOCKADE • Savar] সাভার-আশুলিয়ায় শ্রমিক অসন্তোষ, সড়ক অবরোধের চেষ্টা; গ্রেপ্তার প্রায় ৩০০</title>
@@ -38,13 +164,6 @@
       <description>Verified by 3 newspapers/portals (99%) — Area: Mouchak, Dhaka</description>
       <pubDate>2026-11-18T14:30:13+06:00</pubDate>
       <georss:point>23.7456 90.4092</georss:point>
-    </item>
-    <item>
-      <title>[CLASH • Mirpur] মিরপুরে পুলিশ-বিজিবির সঙ্গে পোশাকশ্রমিকদের সংঘর্ষ</title>
-      <link>https://samakal.com/capital/article/383779/মিরপুরে-পুলিশ-বিজিবির-সঙ্গে-পোশাকশ্রমিকদের-সংঘর্ষ</link>
-      <description>Verified by 27 newspapers/portals (99%) — Area: Mirpur, Dhaka</description>
-      <pubDate>2026-11-18T14:20:26+06:00</pubDate>
-      <georss:point>23.8069 90.3687</georss:point>
     </item>
     <item>
       <title>[FIRE • Chattogram] Grameen Bank office set on fire in Satkania</title>
@@ -96,34 +215,6 @@
       <georss:point>23.9999 90.4203</georss:point>
     </item>
     <item>
-      <title>[FIRE • Gazipur] গাজীপুরে পুলিশের গাড়িতে আগুন</title>
-      <link>https://www.arthosuchak.com/archives/982934/%e0%a6%97%e0%a6%be%e0%a6%9c%e0%a7%80%e0%a6%aa%e0%a7%81%e0%a6%b0%e0%a7%87-%e0%a6%aa%e0%a7%81%e0%a6%b2%e0%a6%bf%e0%a6%b6%e0%a7%87%e0%a6%b0-%e0%a6%97%e0%a6%be%e0%a6%a1%e0%a6%bc%e0%a6%bf%e0%a6%a4%e0%a7%87</link>
-      <description>Verified by 25 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
-      <pubDate>2026-11-18T13:59:00+06:00</pubDate>
-      <georss:point>23.9999 90.4203</georss:point>
-    </item>
-    <item>
-      <title>[CLASH • Gazipur] Labour Unrest Shuts 39 Factories Across Gazipur</title>
-      <link>https://bangladeshpost.net/posts/labour-unrest-shuts-39-factories-across-gazipur-175698</link>
-      <description>Verified by 14 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
-      <pubDate>2026-11-18T13:55:00+06:00</pubDate>
-      <georss:point>23.9999 90.4203</georss:point>
-    </item>
-    <item>
-      <title>[FIRE • Mohakhali] সাততলা বস্তিতে আগুনে ক্ষতিগ্রস্ত শতাধিক পরিবার: ফায়ার সার্ভিস</title>
-      <link>https://www.banglanews24.com/national/news/bd/1694240.details</link>
-      <description>Verified by 35 newspapers/portals (99%) — Area: Mohakhali, Dhaka</description>
-      <pubDate>2026-11-18T13:49:35+06:00</pubDate>
-      <georss:point>23.7778 90.4052</georss:point>
-    </item>
-    <item>
-      <title>[CLASH • Ashulia] আশুলিয়ায় সড়ক অবরোধের চেষ্টা শ্রমিকদের, টিয়ারশেলে ছত্রভঙ্গ করল পুলিশ</title>
-      <link>https://www.dhakapost.com/country/498882</link>
-      <description>Verified by 7 newspapers/portals (99%) — Area: Ashulia, Dhaka</description>
-      <pubDate>2026-11-18T13:41:48+06:00</pubDate>
-      <georss:point>23.901 90.3245</georss:point>
-    </item>
-    <item>
       <title>[FIRE • Rangpur] রংপুরে দুর্বৃত্তদের আগুনে কোচিং সেন্টারের বাস পুড়ে ছাই</title>
       <link>https://sarabangla.net/bangladesh/post-1222354</link>
       <description>Verified by 8 newspapers/portals (99%) — Area: Rangpur, Rangpur</description>
@@ -136,13 +227,6 @@
       <description>Verified by 1 newspaper/portal (63%) — Area: Mirpur, Dhaka</description>
       <pubDate>2026-11-18T13:33:13+06:00</pubDate>
       <georss:point>23.8069 90.3687</georss:point>
-    </item>
-    <item>
-      <title>[CLASH • Savar] সাভারে পোশাকশ্রমিক বিক্ষোভ: কাঁদানে গ্যাস-সাউন্ড গ্রেনেড নিক্ষেপ, কারখানা ছুটি</title>
-      <link>https://bangla.bdnews24.com/samagrabangladesh/hf9memvl9b</link>
-      <description>Verified by 8 newspapers/portals (99%) — Area: Savar, Dhaka</description>
-      <pubDate>2026-11-18T13:31:33+06:00</pubDate>
-      <georss:point>23.8583 90.2667</georss:point>
     </item>
     <item>
       <title>[CLASH • Mirpur-11] কাফরুলে পুলিশের রাবার বুলেটে নারী শ্রমিক আহত</title>
@@ -159,25 +243,11 @@
       <georss:point>23.8069 90.3687</georss:point>
     </item>
     <item>
-      <title>[GUNFIRE • Rajshahi] রাজশাহীতে গ্রামীণ ব্যাংক কার্যালয়ে পেট্রোল বোমা নিক্ষেপ</title>
-      <link>https://www.deshrupantor.com/736103/%E0%A6%B0%E0%A6%BE%E0%A6%9C%E0%A6%B6%E0%A6%BE%E0%A6%B9%E0%A7%80%E0%A6%A4%E0%A7%87-%E0%A6%97%E0%A7%8D%E0%A6%B0%E0%A6%BE%E0%A6%AE%E0%A7%80%E0%A6%A3-%E0%A6%AC%E0%A7%8D%E0%A6%AF%E0%A6%BE%E0%A6%82%E0%A6%95-%E0%A6%95%E0%A6%BE%E0%A6%B0%E0%A7%8D%E0%A6%AF%E0%A6%BE%E0%A6%B2%E0%A7%9F%E0%A7%87-%E0%A6%AA%E0%A7%87%E0%A6%9F%E0%A7%8D%E0%A6%B0%E0%A7%8B%E0%A6%B2-%E0%A6%AC%E0%A7%8B%E0%A6%AE%E0%A6%BE</link>
-      <description>Verified by 11 newspapers/portals (99%) — Area: Rajshahi, Rajshahi</description>
-      <pubDate>2026-11-18T13:21:12+06:00</pubDate>
-      <georss:point>24.3745 88.6042</georss:point>
-    </item>
-    <item>
       <title>[FIRE • Barishal] পিরোজপুরে দাঁড়িয়ে থাকা দুই বাসে অগ্নিসংযোগ, হেলপার নিহত</title>
       <link>https://bangla.dhakatribune.com/bangladesh/113334/%E0%A6%AA%E0%A6%BF%E0%A6%B0%E0%A7%8B%E0%A6%9C%E0%A6%AA%E0%A7%81%E0%A6%B0%E0%A7%87-%E0%A6%A6%E0%A6%BE%E0%A6%81%E0%A7%9C%E0%A6%BF%E0%A7%9F%E0%A7%87-%E0%A6%A5%E0%A6%BE%E0%A6%95%E0%A6%BE-%E0%A6%A6%E0%A7%81%E0%A6%87-%E0%A6%AC%E0%A6%BE%E0%A6%B8%E0%A7%87-%E0%A6%85%E0%A6%97%E0%A7%8D%E0%A6%A8%E0%A6%BF%E0%A6%B8%E0%A6%82%E0%A6%AF%E0%A7%8B%E0%A6%97-%E0%A6%B9%E0%A7%87%E0%A6%B2%E0%A6%AA%E0%A6%BE%E0%A6%B0</link>
       <description>Verified by 22 newspapers/portals (99%) — Area: Barishal, Barishal</description>
       <pubDate>2026-11-18T13:18:43+06:00</pubDate>
       <georss:point>22.701 90.3535</georss:point>
-    </item>
-    <item>
-      <title>[CLASH • Chattogram] দুই অটোরিকশার মুখোমুখি সংঘর্ষে নিহত ১</title>
-      <link>https://www.banglanews24.com/daily-chittagong/news/bd/1694233.details</link>
-      <description>Verified by 5 newspapers/portals (99%) — Area: Chattogram, Chattogram</description>
-      <pubDate>2026-11-18T13:17:50+06:00</pubDate>
-      <georss:point>22.3569 91.7832</georss:point>
     </item>
     <item>
       <title>[ACCIDENT • Chattogram] দুই অটোরিকশার মুখোমুখি সংঘর্ষে নিহত ১</title>
@@ -187,13 +257,6 @@
       <georss:point>22.3569 91.7832</georss:point>
     </item>
     <item>
-      <title>[CLASH • Mymensingh] ডিএনসিসি প্রশাসকের ব্যক্তিগত কার্যালয়ে ইটপাটকেল নিক্ষেপ - MZamin</title>
-      <link>https://www.mzamin.com/article/60997</link>
-      <description>Verified by 7 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
-      <pubDate>2026-11-18T13:17:18+06:00</pubDate>
-      <georss:point>24.7471 90.4203</georss:point>
-    </item>
-    <item>
       <title>[BLOCKADE • Barishal] ফরিদপুরে বিএনপি কার্যালয়ে হামলা-ভাঙচুর, নিহত কৃষক দল নেতা</title>
       <link>https://www.itvbd.com/country/dhaka/278225/%E0%A6%AB%E0%A6%B0%E0%A6%BF%E0%A6%A6%E0%A6%AA%E0%A7%81%E0%A6%B0%E0%A7%87-%E0%A6%AC%E0%A6%BF%E0%A6%8F%E0%A6%A8%E0%A6%AA%E0%A6%BF-%E0%A6%95%E0%A6%BE%E0%A6%B0%E0%A7%8D%E0%A6%AF%E0%A6%BE%E0%A6%B2%E0%A7%9F%E0%A7%87-%E0%A6%B9%E0%A6%BE%E0%A6%AE%E0%A6%B2%E0%A6%BE-%E0%A6%AD%E0%A6%BE%E0%A6%99%E0%A6%9A%E0%A7%81%E0%A6%B0-%E0%A6%A8%E0%A6%BF%E0%A6%B9%E0%A6%A4-%E0%A6%95%E0%A7%83%E0%A6%B7%E0%A6%95</link>
       <description>Verified by 8 newspapers/portals (99%) — Area: Barishal, Barishal</description>
@@ -201,46 +264,11 @@
       <georss:point>22.701 90.3535</georss:point>
     </item>
     <item>
-      <title>[BLOCKADE • Mymensingh] পুলিশের গাড়িতে বিক্ষুব্ধ শ্রমিকদের আগুন</title>
-      <link>https://www.bhorerkagoj.net/dhaka/803725</link>
-      <description>Verified by 13 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
-      <pubDate>2026-11-18T13:00:00+06:00</pubDate>
-      <georss:point>24.7471 90.4203</georss:point>
-    </item>
-    <item>
-      <title>[BLOCKADE • Gazipur] এবার আগুনে পুড়ল গাজীপুরে উপ-পুলিশ কমিশনারের গাড়ি</title>
-      <link>https://rtvonline.com/country/416381</link>
-      <description>Verified by 12 newspapers/portals (99%) — Area: Gazipur, Gazipur</description>
-      <pubDate>2026-11-18T12:30:40+06:00</pubDate>
-      <georss:point>23.9999 90.4203</georss:point>
-    </item>
-    <item>
-      <title>[FIRE • Mymensingh] গাজীপুরে ঢাকা-ময়মনসিংহ মহাসড়কে পুলিশের গাড়িতে আগুন, ৩০ পোশাক কারখানা ছুটি</title>
-      <link>https://www.ajkerpatrika.com/bangladesh/gazipur/ajpvk71ui6df5</link>
-      <description>Verified by 5 newspapers/portals (99%) — Area: Mymensingh, Mymensingh</description>
-      <pubDate>2026-11-18T12:27:47.191228+06:00</pubDate>
-      <georss:point>24.7471 90.4203</georss:point>
-    </item>
-    <item>
       <title>[PROCESSION • Bogura] বগুড়ায় নিষিদ্ধ ছাত্রলীগ সভাপতির নেতৃত্বে মশাল মিছিল - MZamin</title>
       <link>https://www.mzamin.com/article/60990</link>
       <description>Verified by 1 newspaper/portal (63%) — Area: Bogura, Bogura</description>
       <pubDate>2026-11-18T12:16:42+06:00</pubDate>
       <georss:point>24.8481 89.373</georss:point>
-    </item>
-    <item>
-      <title>[MURDER • Demra] দুই বোনের ডাকেও মিলল না সাড়া, দরজা ভেঙে মিলল নিথর দেহ</title>
-      <link>https://www.ittefaq.com.bd/821639/%E0%A6%A6%E0%A7%81%E0%A6%87-%E0%A6%AC%E0%A7%8B%E0%A6%A8%E0%A7%87%E0%A6%B0-%E0%A6%A1%E0%A6%BE%E0%A6%95%E0%A7%87%E0%A6%93-%E0%A6%AE%E0%A6%BF%E0%A6%B2%E0%A6%B2-%E0%A6%A8%E0%A6%BE-%E0%A6%B8%E0%A6%BE%E0%A7%9C%E0%A6%BE-%E0%A6%A6%E0%A6%B0%E0%A6%9C%E0%A6%BE-%E0%A6%AD%E0%A7%87%E0%A6%99%E0%A7%87-%E0%A6%AE%E0%A6%BF%E0%A6%B2%E0%A6%B2-%E0%A6%A8%E0%A6%BF%E0%A6%A5%E0%A6%B0</link>
-      <description>Verified by 3 newspapers/portals (99%) — Area: Demra, Dhaka</description>
-      <pubDate>2026-11-18T11:46:41+06:00</pubDate>
-      <georss:point>23.7224 90.4875</georss:point>
-    </item>
-    <item>
-      <title>[GUNFIRE • Chattogram] ‘জয় বাংলা’ স্লোগান দিয়ে বিএনপি নেতার বাড়িতে ককটেল বিস্ফোরণ, আগুন</title>
-      <link>https://rtvonline.com/country/416374</link>
-      <description>Verified by 3 newspapers/portals (99%) — Area: Chattogram, Chattogram</description>
-      <pubDate>2026-11-18T11:38:06+06:00</pubDate>
-      <georss:point>22.3569 91.7832</georss:point>
     </item>
   </channel>
 </rss>

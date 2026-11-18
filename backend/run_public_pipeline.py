@@ -103,14 +103,72 @@ def export_static_public_feed(service: StreamService, out_dir: Path) -> dict:
     return status_meta
 
 
-def run_crawler_round(log_dir: Path) -> None:
-    """Runs one crawling round across the 45 Bangladeshi news portals."""
-    seen = streamer.load_seen()
-    state = streamer.StreamState(log_dir)
-    try:
-        streamer.crawl_round(state, seen)
-    finally:
-        state.close()
+def _create_crawler_ctx(log_dir: Path, max_articles: int = 25) -> tuple:
+    """Initializes a reusable Ctx and Output writing to log_dir."""
+    from types import SimpleNamespace
+    from concurrent.futures import ThreadPoolExecutor  # noqa: F401
+
+    data_dir = log_dir.parent
+    out = streamer.Output(data_dir)
+    sites = streamer.compile_sites(only=None, lang_filter=None)
+    args = SimpleNamespace(
+        user_agent=streamer.DEFAULT_UA,
+        verbose=False,
+        ignore_robots=False,
+        no_categories=False,
+        max_categories=12,
+        cats_per_round=2,
+        rediscover=120,
+        max_articles=max_articles,
+        first_round_max=max_articles,
+        backfill_pages=1,
+        from_now=False,
+        article_pause_min=0.15,
+        article_pause_max=0.45,
+    )
+    fetchers = {
+        s["key"]: streamer.Fetcher(args.user_agent, args.verbose, check_robots=True)
+        for s in sites
+    }
+    allowed = []
+    for s in sites:
+        f = fetchers[s["key"]]
+        f.load_robots(s["home"])
+        if f.allowed(s["home"]):
+            allowed.append(s)
+    seen = out.load_seen()
+    ctx = streamer.Ctx(args, out, seen, fetchers)
+    out.note(
+        f"BigWarn Cloud Pipeline crawler initialized: {len(allowed)} portals active. "
+        f"Logs -> {out.logdir}"
+    )
+    return ctx, allowed
+
+
+def run_crawler_round(log_dir: Path, ctx_bundle: tuple | None = None, round_no: int = 1) -> tuple:
+    """Runs one crawling round across all allowed Bangladeshi news portals."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    if ctx_bundle is None:
+        ctx, sites = _create_crawler_ctx(log_dir)
+    else:
+        ctx, sites = ctx_bundle
+
+    with ThreadPoolExecutor(max_workers=min(12, max(1, len(sites)))) as pool:
+        futures = [
+            (s, pool.submit(streamer.safe_scrape, ctx, s, round_no, round_no == 1))
+            for s in sites
+        ]
+        counts = {s["name"]: fut.result() for s, fut in futures}
+
+    new_count = sum(counts.values())
+    ctx.out.save_seen(ctx.seen)
+    detail = ", ".join(f"{n} {c}" for n, c in counts.items() if c)
+    ctx.out.note(
+        f"-- round {round_no} done at {now_dhaka():%H:%M:%S}: {new_count} new today"
+        + (f" ({detail})" if detail else "")
+    )
+    return ctx, sites
 
 
 def start_cloudflare_tunnel(port: int) -> None:
@@ -165,13 +223,18 @@ def main() -> None:
 
     if not args.no_crawler:
         def _bg_worker() -> None:
+            ctx_bundle = None
+            round_no = 0
             while True:
+                round_no += 1
                 try:
                     export_static_public_feed(service, export_dir)
-                    run_crawler_round(log_dir)
+                    ctx_bundle = run_crawler_round(log_dir, ctx_bundle=ctx_bundle, round_no=round_no)
                     export_static_public_feed(service, export_dir)
                 except Exception as e:
+                    import traceback
                     print(f"[BigWarn Pipeline] Background round warning: {e}")
+                    traceback.print_exc()
                 time.sleep(max(30, args.interval))
 
         threading.Thread(target=_bg_worker, daemon=True, name="bigwarn-pipeline-worker").start()

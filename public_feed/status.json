@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-11-18T14:35:57.166795+06:00",
+  "generated_at": "2026-11-18T14:51:51.185945+06:00",
   "date": "2026-11-18",
-  "active_3h_gold_clusters": 34,
-  "recent_6h_silver_articles": 279,
+  "active_3h_gold_clusters": 38,
+  "recent_6h_silver_articles": 272,
   "cloud_lakehouse": {
     "provider": "local_medallion",
     "cloud_enabled": false,
