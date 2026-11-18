@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Linking,
   Modal,
@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { GoldAlert } from "../types/alert";
 import { VeracityMeter } from "./VeracityMeter";
+import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
 
 interface AreaDetailModalProps {
   visible: boolean;
@@ -25,6 +26,29 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
   alerts,
   onClose,
 }) => {
+  // Sort clusters and their articles so the most recent news is always at the top
+  const sortedAlerts = useMemo(() => {
+    return [...alerts]
+      .map((cluster) => {
+        const sortedArticles = [...(cluster.articles || [])].sort((a, b) => {
+          const tsA = a.published || a.ingested_at || "";
+          const tsB = b.published || b.ingested_at || "";
+          return tsB.localeCompare(tsA);
+        });
+        const newestTs =
+          sortedArticles[0]?.published ||
+          sortedArticles[0]?.ingested_at ||
+          cluster.last_updated ||
+          "";
+        return {
+          ...cluster,
+          articles: sortedArticles,
+          _newestTs: newestTs,
+        };
+      })
+      .sort((a, b) => b._newestTs.localeCompare(a._newestTs));
+  }, [alerts]);
+
   if (!areaName) return null;
 
   return (
@@ -33,7 +57,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
         <View style={styles.sheet}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.kicker}>AREA DISRUPTION INTEL</Text>
+              <Text style={styles.kicker}>AREA THREAT & DISRUPTION INTEL</Text>
               <Text style={styles.title}>{areaName}</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -42,10 +66,12 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
           </View>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-            {alerts.length === 0 ? (
-              <Text style={styles.empty}>No disruption alerts recorded for {areaName}.</Text>
+            {sortedAlerts.length === 0 ? (
+              <Text style={styles.empty}>
+                No active threat or disruption alerts recorded for {areaName}.
+              </Text>
             ) : (
-              alerts.map((cluster) => {
+              sortedAlerts.map((cluster) => {
                 const isRed = cluster.color === "#EF4444";
                 return (
                   <View
@@ -67,7 +93,8 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                         ]}
                       >
                         <Text style={[styles.eventPillText, { color: cluster.color }]}>
-                          {cluster.event_type.toUpperCase()} • {cluster.severity}
+                          {formatEventLabel(cluster.event_type).toUpperCase()} •{" "}
+                          {cluster.severity}
                         </Text>
                       </View>
                       {cluster.on_route && (
@@ -76,6 +103,15 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                         </View>
                       )}
                     </View>
+
+                    {cluster._newestTs ? (
+                      <View style={styles.clusterTimeRow}>
+                        <Ionicons name="time-outline" size={12} color="#38BDF8" />
+                        <Text style={styles.clusterTimeText}>
+                          Latest report: {formatNewsTimestamp(cluster._newestTs)}
+                        </Text>
+                      </View>
+                    ) : null}
 
                     <VeracityMeter
                       veracityPercent={cluster.veracity_percent}
@@ -86,7 +122,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                     />
 
                     <Text style={styles.headlinesTitle}>
-                      Headlines ({cluster.articles.length})
+                      Recent Reports — Newest First ({cluster.articles.length})
                     </Text>
 
                     {cluster.articles.map((art, idx) => (
@@ -98,12 +134,31 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                         }}
                       >
                         <View style={styles.articleMeta}>
-                          <Text style={styles.articleSource}>{art.source}</Text>
-                          <Text style={styles.articleLang}>
-                            {art.lang?.toUpperCase()}
+                          <View style={styles.sourceWrap}>
+                            <Text style={styles.articleSource}>{art.source}</Text>
+                            <Text style={styles.articleLang}>
+                              {art.lang?.toUpperCase()}
+                            </Text>
+                          </View>
+                          {idx === 0 && (
+                            <View style={styles.latestBadge}>
+                              <Text style={styles.latestBadgeText}>LATEST</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <Text style={styles.articleHeadline}>{art.headline}</Text>
+
+                        <View style={styles.publishTimeRow}>
+                          <Ionicons
+                            name="calendar-outline"
+                            size={11}
+                            color="#94A3B8"
+                          />
+                          <Text style={styles.publishTimeText}>
+                            {formatNewsTimestamp(art.published, art.ingested_at)}
                           </Text>
                         </View>
-                        <Text style={styles.articleHeadline}>{art.headline}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -127,7 +182,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0B1120",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "82%",
+    maxHeight: "84%",
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
@@ -157,11 +212,6 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 8,
   },
-  closeText: {
-    color: "#E2E8F0",
-    fontWeight: "600",
-    fontSize: 13,
-  },
   scroll: {
     flexGrow: 0,
   },
@@ -183,6 +233,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
+  },
+  clusterTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 6,
+  },
+  clusterTimeText: {
+    color: "#7DD3FC",
+    fontSize: 11,
+    fontWeight: "600",
   },
   eventPill: {
     borderRadius: 6,
@@ -217,7 +278,7 @@ const styles = StyleSheet.create({
   articleRow: {
     backgroundColor: "#0F172A",
     borderRadius: 8,
-    padding: 9,
+    padding: 10,
     marginBottom: 6,
     borderWidth: 1,
     borderColor: "#1E293B",
@@ -225,7 +286,13 @@ const styles = StyleSheet.create({
   articleMeta: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 3,
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  sourceWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   articleSource: {
     color: "#38BDF8",
@@ -236,10 +303,39 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 10,
     fontWeight: "700",
+    backgroundColor: "#1E293B",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  latestBadge: {
+    backgroundColor: "rgba(16, 185, 129, 0.18)",
+    borderColor: "#10B981",
+    borderWidth: 0.8,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  latestBadgeText: {
+    color: "#34D399",
+    fontSize: 9,
+    fontWeight: "800",
   },
   articleHeadline: {
     color: "#F1F5F9",
     fontSize: 13,
     lineHeight: 18,
+    fontWeight: "600",
+  },
+  publishTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 6,
+  },
+  publishTimeText: {
+    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "500",
   },
 });

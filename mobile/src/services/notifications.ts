@@ -1,49 +1,13 @@
-import { Platform, Vibration } from "react-native";
-import * as Notifications from "expo-notifications";
 import { GoldAlert } from "../types/alert";
 
-const CHANNEL_ID = "route-anomaly-alerts";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
-export async function initNotifications(): Promise<boolean> {
-  try {
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: "Route Anomaly & Strike Alerts",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 200, 250],
-        lightColor: "#EF4444",
-        sound: "default",
-      });
-    }
-
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    return finalStatus === "granted";
-  } catch {
-    return false;
-  }
-}
-
 const EVENT_LABELS: Record<string, string> = {
+  gunfire: "Firing / Bomb Blast",
+  murder: "Murder / Violent Crime",
   blockade: "Road Blockade",
   strike: "Strike / Hartal",
-  clash: "Street Clash",
-  fire: "Fire Incident",
-  procession: "Protest Procession",
+  clash: "Violent Clash",
+  fire: "Fire / Arson",
+  procession: "Protest March",
   accident: "Road Accident",
   waterlogging: "Waterlogging",
   power_outage: "Power Outage",
@@ -51,6 +15,43 @@ const EVENT_LABELS: Record<string, string> = {
 
 export function formatEventLabel(eventType: string): string {
   return EVENT_LABELS[eventType] || eventType.replace(/_/g, " ").toUpperCase();
+}
+
+export function formatNewsTimestamp(
+  published?: string | null,
+  ingestedAt?: string | null
+): string {
+  const raw = published || ingestedAt;
+  if (!raw) return "Unknown time";
+  try {
+    const dt = new Date(raw);
+    if (isNaN(dt.getTime())) return raw;
+
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    const day = dt.getDate();
+    const mon = months[dt.getMonth()];
+    const year = dt.getFullYear();
+
+    let hours = dt.getHours();
+    const mins = String(dt.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+
+    const diffMin = Math.round((Date.now() - dt.getTime()) / 60000);
+    let rel = "";
+    if (diffMin >= 0 && diffMin < 60) {
+      rel = diffMin <= 1 ? " • Just now" : ` • ${diffMin}m ago`;
+    } else if (diffMin >= 60 && diffMin < 1440) {
+      rel = ` • ${Math.floor(diffMin / 60)}h ago`;
+    }
+
+    return `${day} ${mon} ${year}, ${hours}:${mins} ${ampm}${rel}`;
+  } catch {
+    return raw;
+  }
 }
 
 export function buildRouteAnomalyMessage(alert: GoldAlert): {
@@ -64,31 +65,7 @@ export function buildRouteAnomalyMessage(alert: GoldAlert): {
       : "along your route";
 
   return {
-    title: `⚠️ Route Anomaly: Change Your Route`,
-    body: `There is a ${label} near ${alert.area} (${distText}). Please change your route. ${alert.veracity_summary} (${alert.veracity_percent}%).`,
+    title: `Route Alert: ${label}`,
+    body: `${label} near ${alert.area} (${distText}) • ${alert.veracity_summary} (${alert.veracity_percent}%)`,
   };
-}
-
-export async function sendRouteAnomalyNotification(
-  alert: GoldAlert,
-  soundEnabled: boolean = true
-): Promise<void> {
-  try {
-    const { title, body } = buildRouteAnomalyMessage(alert);
-    if (soundEnabled) {
-      Vibration.vibrate([0, 220, 140, 220]);
-    }
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        sound: soundEnabled ? "default" : undefined,
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        data: { area: alert.area, clusterId: alert.cluster_id },
-      },
-      trigger: null,
-    });
-  } catch {
-    // Gracefully ignore if simulator/device blocks notification scheduling
-  }
 }

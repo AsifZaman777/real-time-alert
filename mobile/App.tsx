@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Vibration,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -22,14 +23,12 @@ import {
   MapAlertResponse,
   RouteAlertResponse,
 } from "./src/types/alert";
-import { OsmMapWebView } from "./src/components/OsmMapWebView";
+import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
 import {
-  buildRouteAnomalyMessage,
   formatEventLabel,
-  initNotifications,
-  sendRouteAnomalyNotification,
+  formatNewsTimestamp,
 } from "./src/services/notifications";
 
 const RISK_META: Record<
@@ -83,12 +82,15 @@ export default function App() {
   const [allMapAlerts, setAllMapAlerts] = useState<GoldAlert[]>([]);
   const [riskLevel, setRiskLevel] = useState<string>("CLEAR");
   const [routeDistKm, setRouteDistKm] = useState<number>(0);
+  const [routeDurationMin, setRouteDurationMin] = useState<number>(0);
+  const [routeGeometry, setRouteGeometry] = useState<RouteRoadGeometry | null>(
+    null
+  );
   const [suppressedCount, setSuppressedCount] = useState<number>(0);
   const [layers, setLayers] = useState<LakehouseLayerStats | null>(null);
   const [streamStatus, setStreamStatus] = useState<string>("CONNECTING");
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [showAllOnMap, setShowAllOnMap] = useState<boolean>(true);
   const [sheetExpanded, setSheetExpanded] = useState<boolean>(false);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export default function App() {
   } | null>(null);
   const [fitRouteNonce, setFitRouteNonce] = useState<number>(0);
 
-  const notifiedClustersRef = useRef<Set<string>>(new Set());
+  const lastPollSigRef = useRef<string>("");
 
   const handleLocateMe = useCallback(async (flyTo: boolean = true) => {
     try {
@@ -144,19 +146,8 @@ export default function App() {
   }, [currentLocation.lat, currentLocation.lon]);
 
   useEffect(() => {
-    initNotifications();
     handleLocateMe(false);
   }, []);
-
-  const routeKey = useMemo(
-    () =>
-      `${currentLocation.lat.toFixed(3)},${currentLocation.lon.toFixed(3)}->${destination.lat.toFixed(3)},${destination.lon.toFixed(3)}`,
-    [currentLocation, destination]
-  );
-
-  useEffect(() => {
-    notifiedClustersRef.current.clear();
-  }, [routeKey]);
 
   const fetchAlerts = useCallback(async () => {
     const controller = new AbortController();
@@ -199,23 +190,38 @@ export default function App() {
       }
 
       const nextRouteAlerts = routeData.route_alerts || [];
-      setRouteAlerts(nextRouteAlerts);
-      setRiskLevel(routeData.route_risk_level || "CLEAR");
-      setRouteDistKm(routeData.route?.route_distance_km || 0);
-      setSuppressedCount(routeData.suppressed_count || 0);
-      setAllMapAlerts(mapAlerts || []);
-      setLayers(routeData.layers);
+      const pollSig = [
+        currentLocation.lat.toFixed(4),
+        currentLocation.lon.toFixed(4),
+        destination.lat.toFixed(4),
+        destination.lon.toFixed(4),
+        routeData.route_risk_level,
+        routeData.route?.route_distance_km,
+        nextRouteAlerts.map((a) => `${a.cluster_id}:${a.last_updated}`).join(","),
+        (mapAlerts || []).length,
+      ].join("|");
+
       setStreamStatus("LIVE");
       setLastError(null);
 
-      const topAnomaly = nextRouteAlerts.find(
-        (a) =>
-          (a.severity === "CRITICAL" || a.severity === "HIGH") &&
-          !notifiedClustersRef.current.has(`${routeKey}:${a.cluster_id}`)
-      );
-      if (topAnomaly) {
-        notifiedClustersRef.current.add(`${routeKey}:${topAnomaly.cluster_id}`);
-        sendRouteAnomalyNotification(topAnomaly, soundEnabled);
+      // Only trigger state updates if route or alert data actually changed (prevents 8s poll flicker)
+      if (pollSig !== lastPollSigRef.current) {
+        lastPollSigRef.current = pollSig;
+        setRouteAlerts(nextRouteAlerts);
+        setRiskLevel(routeData.route_risk_level || "CLEAR");
+        setRouteDistKm(routeData.route?.route_distance_km || 0);
+        setRouteDurationMin(routeData.route?.duration_min || 0);
+        setRouteGeometry({
+          polyline: routeData.route?.polyline,
+          alt_polyline: routeData.route?.alt_polyline,
+          route_distance_km: routeData.route?.route_distance_km,
+          duration_min: routeData.route?.duration_min,
+          road_names: routeData.route?.road_names,
+          danger_segments: routeData.route?.danger_segments,
+        });
+        setSuppressedCount(routeData.suppressed_count || 0);
+        setAllMapAlerts(mapAlerts || []);
+        setLayers(routeData.layers);
       }
     } catch (err: any) {
       setStreamStatus("OFFLINE");
@@ -224,7 +230,7 @@ export default function App() {
     } finally {
       clearTimeout(timeoutId);
     }
-  }, [apiUrl, currentLocation, destination, todoText, routeKey, soundEnabled]);
+  }, [apiUrl, currentLocation, destination, todoText]);
 
   useEffect(() => {
     fetchAlerts();
@@ -242,11 +248,30 @@ export default function App() {
   };
 
   const handleMapPin = (lat: number, lon: number) => {
+    try {
+      Vibration.vibrate(45);
+    } catch {}
+    // Find nearest known area name for context if close
+    let nearestLabel = "";
+    let bestD = 999;
+    Object.entries(DHAKA_PRESETS).forEach(([name, c]) => {
+      const d = Math.hypot(c.lat - lat, c.lon - lon) * 111;
+      if (d < bestD) {
+        bestD = d;
+        nearestLabel = name;
+      }
+    });
+    const pinLabel =
+      bestD <= 1.8 && nearestLabel
+        ? `Pin near ${nearestLabel}`
+        : `Pinned (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+
     setDestination({
       lat,
       lon,
-      label: `Pinned (${lat.toFixed(3)}, ${lon.toFixed(3)})`,
+      label: pinLabel,
     });
+    setTodoText(pinLabel);
     setPinMode(false);
   };
 
@@ -256,26 +281,55 @@ export default function App() {
     setFocusCoords({ lat: preset.lat, lon: preset.lon, zoom: 14, nonce: Date.now() });
   };
 
+  const sortedRouteAlerts = useMemo(() => {
+    return [...routeAlerts].sort((a, b) => {
+      const tsA =
+        a.articles?.[0]?.published ||
+        a.articles?.[0]?.ingested_at ||
+        a.last_updated ||
+        "";
+      const tsB =
+        b.articles?.[0]?.published ||
+        b.articles?.[0]?.ingested_at ||
+        b.last_updated ||
+        "";
+      return tsB.localeCompare(tsA);
+    });
+  }, [routeAlerts]);
+
   const routeAlertIds = useMemo(
     () => new Set(routeAlerts.map((a) => a.cluster_id)),
     [routeAlerts]
   );
 
-  const visibleMapAlerts = showAllOnMap ? allMapAlerts : routeAlerts;
+  const visibleMapAlerts = showAllOnMap ? allMapAlerts : sortedRouteAlerts;
 
   const selectedAreaAlerts = useMemo(() => {
     if (!selectedArea) return [];
     const routeSet = routeAlertIds;
     return allMapAlerts
       .filter((a) => a.area === selectedArea)
-      .map((a) => ({ ...a, on_route: routeSet.has(a.cluster_id) }));
+      .map((a) => ({ ...a, on_route: routeSet.has(a.cluster_id) }))
+      .sort((a, b) => {
+        const tsA =
+          a.articles?.[0]?.published ||
+          a.articles?.[0]?.ingested_at ||
+          a.last_updated ||
+          "";
+        const tsB =
+          b.articles?.[0]?.published ||
+          b.articles?.[0]?.ingested_at ||
+          b.last_updated ||
+          "";
+        return tsB.localeCompare(tsA);
+      });
   }, [selectedArea, allMapAlerts, routeAlertIds]);
 
   const riskMeta = RISK_META[riskLevel] || RISK_META.CLEAR;
-  const topRouteAlert = routeAlerts[0] || null;
+  const topRouteAlert = sortedRouteAlerts[0] || null;
   const anomalyBannerText = topRouteAlert
-    ? buildRouteAnomalyMessage(topRouteAlert).body
-    : `No strikes or blockades on your route • ${suppressedCount} filtered`;
+    ? `⛔ AVOID ${(topRouteAlert.affected_road || topRouteAlert.area).toUpperCase()}: ${formatEventLabel(topRouteAlert.event_type)} in ${topRouteAlert.area} — ${topRouteAlert.sample_headline}`
+    : `Hold anywhere on map to pin destination • Minimum road route is clear (${suppressedCount} city alerts filtered)`;
 
   return (
     <View style={styles.root}>
@@ -289,6 +343,7 @@ export default function App() {
           todoText={todoText}
           alerts={visibleMapAlerts}
           routeAlertIds={routeAlertIds}
+          routeGeometry={routeGeometry}
           focusCoords={focusCoords}
           fitRouteNonce={fitRouteNonce}
           pinMode={pinMode}
@@ -330,16 +385,13 @@ export default function App() {
             </View>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity
-                onPress={() => setSoundEnabled((s) => !s)}
-                style={[styles.iconBtn, soundEnabled && styles.iconBtnActive]}
-              >
-                <Ionicons
-                  name={soundEnabled ? "notifications" : "notifications-off"}
-                  size={16}
-                  color={soundEnabled ? "#38BDF8" : "#64748B"}
-                />
-              </TouchableOpacity>
+              {routeDistKm > 0 && (
+                <View style={styles.statusPill}>
+                  <Text style={[styles.statusText, { color: riskMeta.color }]}>
+                    {routeDistKm} km{routeDurationMin > 0 ? ` • ${routeDurationMin}m` : ""}
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity
                 onPress={() => setShowSettings((s) => !s)}
                 style={styles.iconBtn}
@@ -425,38 +477,6 @@ export default function App() {
             )}
           </ScrollView>
         </View>
-
-        {/* Compact Route Anomaly Pill */}
-        <View
-          style={[
-            styles.anomalyBanner,
-            { backgroundColor: riskMeta.bg, borderColor: riskMeta.border },
-          ]}
-        >
-          <View style={styles.anomalyHeader}>
-            <View style={styles.anomalyTitleRow}>
-              <Ionicons name={riskMeta.icon} size={14} color={riskMeta.color} />
-              <Text style={[styles.anomalyTitle, { color: riskMeta.color }]}>
-                {riskMeta.label}
-                {routeDistKm > 0 ? ` • ${routeDistKm} km` : ""}
-              </Text>
-            </View>
-            {topRouteAlert && (
-              <TouchableOpacity
-                onPress={() =>
-                  sendRouteAnomalyNotification(topRouteAlert, soundEnabled)
-                }
-                style={styles.testNotifyBtn}
-              >
-                <Ionicons name="volume-high-outline" size={12} color="#F8FAFC" />
-                <Text style={styles.testNotifyText}>Alert</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.anomalyBody} numberOfLines={2}>
-            {anomalyBannerText}
-          </Text>
-        </View>
       </SafeAreaView>
 
       {/* Bottom-Right Map Action Stack (My Location Icon + Map Controls) */}
@@ -516,7 +536,7 @@ export default function App() {
           <View style={styles.handleBar} />
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.feedTitle}>
-              {routeAlerts.length} ROUTE ALERTS
+              {routeAlerts.length} ROAD THREATS ON ROUTE
             </Text>
             <View style={styles.sheetRightRow}>
               <Text style={styles.suppressedLabel}>
@@ -535,50 +555,66 @@ export default function App() {
 
         {sheetExpanded && (
           <FlatList
-            data={routeAlerts}
+            data={sortedRouteAlerts}
             keyExtractor={(item) => item.cluster_id}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <Text style={styles.emptyFeed}>
-                Your route looks clear. No strikes or blockades detected.
+                Your navigated roads look clear. No threats, firing, or blockades detected.
               </Text>
             }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[styles.alertCard, { borderLeftColor: item.color }]}
-                onPress={() => setSelectedArea(item.area)}
-              >
-                <View style={styles.alertTop}>
-                  <View style={styles.alertTitleRow}>
-                    <Text style={styles.alertArea}>{item.area}</Text>
-                    <View
-                      style={[
-                        styles.eventTag,
-                        { backgroundColor: `${item.color}22` },
-                      ]}
-                    >
-                      <Text style={[styles.eventTagText, { color: item.color }]}>
-                        {formatEventLabel(item.event_type)}
-                      </Text>
+            renderItem={({ item }) => {
+              const latestArt = item.articles?.[0];
+              const publishDisplay = formatNewsTimestamp(
+                latestArt?.published || item.last_updated,
+                latestArt?.ingested_at
+              );
+              return (
+                <TouchableOpacity
+                  style={[styles.alertCard, { borderLeftColor: item.color }]}
+                  onPress={() => setSelectedArea(item.area)}
+                >
+                  <View style={styles.alertTop}>
+                    <View style={styles.alertTitleRow}>
+                      <Text style={styles.alertArea}>{item.area}</Text>
+                      <View
+                        style={[
+                          styles.eventTag,
+                          { backgroundColor: `${item.color}22` },
+                        ]}
+                      >
+                        <Text style={[styles.eventTagText, { color: item.color }]}>
+                          {formatEventLabel(item.event_type)}
+                        </Text>
+                      </View>
                     </View>
+                    <Text style={styles.alertDist}>
+                      {item.distance_to_route_km} km from road
+                    </Text>
                   </View>
-                  <Text style={styles.alertDist}>
-                    {item.distance_to_route_km} km
+                  {item.affected_road ? (
+                    <Text style={styles.avoidRoadText}>
+                      ⛔ Avoid Road: {item.affected_road}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.alertHeadline} numberOfLines={2}>
+                    {item.sample_headline}
                   </Text>
-                </View>
-                <Text style={styles.alertHeadline} numberOfLines={2}>
-                  {item.sample_headline}
-                </Text>
-                <VeracityMeter
-                  veracityPercent={item.veracity_percent}
-                  credibilityScore={item.credibility_score}
-                  veracityStatus={item.veracity_status}
-                  veracitySummary={item.veracity_summary}
-                  sources={item.sources}
-                  compact
-                />
-              </TouchableOpacity>
-            )}
+                  <View style={styles.alertTimeRow}>
+                    <Ionicons name="time-outline" size={11} color="#38BDF8" />
+                    <Text style={styles.alertTimeText}>{publishDisplay}</Text>
+                  </View>
+                  <VeracityMeter
+                    veracityPercent={item.veracity_percent}
+                    credibilityScore={item.credibility_score}
+                    veracityStatus={item.veracity_status}
+                    veracitySummary={item.veracity_summary}
+                    sources={item.sources}
+                    compact
+                  />
+                </TouchableOpacity>
+              );
+            }}
           />
         )}
       </View>
@@ -864,5 +900,23 @@ const styles = StyleSheet.create({
   eventTag: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
   eventTagText: { fontSize: 10, fontWeight: "800" },
   alertDist: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
+  avoidRoadText: {
+    color: "#FCA5A5",
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 3,
+  },
   alertHeadline: { color: "#CBD5E1", fontSize: 12, lineHeight: 17 },
+  alertTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  alertTimeText: {
+    color: "#7DD3FC",
+    fontSize: 10.5,
+    fontWeight: "600",
+  },
 });

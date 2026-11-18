@@ -1,11 +1,21 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { WebView, WebViewMessageEvent, WebViewProps } from "react-native-webview";
-import { Coordinates, GoldAlert } from "../types/alert";
+import { Coordinates, DangerRoadSegment, GoldAlert } from "../types/alert";
+import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
 
 const TypedWebView = WebView as unknown as React.ComponentType<
   WebViewProps & { ref?: React.Ref<{ injectJavaScript: (script: string) => void }> }
 >;
+
+export interface RouteRoadGeometry {
+  polyline?: number[][];
+  alt_polyline?: number[][];
+  route_distance_km?: number;
+  duration_min?: number;
+  road_names?: string[];
+  danger_segments?: DangerRoadSegment[];
+}
 
 interface OsmMapWebViewProps {
   currentLocation: Coordinates;
@@ -13,10 +23,11 @@ interface OsmMapWebViewProps {
   todoText: string;
   alerts: GoldAlert[];
   routeAlertIds: Set<string>;
+  routeGeometry?: RouteRoadGeometry | null;
   focusCoords?: { lat: number; lon: number; zoom?: number; nonce: number } | null;
   fitRouteNonce?: number;
   pinMode?: boolean;
-  onPinDestination: (lat: number, lon: number) => void;
+  onPinDestination: (lat: number, lon: number, roadLabel?: string) => void;
   onSelectArea: (area: string) => void;
 }
 
@@ -26,14 +37,17 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   todoText,
   alerts,
   routeAlertIds,
+  routeGeometry,
   focusCoords,
   fitRouteNonce,
+  pinMode = false,
   onPinDestination,
   onSelectArea,
 }) => {
   const webRef = useRef<{ injectJavaScript: (script: string) => void } | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // Group alerts by area so each map marker represents a location (e.g. Mirpur-10)
+  // Group alerts by area so each map marker represents a location (e.g. Banani, Mohakhali, Jatrabari)
   const areaMarkers = useMemo(() => {
     const grouped = new Map<
       string,
@@ -47,6 +61,12 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         clusterCount: number;
         maxSources: number;
         topEvent: string;
+        topEventLabel: string;
+        topHeadline: string;
+        publishedTime: string;
+        veracitySummary: string;
+        affectedRoad?: string;
+        isRecent3h: boolean;
       }
     >();
 
@@ -54,6 +74,16 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       const existing = grouped.get(a.area);
       const isRoute = routeAlertIds.has(a.cluster_id) || Boolean(a.on_route);
       const isRed = a.color === "#EF4444" || a.severity === "CRITICAL";
+      const isRecent =
+        typeof a.is_recent_3h === "boolean"
+          ? a.is_recent_3h
+          : (a.age_minutes ?? 9999) <= 180;
+      const latestArt = a.articles?.[0];
+      const pubTime = formatNewsTimestamp(
+        latestArt?.published || a.last_updated,
+        latestArt?.ingested_at
+      );
+
       if (!existing) {
         grouped.set(a.area, {
           area: a.area,
@@ -65,13 +95,23 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           clusterCount: 1,
           maxSources: a.source_count,
           topEvent: a.event_type,
+          topEventLabel: formatEventLabel(a.event_type),
+          topHeadline: a.sample_headline || "",
+          publishedTime: pubTime,
+          veracitySummary: a.veracity_summary || "",
+          affectedRoad: a.affected_road,
+          isRecent3h: isRecent,
         });
       } else {
         existing.clusterCount += 1;
         existing.hasCritical = existing.hasCritical || isRed;
         if (existing.hasCritical) existing.color = "#EF4444";
         existing.onRoute = existing.onRoute || isRoute;
+        existing.isRecent3h = existing.isRecent3h || isRecent;
         existing.maxSources = Math.max(existing.maxSources, a.source_count);
+        if (!existing.affectedRoad && a.affected_road) {
+          existing.affectedRoad = a.affected_road;
+        }
       }
     }
     return Array.from(grouped.values());
@@ -85,7 +125,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0B1120; }
+    html, body, #map {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #0B1120;
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     .custom-pin-wrapper {
       background: transparent !important;
       border: none !important;
@@ -93,126 +139,669 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     .user-wrap {
       position: relative;
       display: flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px;
+      width: 24px; height: 24px;
       transform: translate(-50%, -50%);
     }
     .user-pulse {
       position: absolute;
-      width: 34px; height: 34px; border-radius: 50%;
-      background: rgba(56, 189, 248, 0.28);
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(56, 189, 248, 0.35);
       animation: pulseRing 2s ease-out infinite;
     }
     .user-dot {
       width: 15px; height: 15px; border-radius: 50%;
-      background: #0EA5E9; border: 3px solid #FFFFFF;
-      box-shadow: 0 2px 8px rgba(14, 165, 233, 0.75);
+      background: #2563EB; border: 2.5px solid #FFFFFF;
+      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.9);
       z-index: 2;
     }
     @keyframes pulseRing {
-      0% { transform: scale(0.6); opacity: 0.9; }
-      100% { transform: scale(1.7); opacity: 0; }
+      0% { transform: scale(0.55); opacity: 0.95; }
+      100% { transform: scale(1.9); opacity: 0; }
     }
-    .dest-pin {
-      display: inline-flex; align-items: center; gap: 4px;
-      width: max-content; max-width: 190px; overflow: hidden; text-overflow: ellipsis;
-      background: #10B981; color: #052E16; font-weight: 800; font-size: 11px;
-      padding: 5px 10px; border-radius: 14px; border: 2px solid #FFFFFF;
-      white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      transform: translate(-50%, -100%);
-    }
-    .area-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      width: max-content;
-      color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-size: 11px; font-weight: 700; padding: 4px 9px;
-      border-radius: 999px; border: 2px solid #FFFFFF;
-      white-space: nowrap; box-shadow: 0 3px 10px rgba(0,0,0,0.55);
+
+    /* Pulsing Red Hazard Dot placed directly on the affected road */
+    .road-hazard-dot-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
       transform: translate(-50%, -50%);
+      cursor: pointer;
     }
-    .area-badge.on-route {
-      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.45), 0 3px 12px rgba(0,0,0,0.65);
+    .road-hazard-pulse {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.45);
+      animation: pulseRing 1.5s ease-out infinite;
+    }
+    .road-hazard-core {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #EF4444;
+      border: 2.5px solid #FFFFFF;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.95), 0 2px 6px rgba(0,0,0,0.65);
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .road-hazard-inner {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #FEF2F2;
+    }
+
+    /* Google Maps-style Teardrop Pin with Drop Bounce */
+    .gmap-pin-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+      animation: gmapDropBounce 0.42s cubic-bezier(0.22, 1.28, 0.36, 1);
+    }
+    @keyframes gmapDropBounce {
+      0% { transform: translate(-50%, -180%) scale(0.7); opacity: 0; }
+      65% { transform: translate(-50%, -95%) scale(1.06); opacity: 1; }
+      85% { transform: translate(-50%, -104%) scale(0.97); }
+      100% { transform: translate(-50%, -100%) scale(1); }
+    }
+    .gmap-pin-label {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      color: #F8FAFC;
+      font-weight: 800;
+      font-size: 10.5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1.2px solid rgba(248, 113, 113, 0.85);
+      white-space: nowrap;
+      max-width: 185px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+      margin-bottom: 2px;
+    }
+    .gmap-pin-svg {
+      width: 32px;
+      height: 40px;
+      filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.5));
+    }
+    .gmap-pin-shadow {
+      width: 12px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.4);
+      margin-top: -2px;
+    }
+
+    /* Compact Semi-Transparent Route ETA Badge */
+    .leaflet-tooltip.leaflet-route-eta {
+      background: rgba(29, 78, 216, 0.65) !important;
+      backdrop-filter: blur(3px) !important;
+      -webkit-backdrop-filter: blur(3px) !important;
+      color: #FFFFFF !important;
+      border: 1.2px solid rgba(255, 255, 255, 0.85) !important;
+      border-radius: 999px !important;
+      font-weight: 800 !important;
+      font-size: 10px !important;
+      padding: 2px 8px !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+      pointer-events: none !important;
+    }
+    .leaflet-tooltip.leaflet-route-eta::before {
+      display: none !important;
+    }
+
+    /* Translucent Glassmorphism Popup when clicking a Red Hazard Dot (so route stays visible underneath!) */
+    .leaflet-popup.leaflet-avoid-popup .leaflet-popup-content-wrapper {
+      background: rgba(15, 23, 42, 0.62) !important;
+      backdrop-filter: blur(6px) !important;
+      -webkit-backdrop-filter: blur(6px) !important;
+      color: #F8FAFC !important;
+      border: 1.5px solid rgba(239, 68, 68, 0.88) !important;
+      border-radius: 12px !important;
+      padding: 0 !important;
+      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.32), 0 3px 10px rgba(0,0,0,0.5) !important;
+    }
+    .leaflet-popup.leaflet-avoid-popup .leaflet-popup-content {
+      margin: 8px 10px !important;
+      width: 215px !important;
+    }
+    .leaflet-popup.leaflet-avoid-popup .leaflet-popup-tip {
+      background: rgba(239, 68, 68, 0.85) !important;
+    }
+    .leaflet-popup.leaflet-avoid-popup a.leaflet-popup-close-button {
+      color: #FCA5A5 !important;
+      font-size: 16px !important;
+      top: 5px !important;
+      right: 6px !important;
+    }
+
+    .avoid-header {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(239, 68, 68, 0.32);
+      border-radius: 5px;
+      padding: 2px 6px;
+      margin-bottom: 4px;
+    }
+    .avoid-badge-text {
+      color: #FECACA;
+      font-size: 9.5px;
+      font-weight: 900;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .avoid-road-name {
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 3px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.85);
+    }
+    .avoid-headline {
+      color: #F1F5F9;
+      font-size: 10.5px;
+      line-height: 13.5px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 5px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+    }
+    .avoid-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #7DD3FC;
+      font-size: 9.5px;
+      font-weight: 700;
+      border-top: 1px solid rgba(255,255,255,0.16);
+      padding-top: 4px;
+      cursor: pointer;
+    }
+    .avoid-open-btn {
+      background: rgba(239, 68, 68, 0.75);
+      color: #FFFFFF;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 9.5px;
+      font-weight: 800;
+    }
+
+    /* Compact Semi-Transparent Area Badges for off-route alerts */
+    .area-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      width: max-content;
+      color: #FFFFFF;
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 999px; border: 1.2px solid rgba(255,255,255,0.85);
+      white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      transform: translate(-50%, -50%);
+      opacity: 0.84;
     }
     .area-count {
-      background: rgba(0,0,0,0.32); border-radius: 999px;
-      padding: 1px 6px; font-size: 10px; font-weight: 800;
+      background: rgba(0,0,0,0.35); border-radius: 999px;
+      padding: 0px 5px; font-size: 9.5px; font-weight: 800;
+    }
+
+    @keyframes dangerPulse {
+      0% { stroke-opacity: 0.95; }
+      50% { stroke-opacity: 0.6; }
+      100% { stroke-opacity: 0.95; }
+    }
+    .leaflet-danger-road {
+      animation: dangerPulse 1.5s ease-in-out infinite;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <script>
-    const map = L.map('map', { zoomControl: false }).setView([23.7600, 90.3950], 12);
+    const map = L.map('map', {
+      zoomControl: false,
+      attributionControl: true,
+      inertia: true,
+      closePopupOnClick: true
+    }).setView([23.7600, 90.3950], 12);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+
+    const routeLayerGroup = L.featureGroup().addTo(map);
+    const dangerRoadLayerGroup = L.featureGroup().addTo(map);
+    const alertMarkerLayerGroup = L.featureGroup().addTo(map);
+
     let userMarker = null;
     let destMarker = null;
-    let routeLine = null;
-    let alertLayer = L.layerGroup().addTo(map);
+    let currentPinMode = false;
+    let lastRouteFetchId = 0;
+    let lastUserSig = '';
+    let lastDestSig = '';
+    let lastRouteSig = '';
+    let lastMarkersSig = '';
 
-    map.on('click', function(e) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
+    function sendBridgeMessage(obj) {
+      const str = JSON.stringify(obj);
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(str);
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage(str, '*');
+      }
+    }
+
+    function triggerDropPin(lat, lon) {
+      sendBridgeMessage({
         type: 'pinDestination',
-        lat: e.latlng.lat,
-        lon: e.latlng.lng
-      }));
+        lat: lat,
+        lon: lon
+      });
+    }
+
+    // 1. Long-press (press and hold ~420ms) via Leaflet contextmenu
+    map.on('contextmenu', function(e) {
+      triggerDropPin(e.latlng.lat, e.latlng.lng);
     });
 
-    window.updateMapState = function(payload) {
-      const { currentLocation, destination, todoText, markers } = payload;
+    // 2. Touch press-and-hold (~420ms) handler for Android WebViews
+    let holdTimer = null;
+    let startPt = null;
+    const mapContainer = map.getContainer();
 
-      if (userMarker) map.removeLayer(userMarker);
-      userMarker = L.marker([currentLocation.lat, currentLocation.lon], {
-        icon: L.divIcon({
-          className: 'custom-pin-wrapper',
-          html: '<div class="user-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        })
-      }).addTo(map);
+    mapContainer.addEventListener('touchstart', function(ev) {
+      if (!ev.touches || ev.touches.length !== 1) {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        return;
+      }
+      const t = ev.touches[0];
+      startPt = { x: t.clientX, y: t.clientY };
+      holdTimer = setTimeout(function() {
+        holdTimer = null;
+        const rect = mapContainer.getBoundingClientRect();
+        const containerPt = L.point(t.clientX - rect.left, t.clientY - rect.top);
+        const latlng = map.containerPointToLatLng(containerPt);
+        if (latlng) {
+          triggerDropPin(latlng.lat, latlng.lng);
+        }
+      }, 420);
+    }, { passive: true });
 
-      if (destMarker) map.removeLayer(destMarker);
-      const label = todoText ? ('🎯 ' + todoText) : (destination.label || '🎯 Destination');
-      destMarker = L.marker([destination.lat, destination.lon], {
-        icon: L.divIcon({ className: 'custom-pin-wrapper', html: '<div class="dest-pin">' + label.replace(/</g,'&lt;') + '</div>', iconSize: [0, 0], iconAnchor: [0, 0] })
-      }).addTo(map);
+    mapContainer.addEventListener('touchmove', function(ev) {
+      if (!holdTimer || !startPt || !ev.touches || !ev.touches[0]) return;
+      const t = ev.touches[0];
+      if (Math.hypot(t.clientX - startPt.x, t.clientY - startPt.y) > 12) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+    }, { passive: true });
 
-      if (routeLine) map.removeLayer(routeLine);
-      routeLine = L.polyline(
-        [[currentLocation.lat, currentLocation.lon], [destination.lat, destination.lon]],
-        { color: '#38BDF8', weight: 4, dashArray: '8, 8', opacity: 0.9 }
-      ).addTo(map);
+    mapContainer.addEventListener('touchend', function() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    }, { passive: true });
 
-      alertLayer.clearLayers();
-      markers.forEach(function(m) {
-        L.circle([m.lat, m.lon], {
-          radius: m.onRoute ? 520 : 380,
-          color: m.color,
-          weight: 1.5,
-          opacity: 0.65,
-          fillColor: m.color,
-          fillOpacity: m.onRoute ? 0.24 : 0.14
-        }).addTo(alertLayer);
+    // 3. Single tap when Pin mode button is toggled on
+    map.on('click', function(e) {
+      if (currentPinMode) {
+        triggerDropPin(e.latlng.lat, e.latlng.lng);
+      }
+    });
 
-        const cls = 'area-badge' + (m.onRoute ? ' on-route' : '');
-        const htmlBadge = '<div class="' + cls + '" style="background:' + m.color + ';">'
-          + '<span>' + m.area + '</span>'
-          + '<span class="area-count">' + m.clusterCount + '</span>'
-          + '</div>';
-        const marker = L.marker([m.lat, m.lon], {
-          icon: L.divIcon({ className: 'custom-pin-wrapper', html: htmlBadge, iconSize: [0, 0], iconAnchor: [0, 0] })
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    window.__selectArea = function(areaName) {
+      sendBridgeMessage({ type: 'selectArea', area: areaName });
+    };
+
+    function renderLeafletRoadNavigation(primaryPoly, altPoly, distKm, durMin, dangerSegs, markers) {
+      routeLayerGroup.clearLayers();
+      dangerRoadLayerGroup.clearLayers();
+
+      // A. Alternative Road Route (Dashed Slate Polyline)
+      if (altPoly && altPoly.length >= 2) {
+        const altLine = L.polyline(altPoly, {
+          color: '#64748B',
+          weight: 4.5,
+          opacity: 0.55,
+          dashArray: '6, 8',
+          lineCap: 'round'
+        }).addTo(routeLayerGroup);
+
+        altLine.bindTooltip('Alternative Road Route', {
+          sticky: true,
+          direction: 'top'
         });
-        marker.on('click', function(ev) {
-          L.DomEvent.stopPropagation(ev);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'selectArea',
-            area: m.area
-          }));
+      }
+
+      // B. Primary Minimum Road Route (Google Maps Navigation Blue)
+      if (primaryPoly && primaryPoly.length >= 2) {
+        L.polyline(primaryPoly, {
+          color: '#1E3A8A',
+          weight: 8,
+          opacity: 0.82,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(routeLayerGroup);
+
+        L.polyline(primaryPoly, {
+          color: '#3B82F6',
+          weight: 5,
+          opacity: 0.96,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(routeLayerGroup);
+
+        // Compact translucent ETA pill offset slightly from the route
+        if (distKm) {
+          const etaLabel = '🚗 ' + distKm + ' km' + (durMin ? (' • ' + durMin + 'm') : '');
+          const etaIdx = Math.floor(primaryPoly.length * 0.22);
+          const etaLatLng = L.latLng(primaryPoly[etaIdx] || primaryPoly[0]);
+          L.tooltip({
+            permanent: true,
+            direction: 'right',
+            className: 'leaflet-route-eta',
+            offset: [10, 0]
+          })
+            .setLatLng(etaLatLng)
+            .setContent(etaLabel)
+            .addTo(routeLayerGroup);
+        }
+      }
+
+      // C. Highlight Affected Road Stretches in RED + Place Interactive Pulsing Red Dots
+      //    (Tooltips are NOT permanently open — clicking a red dot opens a transparent glass popup!)
+      let effectiveDangers = dangerSegs || [];
+
+      if ((!effectiveDangers || effectiveDangers.length === 0) && primaryPoly && primaryPoly.length >= 2) {
+        effectiveDangers = [];
+        (markers || []).forEach(function(m) {
+          if (!m.isRecent3h) return;
+          const mLatLng = L.latLng(m.lat, m.lon);
+          const subCoords = [];
+          let closestPt = null;
+          let minD = 999999;
+
+          for (let i = 0; i < primaryPoly.length; i++) {
+            const pt = primaryPoly[i];
+            const dMeters = mLatLng.distanceTo(L.latLng(pt[0], pt[1]));
+            if (dMeters < minD) {
+              minD = dMeters;
+              closestPt = pt;
+            }
+            if (dMeters <= 1250) {
+              subCoords.push(pt);
+            }
+          }
+
+          if (minD <= 1250 && closestPt) {
+            effectiveDangers.push({
+              area: m.area,
+              road_name: m.affectedRoad || (m.area + ' Road'),
+              event_type: m.topEventLabel || m.topEvent,
+              headline: m.topHeadline || ('Active ' + m.topEvent + ' reported in ' + m.area),
+              veracity_summary: m.veracitySummary || (m.maxSources + ' source(s)'),
+              tooltip_lat: subCoords.length ? subCoords[Math.floor(subCoords.length / 2)][0] : closestPt[0],
+              tooltip_lon: subCoords.length ? subCoords[Math.floor(subCoords.length / 2)][1] : closestPt[1],
+              coords: subCoords.length >= 2 ? subCoords : [closestPt, [m.lat, m.lon]]
+            });
+          }
         });
-        marker.addTo(alertLayer);
+      }
+
+      // Deduplicate danger segments by area so each affected stretch has 1 clean red dot
+      const seenDangerAreas = {};
+      const uniqueDangers = [];
+      effectiveDangers.forEach(function(seg) {
+        const k = seg.area || (seg.tooltip_lat + ',' + seg.tooltip_lon);
+        if (!seenDangerAreas[k]) {
+          seenDangerAreas[k] = true;
+          uniqueDangers.push(seg);
+        }
       });
+
+      uniqueDangers.forEach(function(seg) {
+        const evText = escapeHtml(String(seg.event_type || 'THREAT').replace(/_/g, ' ').toUpperCase());
+        const roadTitle = escapeHtml(seg.road_name || (seg.area + ' Road'));
+        const areaTitle = escapeHtml(seg.area || '');
+        const headText = escapeHtml(seg.headline || '');
+        const verText = escapeHtml(seg.veracity_summary || 'Verified alert');
+
+        const popupHtml = '<div onclick="window.__selectArea(\\'' + areaTitle.replace(/'/g, "\\\\'") + '\\')">'
+          + '<div class="avoid-header">'
+          +   '<span class="avoid-badge-text">⛔ AVOID • ' + evText + '</span>'
+          + '</div>'
+          + '<div class="avoid-road-name">📍 ' + roadTitle + ' (' + areaTitle + ')</div>'
+          + (headText ? ('<div class="avoid-headline">' + headText + '</div>') : '')
+          + '<div class="avoid-footer">'
+          +   '<span>' + verText + '</span>'
+          +   '<span class="avoid-open-btn">Full News ›</span>'
+          + '</div>'
+          + '</div>';
+
+        const popupOpts = {
+          className: 'leaflet-avoid-popup',
+          closeButton: true,
+          autoClose: true,
+          closeOnClick: true,
+          offset: [0, -6]
+        };
+
+        // 1. Draw the Red Road Stretch along the route
+        if (seg.coords && seg.coords.length >= 2) {
+          L.polyline(seg.coords, {
+            color: '#7F1D1D',
+            weight: 11,
+            opacity: 0.65,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(dangerRoadLayerGroup);
+
+          const redRoad = L.polyline(seg.coords, {
+            color: '#EF4444',
+            weight: 6.5,
+            opacity: 0.96,
+            lineCap: 'round',
+            lineJoin: 'round',
+            className: 'leaflet-danger-road'
+          }).addTo(dangerRoadLayerGroup);
+
+          redRoad.bindPopup(popupHtml, popupOpts);
+        }
+
+        // 2. Place a Pulsing Red Hazard Dot right on the affected road (click to open transparent tooltip!)
+        if (seg.tooltip_lat && seg.tooltip_lon) {
+          const redDotHtml = '<div class="road-hazard-dot-wrap">'
+            + '<div class="road-hazard-pulse"></div>'
+            + '<div class="road-hazard-core"><div class="road-hazard-inner"></div></div>'
+            + '</div>';
+
+          const dotMarker = L.marker([seg.tooltip_lat, seg.tooltip_lon], {
+            icon: L.divIcon({
+              className: 'custom-pin-wrapper',
+              html: redDotHtml,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
+            }),
+            zIndexOffset: 950
+          }).addTo(dangerRoadLayerGroup);
+
+          dotMarker.bindPopup(popupHtml, popupOpts);
+        }
+      });
+
+      return seenDangerAreas;
+    }
+
+    window.updateMapState = function(payload) {
+      const { currentLocation, destination, todoText, markers, routeGeometry, pinMode } = payload;
+      currentPinMode = Boolean(pinMode);
+
+      // 1. User Blue Pulsing Dot (only update if coordinates changed)
+      const userSig = currentLocation.lat.toFixed(5) + ',' + currentLocation.lon.toFixed(5);
+      if (userSig !== lastUserSig) {
+        lastUserSig = userSig;
+        if (userMarker) {
+          userMarker.setLatLng([currentLocation.lat, currentLocation.lon]);
+        } else {
+          userMarker = L.marker([currentLocation.lat, currentLocation.lon], {
+            icon: L.divIcon({
+              className: 'custom-pin-wrapper',
+              html: '<div class="user-wrap"><div class="user-pulse"></div><div class="user-dot"></div></div>',
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            })
+          }).addTo(map);
+        }
+      }
+
+      // 2. Draggable Google Maps-style Red Teardrop Destination Pin (only recreate if destination changed)
+      const pinTitle = escapeHtml(destination.label || todoText || 'Pinned Destination');
+      const destSig = destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5) + ':' + pinTitle;
+      if (destSig !== lastDestSig) {
+        lastDestSig = destSig;
+        if (destMarker) map.removeLayer(destMarker);
+        const gmapPinHtml = '<div class="gmap-pin-container">'
+          + '<div class="gmap-pin-label">' + pinTitle + '</div>'
+          + '<svg class="gmap-pin-svg" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg">'
+          +   '<path d="M19 2C9.6 2 2 9.6 2 19c0 12.6 15.2 26.2 16 26.9.6.5 1.4.5 2 0 .8-.7 16-14.3 16-26.9C36 9.6 28.4 2 19 2z" fill="#EA4335" stroke="#FFFFFF" stroke-width="2.5"/>'
+          +   '<circle cx="19" cy="18.5" r="6.5" fill="#7F1D1D"/>'
+          +   '<circle cx="19" cy="18.5" r="4" fill="#FFFFFF"/>'
+          + '</svg>'
+          + '<div class="gmap-pin-shadow"></div>'
+          + '</div>';
+
+        destMarker = L.marker([destination.lat, destination.lon], {
+          draggable: true,
+          icon: L.divIcon({
+            className: 'custom-pin-wrapper',
+            html: gmapPinHtml,
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
+          }),
+          zIndexOffset: 900
+        }).addTo(map);
+
+        destMarker.on('dragend', function(ev) {
+          const pos = ev.target.getLatLng();
+          if (pos) {
+            triggerDropPin(pos.lat, pos.lng);
+          }
+        });
+      }
+
+      // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots (only if route/threats changed)
+      const polyLen = (routeGeometry && routeGeometry.polyline) ? routeGeometry.polyline.length : 0;
+      const dangerKeys = (routeGeometry && routeGeometry.danger_segments)
+        ? routeGeometry.danger_segments.map(function(d) { return d.area + ':' + d.event_type; }).join('|')
+        : '';
+      const routeSig = userSig + '->' + destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5)
+        + '|p:' + polyLen + '|d:' + dangerKeys;
+
+      if (routeSig !== lastRouteSig) {
+        lastRouteSig = routeSig;
+        if (routeGeometry && routeGeometry.polyline && routeGeometry.polyline.length >= 2) {
+          renderLeafletRoadNavigation(
+            routeGeometry.polyline,
+            routeGeometry.alt_polyline || [],
+            routeGeometry.route_distance_km,
+            routeGeometry.duration_min,
+            routeGeometry.danger_segments || [],
+            markers
+          );
+        } else {
+          const fetchId = ++lastRouteFetchId;
+          const osrmUrl = 'https://router.project-osrm.org/route/v1/driving/'
+            + currentLocation.lon + ',' + currentLocation.lat + ';'
+            + destination.lon + ',' + destination.lat
+            + '?overview=full&geometries=geojson&alternatives=true';
+
+          fetch(osrmUrl)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (fetchId !== lastRouteFetchId) return;
+              if (data && data.routes && data.routes.length > 0) {
+                const r0 = data.routes[0];
+                const poly0 = r0.geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+                const poly1 = data.routes[1]
+                  ? data.routes[1].geometry.coordinates.map(function(c) { return [c[1], c[0]]; })
+                  : [];
+                const dKm = Math.round((r0.distance / 1000) * 10) / 10;
+                const dMin = Math.max(1, Math.round(r0.duration / 60));
+                renderLeafletRoadNavigation(poly0, poly1, dKm, dMin, [], markers);
+              }
+            })
+            .catch(function() {
+              if (fetchId !== lastRouteFetchId) return;
+              renderLeafletRoadNavigation(
+                [[currentLocation.lat, currentLocation.lon], [destination.lat, destination.lon]],
+                [],
+                null,
+                null,
+                [],
+                markers
+              );
+            });
+        }
+      }
+
+      // 4. Render City Threat Markers (only if markers changed)
+      const markersSig = (markers || []).map(function(m) {
+        return m.area + ':' + m.clusterCount + ':' + (m.onRoute ? '1' : '0') + ':' + m.color;
+      }).join('|');
+
+      if (markersSig !== lastMarkersSig) {
+        lastMarkersSig = markersSig;
+        alertMarkerLayerGroup.clearLayers();
+        markers.forEach(function(m) {
+          L.circle([m.lat, m.lon], {
+            radius: m.onRoute ? 480 : 340,
+            color: m.color,
+            weight: m.onRoute ? 2 : 1.2,
+            opacity: m.onRoute ? 0.65 : 0.45,
+            fillColor: m.color,
+            fillOpacity: m.onRoute ? 0.16 : 0.10,
+            interactive: false
+          }).addTo(alertMarkerLayerGroup);
+
+          if (!m.onRoute) {
+            const htmlBadge = '<div class="area-badge" style="background:' + m.color + ';">'
+              + '<span>' + escapeHtml(m.area) + '</span>'
+              + '<span class="area-count">' + m.clusterCount + '</span>'
+              + '</div>';
+            const marker = L.marker([m.lat, m.lon], {
+              icon: L.divIcon({
+                className: 'custom-pin-wrapper',
+                html: htmlBadge,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+              })
+            });
+            marker.on('click', function(ev) {
+              L.DomEvent.stopPropagation(ev);
+              sendBridgeMessage({ type: 'selectArea', area: m.area });
+            });
+            marker.addTo(alertMarkerLayerGroup);
+          }
+        });
+      }
     };
 
     window.focusLocation = function(lat, lon, zoom) {
@@ -220,8 +809,12 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     };
 
     window.fitRouteBounds = function(lat1, lon1, lat2, lon2) {
-      const bounds = L.latLngBounds([[lat1, lon1], [lat2, lon2]]);
-      map.fitBounds(bounds, { padding: [44, 44], maxZoom: 14 });
+      if (routeLayerGroup.getLayers().length > 0) {
+        map.fitBounds(routeLayerGroup.getBounds(), { padding: [52, 52], maxZoom: 14 });
+      } else {
+        const bounds = L.latLngBounds([[lat1, lon1], [lat2, lon2]]);
+        map.fitBounds(bounds, { padding: [52, 52], maxZoom: 14 });
+      }
     };
   </script>
 </body>
@@ -229,53 +822,98 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     []
   );
 
+  const runScript = (js: string) => {
+    if (Platform.OS === "web") {
+      try {
+        const win = iframeRef.current?.contentWindow as any;
+        if (win) win.eval(js);
+      } catch {}
+    } else {
+      webRef.current?.injectJavaScript(js);
+    }
+  };
+
   const pushStateToWebView = () => {
     const payload = JSON.stringify({
       currentLocation,
       destination,
       todoText,
       markers: areaMarkers,
+      routeGeometry: routeGeometry || null,
+      pinMode,
     });
-    webRef.current?.injectJavaScript(`window.updateMapState && window.updateMapState(${payload}); true;`);
+    runScript(`window.updateMapState && window.updateMapState(${payload}); true;`);
   };
 
   useEffect(() => {
     pushStateToWebView();
-  }, [currentLocation, destination, todoText, areaMarkers]);
+  }, [currentLocation, destination, todoText, areaMarkers, routeGeometry, pinMode]);
 
   useEffect(() => {
     if (focusCoords) {
-      webRef.current?.injectJavaScript(
+      runScript(
         `window.focusLocation && window.focusLocation(${focusCoords.lat}, ${focusCoords.lon}, ${focusCoords.zoom || 14}); true;`
       );
     }
   }, [focusCoords]);
 
   useEffect(() => {
-    if (fitRouteNonce) {
-      webRef.current?.injectJavaScript(
+    if (fitRouteNonce && fitRouteNonce > 0) {
+      runScript(
         `window.fitRouteBounds && window.fitRouteBounds(${currentLocation.lat}, ${currentLocation.lon}, ${destination.lat}, ${destination.lon}); true;`
       );
     }
   }, [fitRouteNonce]);
 
+  // Listen for iframe postMessage when running on Web
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const onWebMsg = (ev: MessageEvent) => {
+      try {
+        const msg = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data;
+        if (msg?.type === "pinDestination" && typeof msg.lat === "number") {
+          onPinDestination(msg.lat, msg.lon, msg.roadLabel);
+        } else if (msg?.type === "selectArea" && typeof msg.area === "string") {
+          onSelectArea(msg.area);
+        }
+      } catch {}
+    };
+    window.addEventListener("message", onWebMsg);
+    return () => window.removeEventListener("message", onWebMsg);
+  }, [onPinDestination, onSelectArea]);
+
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
-      if (msg.type === "pinDestination") {
-        onPinDestination(msg.lat, msg.lon);
-      } else if (msg.type === "selectArea") {
+      if (msg.type === "pinDestination" && typeof msg.lat === "number") {
+        onPinDestination(msg.lat, msg.lon, msg.roadLabel);
+      } else if (msg.type === "selectArea" && typeof msg.area === "string") {
         onSelectArea(msg.area);
       }
     } catch {
-      // ignore malformed messages
+      // ignore malformed bridge message
     }
   };
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.container}>
+        <iframe
+          ref={iframeRef}
+          srcDoc={html}
+          onLoad={pushStateToWebView}
+          style={{ width: "100%", height: "100%", border: "none", background: "#0B1120" }}
+          title="BigWarn Leaflet Map"
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <TypedWebView
         ref={webRef}
+        originWhitelist={["*"]}
         source={{ html }}
         style={styles.webview}
         onLoadEnd={pushStateToWebView}
@@ -288,12 +926,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0B1120",
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: "#0B1120",
-  },
+  container: { flex: 1, backgroundColor: "#0B1120" },
+  webview: { flex: 1, backgroundColor: "#0B1120" },
 });

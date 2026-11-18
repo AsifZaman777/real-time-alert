@@ -28,13 +28,35 @@ export interface GoldAlert {
   time_windows: string[];
   first_reported?: string;
   last_updated?: string;
+  age_minutes?: number;
+  is_recent_3h?: boolean;
   sample_headline: string;
   articles: AlertArticle[];
   on_route?: boolean;
   route_match_reason?: string;
+  affected_road?: string;
+  avoid_Wait_advice?: string;
   distance_to_route_km?: number;
   distance_to_dest_km?: number;
   distance_to_user_km?: number;
+  road_snap_lat?: number;
+  road_snap_lon?: number;
+  danger_road_coords?: number[][];
+}
+
+export interface DangerRoadSegment {
+  cluster_id: string;
+  area: string;
+  road_name: string;
+  event_type: string;
+  severity: string;
+  color: string;
+  headline: string;
+  veracity_percent: number;
+  veracity_summary: string;
+  tooltip_lat: number;
+  tooltip_lon: number;
+  coords: number[][];
 }
 
 export interface LakehouseLayerStats {
@@ -63,6 +85,13 @@ export interface RouteAlertResponse {
     todo: string;
     corridor_radius_km: number;
     route_distance_km: number;
+    duration_min?: number;
+    road_names?: string[];
+    polyline?: number[][];
+    alt_polyline?: number[][];
+    alt_distance_km?: number | null;
+    alt_duration_min?: number | null;
+    danger_segments?: DangerRoadSegment[];
   };
   route_risk_level: "BLOCKED" | "HIGH_RISK" | "CAUTION" | "CLEAR";
   route_alert_count: number;
