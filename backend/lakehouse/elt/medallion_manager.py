@@ -265,7 +265,7 @@ class MedallionLakehouseManager:
         silver_file = self.silver_dir / f"silver_disruptions_{day}.jsonl"
         gold_file = self.gold_dir / f"gold_alerts_{day}.json"
         try:
-            if raw_items and not bronze_file.exists():
+            if raw_items:
                 bronze_file.write_text(
                     "\n".join(json.dumps(r, ensure_ascii=False) for r in raw_items) + "\n",
                     encoding="utf-8",
