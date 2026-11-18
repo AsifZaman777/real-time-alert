@@ -48,8 +48,9 @@ class StreamService:
         return (base - timedelta(days=1)).strftime("%Y-%m-%d")
 
     def rotate_older_than_48h(self) -> list[str]:
-        """Persists raw stream files older than 48h into archive_48h/ (.txt & .jsonl) so the next
-        48-hour continuous stream stays lean and bounded."""
+        """Archives completed (>48h) streams with all Gold, Silver, and Bronze data into a
+        timestamped .txt file (synced to Cloudflare R2 if enabled), then removes the old active
+        news/cache files so the pipeline continues cleanly from the active 48h window."""
         keep_days = {self.today_str(), self.yesterday_str()}
         archived: list[str] = []
         archive_dir = self.lakehouse.archive_48h_dir
@@ -60,16 +61,17 @@ class StreamService:
                 continue
             d_str = m.group(1)
             if d_str not in keep_days:
-                target_jsonl = archive_dir / p.name
                 try:
-                    if not target_jsonl.exists():
-                        p.replace(target_jsonl)
-                    else:
-                        p.unlink(missing_ok=True)
-                    log_p = self.primary_logdir / f"news_stream_{d_str}.log"
-                    if log_p.exists():
-                        target_txt = archive_dir / f"news_stream_{d_str}.txt"
-                        log_p.replace(target_txt)
+                    _, expired_items = self.read_items(d_str, after=0, enrich_legacy=False)
+                    self.lakehouse.archive_expired_day_to_txt(d_str, expired_items)
+
+                    # Clear old active raw stream, log, and bronze/silver/gold caches older than 48h
+                    p.unlink(missing_ok=True)
+                    (self.primary_logdir / f"news_stream_{d_str}.log").unlink(missing_ok=True)
+                    (self.lakehouse.bronze_dir / f"bronze_articles_{d_str}.jsonl").unlink(missing_ok=True)
+                    (self.lakehouse.silver_dir / f"silver_disruptions_{d_str}.jsonl").unlink(missing_ok=True)
+                    (self.lakehouse.gold_dir / f"gold_alerts_{d_str}.json").unlink(missing_ok=True)
+                    (archive_dir / f"stream_48h_{d_str}.txt").unlink(missing_ok=True)
                     archived.append(d_str)
                 except OSError:
                     pass

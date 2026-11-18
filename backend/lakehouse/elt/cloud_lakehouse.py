@@ -57,6 +57,16 @@ class CloudLakehouseConnector:
             "last_error": self.last_error,
         }
 
+    def upload_files_async(self, files: list[tuple[str, Path, str]]) -> None:
+        """Asynchronously pushes arbitrary archive files (e.g. timestamped Gold/Silver/Bronze .txt) to Cloud Storage."""
+        if not self.is_cloud_enabled or not files:
+            return
+        threading.Thread(
+            target=self._push_worker,
+            args=(list(files),),
+            daemon=True,
+        ).start()
+
     def sync_medallion_files_async(
         self,
         day: str,
@@ -68,30 +78,21 @@ class CloudLakehouseConnector:
         """Asynchronously pushes Bronze, Silver, Gold, and 48h archive files to Cloud Lakehouse."""
         if not self.is_cloud_enabled:
             return
-        t = threading.Thread(
-            target=self._sync_worker,
-            args=(day, bronze_file, silver_file, gold_file, extra_archives or []),
+        files_to_push = [
+            (f"bronze/date={day}/{bronze_file.name}", bronze_file, "application/x-ndjson"),
+            (f"silver/date={day}/{silver_file.name}", silver_file, "application/x-ndjson"),
+            (f"gold/date={day}/{gold_file.name}", gold_file, "application/json"),
+        ] + (extra_archives or [])
+        threading.Thread(
+            target=self._push_worker,
+            args=(files_to_push,),
             daemon=True,
-        )
-        t.start()
+        ).start()
 
-    def _sync_worker(
-        self,
-        day: str,
-        bronze_file: Path,
-        silver_file: Path,
-        gold_file: Path,
-        extra_archives: list[tuple[str, Path, str]],
-    ) -> None:
+    def _push_worker(self, files_to_push: list[tuple[str, Path, str]]) -> None:
         if not self._lock.acquire(blocking=False):
             return
         try:
-            files_to_push = [
-                (f"bronze/date={day}/{bronze_file.name}", bronze_file, "application/x-ndjson"),
-                (f"silver/date={day}/{silver_file.name}", silver_file, "application/x-ndjson"),
-                (f"gold/date={day}/{gold_file.name}", gold_file, "application/json"),
-            ] + extra_archives
-
             if self.provider == "azure_adls":
                 self._upload_to_azure(files_to_push)
             elif self.provider in ("s3", "s3_r2", "cloudflare_r2", "minio"):

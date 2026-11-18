@@ -81,22 +81,22 @@ class MedallionLakehouseManager:
     """Materializes and queries Bronze (raw), Silver (cleansed/enriched), and Gold
     (multi-source corroborated area alerts) layers for the ELT pipeline."""
 
-    def __init__(self, bronze_dir: Path = settings.bronze_path,
-                 silver_dir: Path = settings.silver_path,
-                 gold_dir: Path = settings.gold_path):
-        self.bronze_dir = bronze_dir
-        self.silver_dir = silver_dir
-        self.gold_dir = gold_dir
+    def __init__(self, bronze_dir: Path | None = None,
+                 silver_dir: Path | None = None,
+                 gold_dir: Path | None = None):
+        self.bronze_dir = bronze_dir or settings.bronze_path
+        self.silver_dir = silver_dir or settings.silver_path
+        self.gold_dir = gold_dir or settings.gold_path
         self.archive_48h_dir = settings.logs_dir / "archive_48h"
         for d in (self.bronze_dir, self.silver_dir, self.gold_dir, self.archive_48h_dir):
             d.mkdir(parents=True, exist_ok=True)
         self._tag_cache: dict[str, dict[str, Any]] = {}
         self._persist_lock = threading.Lock()
 
-    def build_medallion_snapshot(self, raw_items: list[dict[str, Any]], day: str) -> dict[str, Any]:
-        """Executes in-memory ELT transformation over Bronze records (single-day or 48h rolling)
-        to produce Silver (enriched + deduplicated) and Gold (corroborated area alerts) tables."""
-        bronze_count = len(raw_items)
+    def _compute_layers(
+        self, raw_items: list[dict[str, Any]], day: str
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Transforms raw Bronze records into cleansed Silver disruptions and Gold alert clusters."""
         silver_records: list[dict[str, Any]] = []
         event_clusters: dict[str, dict[str, Any]] = {}
         now_dhaka = datetime.now(DHAKA_TZ)
@@ -281,6 +281,13 @@ class MedallionLakehouseManager:
             ),
             reverse=True,
         )
+        return silver_records, gold_alerts
+
+    def build_medallion_snapshot(self, raw_items: list[dict[str, Any]], day: str) -> dict[str, Any]:
+        """Executes in-memory ELT transformation over Bronze records (single-day or 48h rolling)
+        to produce Silver (enriched + deduplicated) and Gold (corroborated area alerts) tables."""
+        bronze_count = len(raw_items)
+        silver_records, gold_alerts = self._compute_layers(raw_items, day)
 
         # Persist Bronze, Silver, Gold, and 48h TXT/JSONL archive asynchronously so API responses return in <5ms
         self._persist_snapshot_async(day, raw_items, silver_records, gold_alerts)
@@ -316,6 +323,64 @@ class MedallionLakehouseManager:
             },
         }
 
+    def _format_txt_report(
+        self,
+        day: str,
+        raw_items: list[dict[str, Any]],
+        silver_records: list[dict[str, Any]],
+        gold_alerts: list[dict[str, Any]],
+        generated_at: str,
+    ) -> str:
+        """Formats complete Gold, Silver, and Bronze Medallion data into a timestamped UTF-8 text archive."""
+        lines = [
+            f"=== BigWarn 48-Hour Medallion Archive ({day}) | Generated: {generated_at} ===",
+            f"Summary -> GOLD Clusters: {len(gold_alerts)} | SILVER Disruptions: {len(silver_records)} | BRONZE Raw Articles: {len(raw_items)}",
+            "",
+            "================ [1/3] GOLD: CORROBORATED AREA ALERTS ================",
+        ]
+        for g in gold_alerts:
+            lines.append(
+                f"[{g.get('last_updated','')}] {g.get('severity','')} | {g.get('area','')} ({g.get('event_type','')}) | "
+                f"{g.get('veracity_status','')} ({g.get('veracity_percent',0)}%) | "
+                f"Sources={','.join(g.get('sources') or [])} | {g.get('sample_headline','')}"
+            )
+        lines.extend(["", "================ [2/3] SILVER: ENRICHED DISRUPTIONS ================"])
+        for s in silver_records:
+            lines.append(
+                f"[{s.get('published','')}] {s.get('source','')} | "
+                f"Areas={','.join(s.get('locations') or [])} | Events={','.join(s.get('event_types') or [])} | "
+                f"{s.get('headline','')} | {s.get('url','')}"
+            )
+        lines.extend(["", "================ [3/3] BRONZE: RAW STREAM ARTICLES ================"])
+        for b in raw_items:
+            ts = b.get("published") or b.get("ingested_at") or ""
+            kws = ",".join(b.get("matched_keywords") or [])
+            snippet = re.sub(r"\s+", " ", (b.get("body") or b.get("description") or ""))[:220]
+            lines.append(
+                f"[{ts}] {b.get('source','Unknown')} ({b.get('lang','')}) | {b.get('headline','')} | "
+                f"KW=[{kws}] | {b.get('url','')} | {snippet}"
+            )
+        return "\n".join(lines) + "\n"
+
+    def archive_expired_day_to_txt(self, expired_day: str, raw_items: list[dict[str, Any]]) -> Path:
+        """
+        Before clearing expired (>48h) news locally, exports all Gold, Silver, and Bronze layers
+        into a timestamped .txt archive and pushes it to Cloudflare R2 / configured cloud storage.
+        """
+        now_dt = datetime.now(DHAKA_TZ)
+        ts_slug = now_dt.strftime("%Y%m%d_%H%M%S")
+        silver_records, gold_alerts = self._compute_layers(raw_items, expired_day)
+        report_txt = self._format_txt_report(
+            expired_day, raw_items, silver_records, gold_alerts, now_dt.isoformat()
+        )
+        self.archive_48h_dir.mkdir(parents=True, exist_ok=True)
+        txt_path = self.archive_48h_dir / f"medallion_archive_{expired_day}_{ts_slug}.txt"
+        txt_path.write_text(report_txt, encoding="utf-8")
+        cloud_connector.upload_files_async([
+            (f"archives/{expired_day}/{txt_path.name}", txt_path, "text/plain; charset=utf-8")
+        ])
+        return txt_path
+
     def _persist_snapshot_async(
         self,
         day: str,
@@ -345,21 +410,10 @@ class MedallionLakehouseManager:
                     )
                 gold_file.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
 
-                # Persist human-readable 48-hour log/txt digest before rolling to next cycle
-                txt_lines = [
-                    f"=== BigWarn 48-Hour Rolling Threat & News Log ({day}) ===",
-                    f"Total Bronze Articles: {len(raw_items)} | Silver Threats: {len(silver_records)} | Gold Clusters: {len(gold_alerts)}",
-                    "",
-                ]
-                for it in raw_items[-1000:]:
-                    ts = it.get("published") or it.get("ingested_at") or ""
-                    evs = ",".join(it.get("event_types") or [])
-                    locs = ",".join(it.get("locations") or [])
-                    badge = f" [{evs} | {locs}]" if (evs or locs) else ""
-                    txt_lines.append(
-                        f"[{ts}] {it.get('source', 'Unknown')} | {it.get('headline', '')}{badge} | {it.get('url', '')}"
-                    )
-                txt_archive.write_text("\n".join(txt_lines) + "\n", encoding="utf-8")
+                report_txt = self._format_txt_report(
+                    day, raw_items, silver_records, gold_alerts, datetime.now(DHAKA_TZ).isoformat()
+                )
+                txt_archive.write_text(report_txt, encoding="utf-8")
 
                 extra = [(f"archive_48h/{txt_archive.name}", txt_archive, "text/plain; charset=utf-8")]
                 cloud_connector.sync_medallion_files_async(
