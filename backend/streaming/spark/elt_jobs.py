@@ -9,16 +9,32 @@ from backend.app.core.config import settings
 
 
 def get_spark_session(app_name: str = "BigWarn-Lakehouse-ELT"):
-    """Creates or retrieves a SparkSession configured for Delta Lake / Parquet."""
+    """Creates or retrieves a SparkSession configured for Delta Lake / Parquet on Cloud (Azure ADLS Gen2 / S3 / R2) or Local."""
     from pyspark.sql import SparkSession  # type: ignore
 
-    return (
+    builder = (
         SparkSession.builder.appName(app_name)
         .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
         .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
         .config("spark.sql.shuffle.partitions", "8")
-        .getOrCreate()
     )
+
+    if settings.cloud_lakehouse_provider == "azure_adls" and settings.azure_storage_account and settings.azure_storage_key:
+        builder = builder.config(
+            f"spark.hadoop.fs.azure.account.key.{settings.azure_storage_account}.dfs.core.windows.net",
+            settings.azure_storage_key,
+        )
+    elif settings.cloud_lakehouse_provider in ("s3", "s3_r2", "cloudflare_r2", "minio") and settings.aws_access_key_id:
+        builder = (
+            builder.config("spark.hadoop.fs.s3a.access.key", settings.aws_access_key_id)
+            .config("spark.hadoop.fs.s3a.secret.key", settings.aws_secret_access_key)
+            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            .config("spark.hadoop.fs.s3a.path.style.access", "true")
+        )
+        if settings.s3_endpoint_url:
+            builder = builder.config("spark.hadoop.fs.s3a.endpoint", settings.s3_endpoint_url)
+
+    return builder.getOrCreate()
 
 
 def get_bronze_schema():

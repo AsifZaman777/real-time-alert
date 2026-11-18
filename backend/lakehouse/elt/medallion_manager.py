@@ -14,6 +14,7 @@ from typing import Any
 
 from backend.app.core.config import settings
 from backend.ingestion.enrichment.taxonomy import AREA_METADATA, extract_disruption_tags
+from backend.lakehouse.elt.cloud_lakehouse import cloud_connector
 
 DHAKA_TZ = timezone(timedelta(hours=6))
 MAX_RECENT_MINUTES = 180  # 3 hours recency window for route red dots & tooltips
@@ -276,11 +277,13 @@ class MedallionLakehouseManager:
                     encoding="utf-8",
                 )
             gold_file.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
+            cloud_connector.sync_medallion_files_async(day, bronze_file, silver_file, gold_file)
         except OSError:
             pass
 
         return {
             "date": day,
+            "cloud_lakehouse": cloud_connector.get_status_metadata(),
             "layers": {
                 "bronze": {
                     "table": "lakehouse.bronze.raw_articles",
