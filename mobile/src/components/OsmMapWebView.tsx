@@ -133,7 +133,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .leaflet-tile-pane {
-      filter: brightness(1.02) contrast(0.98) saturate(1.04);
+      filter: brightness(1.04) contrast(0.95) saturate(0.85);
     }
     .leaflet-control-attribution {
       background: rgba(255, 255, 255, 0.85) !important;
@@ -381,23 +381,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       closePopupOnClick: true
     }).setView([23.7600, 90.3950], 12);
 
-    // Google Maps-like Clean White / Daylight Vector-Raster Basemap with OSM fallback
-    const voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // Free OpenStreetMap tiles (no API key required) styled in clean Google-Maps-like white daylight mode
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
-      attribution: '© OpenStreetMap • CARTO'
+      attribution: '© OpenStreetMap'
     }).addTo(map);
-
-    let fallbackLoaded = false;
-    voyagerLayer.on('tileerror', function() {
-      if (!fallbackLoaded) {
-        fallbackLoaded = true;
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
-      }
-    });
 
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
 
