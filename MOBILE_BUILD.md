@@ -72,7 +72,7 @@ cd /Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile
 
 set -a && source .env && set +a
 npx expo prebuild --platform android --clean
-cd android && ./gradlew assembleRelease
+cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 
 cp app/build/outputs/apk/release/app-release.apk ../../frontend/public/downloads/bigwarn-edge.apk
 ```

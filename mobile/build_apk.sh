@@ -34,9 +34,9 @@ npx tsc --noEmit
 echo "==> Generating native Android project (baking mobile/.env)..."
 npx expo prebuild --platform android --clean
 
-echo "==> Building Release APK..."
+echo "==> Building Release APK (arm64-v8a)..."
 cd "$MOBILE_DIR/android"
-./gradlew assembleRelease
+./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 
 mkdir -p "$(dirname "$APK_OUT")"
 cp "$MOBILE_DIR/android/app/build/outputs/apk/release/app-release.apk" "$APK_OUT"
