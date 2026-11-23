@@ -57,7 +57,7 @@ export default function DownloadAppPage() {
               <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
                 <h2 className="text-sm font-bold text-foreground">
-                  BigWarn Edge v1.0.0 (Android APK)
+                  BigWarn Edge v1.1.0 (Android APK)
                 </h2>
               </div>
               <p className="text-xs text-muted-foreground">

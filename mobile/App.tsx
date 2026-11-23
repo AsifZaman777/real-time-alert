@@ -422,6 +422,7 @@ export default function App() {
                 <Ionicons name="shield-checkmark" size={15} color="#38BDF8" />
               </View>
               <Text style={styles.brand}>BigWarn</Text>
+              <Text style={styles.versionTag}>v1.1.0</Text>
               <View
                 style={[
                   styles.statusPill,
@@ -774,6 +775,11 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "800",
     letterSpacing: -0.3,
+  },
+  versionTag: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "700",
   },
   statusPill: {
     flexDirection: "row",
