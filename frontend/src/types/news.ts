@@ -60,11 +60,17 @@ export interface DebugPayload {
 }
 
 export interface CrowdMetrics {
+  h3_index?: string;
+  h3_resolution?: number;
   gathering_size: number;
   online_devices?: number;
+  dbscan_core_devices?: number;
+  ambient_noise_devices?: number;
   devices_per_100m?: number;
   baseline_size: number;
   surge_ratio: number;
+  z_score_sigma?: number;
+  is_normal_hub_crowd?: boolean;
   avg_speed_kmh: number;
   stuck_percent?: number;
   moving_percent?: number;

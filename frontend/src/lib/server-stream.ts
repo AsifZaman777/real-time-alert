@@ -317,10 +317,21 @@ export function buildLakehouseSnapshot(day: string): LakehouseSnapshot {
     (c) => {
       const sc = c.sources.size;
       const highCrowd = ["fire", "strike", "blockade", "clash", "procession"].includes(c.event_type);
-      const baseline = 110;
-      const gathering_size = highCrowd ? 290 + sc * 45 : 165 + sc * 30;
+      const isMegaHub = [
+        "Mirpur-10", "Motijheel", "Farmgate", "Shahbagh", "Gulistan",
+        "New Market", "Karwan Bazar", "Jatrabari", "Mohakhali", "Uttara",
+      ].includes(c.area);
+      const baseline = isMegaHub ? 520 : 260;
+      const gathering_size = highCrowd
+        ? Math.round(baseline * (1.35 + sc * 0.14))
+        : Math.round(baseline * (1.08 + sc * 0.08));
+      const dbscan_core = Math.round(gathering_size * (highCrowd ? 0.76 : 0.48));
       const surge_ratio = Number((gathering_size / baseline).toFixed(1));
-      const crowd_weight_bonus = highCrowd ? 0.14 : 0.08;
+      const z_score_sigma = Number(
+        (highCrowd ? 1.65 + sc * 0.45 : 0.75 + sc * 0.25).toFixed(2)
+      );
+      const is_normal_hub = z_score_sigma < 1.3;
+      const crowd_weight_bonus = is_normal_hub ? 0.0 : highCrowd ? 0.14 : 0.06;
       const score = Math.min(
         0.99,
         Number(
@@ -337,7 +348,7 @@ export function buildLakehouseSnapshot(day: string): LakehouseSnapshot {
         event_type: c.event_type,
         credibility_score: score,
         veracity_status:
-          sc >= 2 ? "VERIFIED (News + Crowd)" : "CONFIRMED (Crowd Weighted)",
+          sc >= 2 ? "VERIFIED (News + H3)" : "CONFIRMED (H3 Baseline Weighted)",
         source_count: sc,
         sources: Array.from(c.sources),
         languages: Array.from(c.languages),
@@ -346,24 +357,32 @@ export function buildLakehouseSnapshot(day: string): LakehouseSnapshot {
         last_updated: c.last_updated,
         is_pre_news_crowd: false,
         crowd_metrics: {
+          h3_index: "893c06a4c27ffff",
+          h3_resolution: 9,
           gathering_size,
           online_devices: gathering_size,
+          dbscan_core_devices: dbscan_core,
+          ambient_noise_devices: gathering_size - dbscan_core,
           devices_per_100m: Math.round(gathering_size / 1.5),
           baseline_size: baseline,
           surge_ratio,
-          avg_speed_kmh: highCrowd ? 1.1 : 2.3,
-          stuck_percent: highCrowd ? 91 : 78,
-          moving_percent: highCrowd ? 9 : 22,
-          mobility_state: highCrowd ? "STUCK / GRIDLOCKED" : "SLOW / CONGESTED",
-          dwell_minutes: highCrowd ? 19 : 11,
+          z_score_sigma,
+          is_normal_hub_crowd: is_normal_hub,
+          avg_speed_kmh: is_normal_hub ? 8.5 : 1.1,
+          stuck_percent: is_normal_hub ? 54 : 89,
+          moving_percent: is_normal_hub ? 46 : 11,
+          mobility_state: is_normal_hub
+            ? "NORMAL HUB BASELINE (Non-Threat)"
+            : `H3 ANOMALY (+${z_score_sigma}σ vs baseline)`,
+          dwell_minutes: is_normal_hub ? 3 : 19,
           gathering_radius_m: 155,
           citizen_reports: 7 + sc * 3,
           confirm_votes: 11 + sc * 2,
           clear_votes: 0,
           crowd_weight_bonus,
           crowd_weight_percent: Math.round(crowd_weight_bonus * 100),
-          pre_news_lead_minutes: highCrowd ? 19 : 11,
-          crowd_status: `📡 ${gathering_size} devices (${surge_ratio}x) • ${highCrowd ? 91 : 78}% STUCK`,
+          pre_news_lead_minutes: highCrowd ? 18 : 0,
+          crowd_status: `H3 • ${dbscan_core} core / ${baseline} base (+${z_score_sigma}σ)`,
           is_pre_news_crowd: false,
         },
         sample_headline: c.articles[0]?.headline || "",

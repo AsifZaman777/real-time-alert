@@ -71,7 +71,16 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         stuckPercent: number;
         avgSpeedKmh: number;
         mobilityState: string;
-        deviceDots: Array<{ lat: number; lon: number; stuck: boolean }>;
+        h3Index: string;
+        h3Boundary: number[][];
+        zScoreSigma: number;
+        deviceDots: Array<{
+          lat: number;
+          lon: number;
+          stuck: boolean;
+          core?: boolean;
+          intensity?: number;
+        }>;
       }
     >();
 
@@ -90,9 +99,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       );
       const cm = a.crowd_metrics;
       const onlineDevs = cm?.online_devices ?? cm?.gathering_size ?? 320;
-      const stuckPct = cm?.stuck_percent ?? 88;
+      const stuckPct = cm?.stuck_percent ?? 85;
       const spdKmh = cm?.avg_speed_kmh ?? 1.2;
-      const mobState = cm?.mobility_state ?? (stuckPct >= 70 ? "STUCK / GRIDLOCKED" : "MOVING");
+      const mobState =
+        cm?.mobility_state ?? (stuckPct >= 70 ? "H3 ANOMALY GRIDLOCK" : "NORMAL HUB BASELINE");
+      const h3Idx = cm?.h3_index ?? "893c06a4c27ffff";
+      const h3Poly = cm?.h3_boundary ?? [];
+      const zSig = cm?.z_score_sigma ?? 1.9;
       const devDots = cm?.device_dots ?? [];
 
       if (!existing) {
@@ -116,6 +129,9 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           stuckPercent: stuckPct,
           avgSpeedKmh: spdKmh,
           mobilityState: mobState,
+          h3Index: h3Idx,
+          h3Boundary: h3Poly,
+          zScoreSigma: zSig,
           deviceDots: devDots,
         });
       } else {
@@ -127,6 +143,10 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         existing.maxSources = Math.max(existing.maxSources, a.source_count);
         existing.onlineDevices = Math.max(existing.onlineDevices, onlineDevs);
         existing.stuckPercent = Math.max(existing.stuckPercent, stuckPct);
+        existing.zScoreSigma = Math.max(existing.zScoreSigma, zSig);
+        if (!existing.h3Boundary.length && h3Poly.length) {
+          existing.h3Boundary = h3Poly;
+        }
         if (!existing.deviceDots.length && devDots.length) {
           existing.deviceDots = devDots;
         }
@@ -145,6 +165,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <style>
     html, body, #map {
       margin: 0; padding: 0; width: 100%; height: 100%;
@@ -981,33 +1002,52 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render City Threat Markers (always show intercepted on-route events with a blinking red beacon!)
+      // 4. Render City Threat Markers + Uber H3 Hexagon Cells + Leaflet.heat Crowd Density Layer
       const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
       if (fullMarkersSig !== lastMarkersSig) {
         lastMarkersSig = fullMarkersSig;
         alertMarkerLayerGroup.clearLayers();
+        const heatPoints = [];
+
         markers.forEach(function(m) {
           const isIntercepted = Boolean(m.isRecent3h && (m.onRoute || activeDangerAreas[m.area]));
           const circleColor = isIntercepted ? '#DC2626' : m.color;
+
+          // Render Uber H3 Resolution-9 Hexagonal Cell Boundary for active <=3h events
+          if (m.isRecent3h && m.h3Boundary && m.h3Boundary.length >= 6) {
+            L.polygon(m.h3Boundary, {
+              color: isIntercepted ? '#DC2626' : '#7C3AED',
+              weight: isIntercepted ? 2.2 : 1.5,
+              opacity: isIntercepted ? 0.85 : 0.55,
+              fillColor: isIntercepted ? '#EF4444' : '#8B5CF6',
+              fillOpacity: isIntercepted ? 0.16 : 0.09,
+              dashArray: isIntercepted ? null : '3, 4',
+              interactive: false
+            }).addTo(alertMarkerLayerGroup);
+          }
+
           L.circle([m.lat, m.lon], {
             radius: isIntercepted ? 520 : 340,
             color: circleColor,
             weight: isIntercepted ? 2.4 : 1.2,
             opacity: isIntercepted ? 0.85 : 0.45,
             fillColor: circleColor,
-            fillOpacity: isIntercepted ? 0.22 : 0.10,
+            fillOpacity: isIntercepted ? 0.18 : 0.08,
             interactive: false
           }).addTo(alertMarkerLayerGroup);
 
-          // Render passive Mobile Network Device Cluster nodes (Red = Stuck device, Green = Moving device)
+          // Render DBSCAN Mobile Network Device Cluster nodes (Red = Stuck core, Green = Moving)
           if (m.isRecent3h && m.deviceDots && m.deviceDots.length > 0) {
             m.deviceDots.forEach(function(d) {
+              if (d.stuck) {
+                heatPoints.push([d.lat, d.lon, d.intensity || 0.85]);
+              }
               L.circleMarker([d.lat, d.lon], {
-                radius: d.stuck ? 3.2 : 2.6,
+                radius: d.stuck ? (d.core ? 3.5 : 2.8) : 2.4,
                 color: '#FFFFFF',
                 weight: 1,
                 fillColor: d.stuck ? '#DC2626' : '#10B981',
-                fillOpacity: 0.88,
+                fillOpacity: 0.9,
                 interactive: false
               }).addTo(alertMarkerLayerGroup);
             });
@@ -1035,6 +1075,15 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           });
           marker.addTo(alertMarkerLayerGroup);
         });
+
+        if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
+          L.heatLayer(heatPoints, {
+            radius: 22,
+            blur: 16,
+            maxZoom: 16,
+            gradient: { 0.3: '#FDE047', 0.65: '#F97316', 1.0: '#DC2626' }
+          }).addTo(alertMarkerLayerGroup);
+        }
       }
     };
 

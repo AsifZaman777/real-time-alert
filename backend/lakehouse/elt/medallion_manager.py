@@ -276,6 +276,10 @@ class MedallionLakehouseManager:
             cw_pct = crowd_metrics["crowd_weight_percent"]
             cw_sign = f"+{cw_pct}%" if cw_pct >= 0 else f"{cw_pct}%"
 
+            z_sig = crowd_metrics.get("z_score_sigma", 0.0)
+            base_sz = crowd_metrics.get("baseline_size", 110)
+            core_sz = crowd_metrics.get("dbscan_core_devices", crowd_metrics["gathering_size"])
+
             gold_alerts.append(
                 {
                     "cluster_id": cid,
@@ -293,8 +297,8 @@ class MedallionLakehouseManager:
                     "veracity_tier": veracity_tier,
                     "veracity_status": status,
                     "veracity_summary": (
-                        f"{num_sources} {source_word} • 📡 {crowd_metrics['gathering_size']} devices "
-                        f"({crowd_metrics.get('stuck_percent', 82)}% stuck, {cw_sign} weight)"
+                        f"{num_sources} {source_word} • H3: {core_sz} core stuck vs {base_sz} base "
+                        f"({z_sig:+.1f}σ, {cw_sign} net)"
                     ),
                     "source_count": num_sources,
                     "sources": sorted(cl["sources"]),

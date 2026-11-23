@@ -352,7 +352,7 @@ export function MobileEdgeSimulator({ snapshot }: Props) {
                         {Math.round(cluster.credibility_score * 100)}% veracity
                       </Badge>
                       <Badge variant="outline">
-                        📡 {cluster.crowd_metrics?.online_devices ?? cluster.crowd_metrics?.gathering_size ?? 340} online devices ({cluster.crowd_metrics?.surge_ratio ?? 3.1}x) • 🛑 {cluster.crowd_metrics?.stuck_percent ?? 89}% STUCK ({cluster.crowd_metrics?.avg_speed_kmh ?? 1.1} km/h)
+                        H3 {(cluster.crowd_metrics?.h3_index || "893c06a4").slice(0, 8)} • {cluster.crowd_metrics?.dbscan_core_devices ?? 340} core vs {cluster.crowd_metrics?.baseline_size ?? 520} normal ({(cluster.crowd_metrics?.z_score_sigma ?? 1.8) >= 0 ? `+${cluster.crowd_metrics?.z_score_sigma ?? 1.8}` : cluster.crowd_metrics?.z_score_sigma}σ)
                       </Badge>
                       {cluster.is_pre_news_crowd && (
                         <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>

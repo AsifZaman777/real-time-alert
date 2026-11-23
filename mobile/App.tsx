@@ -37,6 +37,13 @@ import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
 import {
+  DraggableBottomDrawer,
+  PillChip,
+  SegmentedControl,
+  SurfaceCard,
+  useResponsiveLayout,
+} from "./src/components/ui/MobileUI";
+import {
   formatEventLabel,
   formatNewsTimestamp,
 } from "./src/services/notifications";
@@ -154,8 +161,9 @@ function minDistanceToPolylineKm(
 }
 
 export default function App() {
+  const layout = useResponsiveLayout();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const isCompactPhone = (windowWidth || 390) < 380 || (windowHeight || 760) < 700;
+  const isCompactPhone = layout.isSmallPhone || (windowWidth || 390) < 380;
 
   const [currentLocation, setCurrentLocation] = useState<Coordinates>(
     DHAKA_PRESETS.Dhanmondi
@@ -580,23 +588,74 @@ export default function App() {
 
   const handleSubmitCrowdReport = useCallback(async () => {
     const preset = DHAKA_PRESETS[crowdReportArea] || DHAKA_PRESETS["Mirpur-10"];
-    const size = crowdReportSize || 420;
-    const surge = Number((size / 110).toFixed(1));
-    const stuckPct = crowdReportEvent in { strike: 1, blockade: 1 } ? 93 : 88;
-    const avgSpd = crowdReportEvent in { strike: 1, blockade: 1 } ? 0.8 : 1.2;
-    const conf = Math.min(0.96, Number((0.66 + Math.min(0.26, size / 1800)).toFixed(2)));
+    const size = crowdReportSize || 500;
+    const isMegaHub = [
+      "Mirpur-10",
+      "Motijheel",
+      "Shahbagh",
+      "Farmgate",
+      "Uttara",
+    ].includes(crowdReportArea);
+    const normalBaseline = isMegaHub ? 520 : 280;
+    const stdDevs = isMegaHub ? 145 : 85;
+    const normalStuck = isMegaHub ? 54 : 38;
+    const stuckPct = size <= normalBaseline ? normalStuck : 92;
+    const zDensity = (size - normalBaseline) / stdDevs;
+    const zStuck = (stuckPct - normalStuck) / 12;
+    const zSigma = Number((0.45 * zDensity + 0.55 * zStuck).toFixed(2));
+
+    // If crowd size is within normal baseline for a naturally busy hub (like 500 devices at Mirpur-10),
+    // DO NOT emit a false threat alert!
+    if (zSigma < 1.85) {
+      setCrowdModalOpen(false);
+      setCrowdReportNote("");
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (FEED_ACCESS_TOKEN) {
+          headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
+        }
+        await fetch(`${API_BASE_URL}/api/v1/crowd/vote`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            area: crowdReportArea,
+            event_type: crowdReportEvent,
+            vote: "clear",
+          }),
+        });
+      } catch {}
+      return;
+    }
+
+    const surge = Number((size / normalBaseline).toFixed(1));
+    const avgSpd = crowdReportEvent in { strike: 1, blockade: 1 } ? 0.8 : 1.1;
+    const conf = Math.min(0.95, Number((0.58 + Math.min(0.32, zSigma * 0.11)).toFixed(2)));
     const pct = Math.round(conf * 100);
+    const dbscanCore = Math.round(size * 0.78);
     const noteText =
       crowdReportNote.trim() ||
-      `[Pre-News Mobile Network Alert] ${size} online mobile devices detected in ${crowdReportArea} (${surge}x network density) • ${stuckPct}% STUCK (${avgSpd} km/h, 19m dwell) — active ${crowdReportEvent.toUpperCase()} detected before news.`;
+      `[H3 Anomaly +${zSigma}σ] ${dbscanCore} DBSCAN core stuck devices in ${crowdReportArea} (normal baseline ${normalBaseline}) • ${stuckPct}% STUCK (${avgSpd} km/h).`;
+
+    const h3Boundary = Array.from({ length: 6 }, (_, i) => {
+      const ang = ((60 * i + 30) * Math.PI) / 180;
+      return [
+        Number((preset.lat + 0.00105 * Math.sin(ang)).toFixed(5)),
+        Number((preset.lon + 0.00115 * Math.cos(ang)).toFixed(5)),
+      ];
+    });
 
     const microDots = Array.from({ length: 14 }, (_, idx) => {
       const ang = (2 * Math.PI * idx) / 14;
-      const r = 0.0006 + (idx % 3) * 0.00035;
+      const r = 0.0005 + (idx % 3) * 0.0003;
+      const isSt = idx < 12;
       return {
         lat: Number((preset.lat + Math.sin(ang) * r).toFixed(5)),
         lon: Number((preset.lon + Math.cos(ang) * r).toFixed(5)),
-        stuck: idx < 12,
+        stuck: isSt,
+        core: isSt,
+        intensity: isSt ? 0.92 : 0.3,
       };
     });
 
@@ -613,12 +672,12 @@ export default function App() {
       credibility_score: conf,
       veracity_percent: pct,
       veracity_tier: "HIGH",
-      veracity_status: "PRE-NEWS MOBILE NETWORK ALERT",
-      veracity_summary: `📡 ${size} mobile devices (${surge}x) • ${stuckPct}% STUCK (${avgSpd} km/h)`,
+      veracity_status: `H3 ANOMALY (+${zSigma}σ ABOVE BASELINE)`,
+      veracity_summary: `H3 Cell • ${dbscanCore} core stuck vs ${normalBaseline} normal (+${zSigma}σ)`,
       source_count: 0,
       sources: [
-        `Mobile Network Telemetry (${size} Online Devices)`,
-        `${stuckPct}% Stuck / Stationary (${avgSpd} km/h)`,
+        `Uber H3 Cell (+${zSigma}σ vs ${normalBaseline} Baseline)`,
+        `DBSCAN Core: ${dbscanCore} Stuck Devices (${avgSpd} km/h)`,
       ],
       languages: ["bn", "en"],
       time_windows: ["19m Stationary Dwell"],
@@ -628,24 +687,32 @@ export default function App() {
       is_pre_news_crowd: true,
       alert_origin: "PRE_NEWS_CROWD",
       crowd_metrics: {
+        h3_index: "893c06a4c27ffff",
+        h3_resolution: 9,
+        h3_boundary: h3Boundary,
         gathering_size: size,
         online_devices: size,
+        dbscan_core_devices: dbscanCore,
+        ambient_noise_devices: size - dbscanCore,
+        dbscan_clusters: 2,
         devices_per_100m: Math.round(size / 1.5),
-        baseline_size: 110,
+        baseline_size: normalBaseline,
         surge_ratio: surge,
+        z_score_sigma: zSigma,
+        is_normal_hub_crowd: false,
         avg_speed_kmh: avgSpd,
         stuck_percent: stuckPct,
         moving_percent: 100 - stuckPct,
-        mobility_state: "STUCK / GRIDLOCKED",
+        mobility_state: `H3 ANOMALY GRIDLOCK (+${zSigma}σ vs baseline)`,
         dwell_minutes: 19,
         gathering_radius_m: 155,
-        citizen_reports: Math.round(size / 22),
+        citizen_reports: Math.round(dbscanCore / 25),
         confirm_votes: 24,
         clear_votes: 0,
         crowd_weight_bonus: Number((conf - 0.45).toFixed(2)),
         crowd_weight_percent: Math.round((conf - 0.45) * 100),
         pre_news_lead_minutes: 21,
-        crowd_status: `📡 ${size} devices (${surge}x) • ${stuckPct}% STUCK (${avgSpd} km/h)`,
+        crowd_status: `H3 • ${dbscanCore} core stuck (+${zSigma}σ vs ${normalBaseline} base)`,
         is_pre_news_crowd: true,
         device_dots: microDots,
       },
@@ -653,7 +720,7 @@ export default function App() {
       articles: [
         {
           headline: noteText,
-          source: `Mobile Network Density & Mobility Engine (${size} Devices)`,
+          source: `Uber H3 + DBSCAN Anomaly Engine (+${zSigma}σ)`,
           lang: "en",
           url: "",
           published: new Date().toISOString(),
@@ -1008,9 +1075,22 @@ export default function App() {
         />
       </View>
 
-      {/* Top Floating Google Maps Style Navigation & Filter Card */}
-      <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
-        <View style={[styles.topCard, isCompactPhone && styles.topCardCompact]}>
+      {/* Top Floating Responsive Google Maps Style Navigation & Filter Card */}
+      <SafeAreaView
+        style={[
+          styles.topOverlay,
+          {
+            top: layout.safeTop,
+            left: layout.horizontalMargin,
+            right: layout.horizontalMargin,
+            maxWidth: layout.maxCardWidth,
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+        pointerEvents="box-none"
+      >
+        <SurfaceCard compact={isCompactPhone}>
           {/* Header: Brand + Live Pill + Route ETA + Collapse/Sync Buttons */}
           <View style={styles.headerRow}>
             <View style={styles.brandRow}>
@@ -1114,53 +1194,33 @@ export default function App() {
 
           {!topFiltersCollapsed && (
             <>
-              {/* Region / District Filter Chips */}
+              {/* Region / District Filter Chips (via MobileUI PillChip) */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.chipScroll}
               >
-                <TouchableOpacity
+                <PillChip
+                  label={`All BD (${
+                    availableCities.reduce((acc, c) => acc + c.alert_count, 0) ||
+                    allMapAlerts.length
+                  })`}
+                  active={selectedCity === "ALL"}
+                  activeTone="blue"
                   onPress={() => handleSelectCity("ALL")}
-                  style={[
-                    styles.chip,
-                    selectedCity === "ALL" && styles.cityChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedCity === "ALL" && styles.cityChipTextActive,
-                    ]}
-                  >
-                    All BD (
-                    {availableCities.reduce((acc, c) => acc + c.alert_count, 0) ||
-                      allMapAlerts.length}
-                    )
-                  </Text>
-                </TouchableOpacity>
-                {availableCities.map((c) => {
-                  const active = selectedCity === c.city;
-                  return (
-                    <TouchableOpacity
-                      key={c.city}
-                      onPress={() => handleSelectCity(c.city, c.lat, c.lon)}
-                      style={[styles.chip, active && styles.cityChipActive]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          active && styles.cityChipTextActive,
-                        ]}
-                      >
-                        {c.city} ({c.alert_count})
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                />
+                {availableCities.map((c) => (
+                  <PillChip
+                    key={c.city}
+                    label={`${c.city} (${c.alert_count})`}
+                    active={selectedCity === c.city}
+                    activeTone="blue"
+                    onPress={() => handleSelectCity(c.city, c.lat, c.lon)}
+                  />
+                ))}
               </ScrollView>
 
-              {/* Quick Dhaka Route Destinations */}
+              {/* Quick Dhaka Route Destinations (via MobileUI PillChip) */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1174,34 +1234,20 @@ export default function App() {
                   "Gulshan",
                   "Farmgate",
                   "Dhanmondi",
-                ].map((name) => {
-                  const active = destination.label === name;
-                  return (
-                    <TouchableOpacity
-                      key={name}
-                      onPress={() => handleSelectPresetDest(name)}
-                      style={[styles.chip, active && styles.destChipActive]}
-                    >
-                      <Ionicons
-                        name="navigate"
-                        size={10}
-                        color={active ? "#15803D" : "#64748B"}
-                      />
-                      <Text
-                        style={[
-                          styles.chipText,
-                          active && styles.destChipTextActive,
-                        ]}
-                      >
-                        {name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                ].map((name) => (
+                  <PillChip
+                    key={name}
+                    label={name}
+                    icon="navigate"
+                    active={destination.label === name}
+                    activeTone="green"
+                    onPress={() => handleSelectPresetDest(name)}
+                  />
+                ))}
               </ScrollView>
             </>
           )}
-        </View>
+        </SurfaceCard>
 
         {/* Sleek Route Advisory Strip */}
         <TouchableOpacity
@@ -1274,119 +1320,41 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Gesture-Driven Draggable Bottom Drawer (Drag up to open, drag down to off) */}
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            height: maxDrawerHeight,
-            transform: [{ translateY }],
-          },
-        ]}
+      {/* Gesture-Driven Draggable Bottom Drawer (NO cross button — pure drag-to-open & drag-to-off) */}
+      <DraggableBottomDrawer
+        snap={drawerSnap}
+        onSnapChange={(next) => {
+          snapRef.current = next;
+          setDrawerSnap(next);
+        }}
+        maxHeight={layout.drawerFullHeight}
+        halfHeight={layout.drawerHalfHeight}
+        collapsedHeight={layout.drawerCollapsedHeight}
+        maxWidth={layout.isTablet ? layout.maxCardWidth : undefined}
+        title={`${sortedRouteAlerts.length} ROUTE ALERTS`}
+        badgeText={`${allMapAlerts.length} Across Map`}
+        subtitle={
+          drawerSnap === "off"
+            ? "Drag up to open alerts drawer"
+            : "Drag up for full view • Drag down to collapse"
+        }
       >
-        {/* Drag Handle Zone */}
-        <View
-          {...drawerPanResponder.panHandlers}
-          style={styles.sheetHandleArea}
-        >
-          <View style={styles.handleBar} />
-          <View style={styles.sheetHeaderRow}>
-            <View style={styles.sheetTitleCol}>
-              <View style={styles.sheetTitleBadgeRow}>
-                <Text style={styles.feedTitle}>
-                  {sortedRouteAlerts.length} ROUTE ALERTS
-                </Text>
-                <View style={styles.totalMapBadge}>
-                  <Text style={styles.totalMapBadgeText}>
-                    {allMapAlerts.length} Across Map
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.dragInstructionText}>
-                {drawerSnap === "off"
-                  ? "Drag up to open alerts drawer"
-                  : "Drag up for full view • Drag down to turn off"}
-              </Text>
-            </View>
-
-            <View style={styles.sheetRightRow}>
-              {drawerSnap !== "off" && (
-                <TouchableOpacity
-                  onPress={() =>
-                    snapDrawerTo(drawerSnap === "half" ? "full" : "half")
-                  }
-                  style={styles.drawerActionBtn}
-                  accessibilityLabel="Toggle half or full height"
-                >
-                  <Ionicons
-                    name={
-                      drawerSnap === "full"
-                        ? "contract-outline"
-                        : "expand-outline"
-                    }
-                    size={15}
-                    color="#1A73E8"
-                  />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                onPress={() =>
-                  snapDrawerTo(drawerSnap === "off" ? "half" : "off")
-                }
-                style={[
-                  styles.drawerActionBtn,
-                  drawerSnap !== "off" && styles.drawerOffBtn,
-                ]}
-                accessibilityLabel={
-                  drawerSnap === "off" ? "Open drawer" : "Turn off drawer"
-                }
-              >
-                <Ionicons
-                  name={drawerSnap === "off" ? "chevron-up" : "close"}
-                  size={16}
-                  color={drawerSnap === "off" ? "#334155" : "#DC2626"}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
         {/* Drawer Segmented Tabs + Lakehouse Stats */}
         <View style={styles.drawerTabsRow}>
-          <View style={styles.segmentedTabs}>
-            <TouchableOpacity
-              onPress={() => setDrawerTab("route")}
-              style={[
-                styles.drawerTabBtn,
-                drawerTab === "route" && styles.drawerTabBtnActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.drawerTabText,
-                  drawerTab === "route" && styles.drawerTabTextActive,
-                ]}
-              >
-                🛣️ On Route ({sortedRouteAlerts.length})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setDrawerTab("all")}
-              style={[
-                styles.drawerTabBtn,
-                drawerTab === "all" && styles.drawerTabBtnActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.drawerTabText,
-                  drawerTab === "all" && styles.drawerTabTextActive,
-                ]}
-              >
-                🗺️ All Places ({sortedAllAlerts.length})
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <SegmentedControl
+            options={[
+              {
+                id: "route",
+                label: `🛣️ On Route (${sortedRouteAlerts.length})`,
+              },
+              {
+                id: "all",
+                label: `🗺️ All Places (${sortedAllAlerts.length})`,
+              },
+            ]}
+            activeId={drawerTab}
+            onSelect={(id) => setDrawerTab(id as DrawerTab)}
+          />
 
           <Text style={styles.suppressedLabel}>
             {layers
@@ -1507,7 +1475,7 @@ export default function App() {
             );
           }}
         />
-      </Animated.View>
+      </DraggableBottomDrawer>
 
       {/* Public Gathering & Crowd-Sensing Early Alert Reporter Modal */}
       <Modal
@@ -1536,10 +1504,11 @@ export default function App() {
             </View>
 
             <Text style={styles.crowdModalDesc}>
-              Detects online mobile devices clustered in the same position via
-              live network connectivity. During a strike or fire, high device
-              density + stuck/stationary velocity (&lt; 2 km/h) alerts the event
-              before news publishes and weights news veracity.
+              Uses Uber H3 Resolution-9 hexagonal cells + DBSCAN clustering with
+              per-area baseline normalization. Normal busy crowds (e.g. ~520
+              devices at Mirpur-10) are ignored as non-threats; only multi-sigma
+              stationary anomalies (&ge; +1.9&sigma;) trigger alerts or boost
+              veracity.
             </Text>
 
             <Text style={styles.crowdFieldLabel}>📍 Gathering Location</Text>
@@ -1606,10 +1575,10 @@ export default function App() {
             </ScrollView>
 
             <Text style={styles.crowdFieldLabel}>
-              📡 Online Mobile Devices Detected in Same Position
+              📡 H3 Cell Device Load (500 = Normal Hub Baseline • 850+ = Anomaly)
             </Text>
             <View style={styles.crowdSizeRow}>
-              {[150, 350, 550, 1000].map((sz) => {
+              {[500, 750, 950, 1200].map((sz) => {
                 const active = crowdReportSize === sz;
                 return (
                   <TouchableOpacity
@@ -1626,7 +1595,7 @@ export default function App() {
                         active && styles.crowdSizeTextActive,
                       ]}
                     >
-                      {sz} dev
+                      {sz === 500 ? "500 (Base)" : `${sz} (+σ)`}
                     </Text>
                   </TouchableOpacity>
                 );

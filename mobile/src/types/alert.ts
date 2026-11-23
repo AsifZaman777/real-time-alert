@@ -8,11 +8,19 @@ export interface AlertArticle {
 }
 
 export interface CrowdMetrics {
+  h3_index?: string;
+  h3_resolution?: number;
+  h3_boundary?: number[][];
   gathering_size: number;
   online_devices?: number;
+  dbscan_core_devices?: number;
+  ambient_noise_devices?: number;
+  dbscan_clusters?: number;
   devices_per_100m?: number;
   baseline_size: number;
   surge_ratio: number;
+  z_score_sigma?: number;
+  is_normal_hub_crowd?: boolean;
   avg_speed_kmh: number;
   stuck_percent?: number;
   moving_percent?: number;
@@ -27,7 +35,13 @@ export interface CrowdMetrics {
   pre_news_lead_minutes: number;
   crowd_status: string;
   is_pre_news_crowd: boolean;
-  device_dots?: Array<{ lat: number; lon: number; stuck: boolean }>;
+  device_dots?: Array<{
+    lat: number;
+    lon: number;
+    stuck: boolean;
+    core?: boolean;
+    intensity?: number;
+  }>;
 }
 
 export interface GoldAlert {

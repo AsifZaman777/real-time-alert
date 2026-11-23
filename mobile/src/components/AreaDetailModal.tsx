@@ -128,9 +128,6 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                 <Text style={styles.title}>{areaName}</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={dismissWithAnimation} style={styles.closeBtn}>
-              <Ionicons name="close" size={18} color="#475569" />
-            </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>

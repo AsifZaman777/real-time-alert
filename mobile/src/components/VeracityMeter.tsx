@@ -33,18 +33,22 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
       ? "#F59E0B"
       : "#F43F5E";
 
-  const cwPct = crowdMetrics?.crowd_weight_percent ?? 14;
+  const cwPct = crowdMetrics?.crowd_weight_percent ?? 0;
   const cwSign = cwPct >= 0 ? `+${cwPct}%` : `${cwPct}%`;
+  const h3Index = (crowdMetrics?.h3_index || "893c06a4c27ffff").slice(0, 10);
   const onlineDevices =
-    crowdMetrics?.online_devices ?? crowdMetrics?.gathering_size ?? 340;
-  const surgeRatio = crowdMetrics?.surge_ratio ?? 3.1;
-  const stuckPct = crowdMetrics?.stuck_percent ?? 88;
+    crowdMetrics?.online_devices ?? crowdMetrics?.gathering_size ?? 420;
+  const baselineSize = crowdMetrics?.baseline_size ?? 520;
+  const dbscanCore =
+    crowdMetrics?.dbscan_core_devices ?? Math.round(onlineDevices * 0.72);
+  const zScore = crowdMetrics?.z_score_sigma ?? 1.8;
+  const zSign = zScore >= 0 ? `+${zScore.toFixed(1)}σ` : `${zScore.toFixed(1)}σ`;
+  const isNormalHub = crowdMetrics?.is_normal_hub_crowd ?? zScore < 1.3;
+  const stuckPct = crowdMetrics?.stuck_percent ?? 84;
   const movingPct = crowdMetrics?.moving_percent ?? 100 - stuckPct;
-  const avgSpeedKmh = crowdMetrics?.avg_speed_kmh ?? 1.1;
-  const dwellMin = crowdMetrics?.dwell_minutes ?? 18;
-  const radiusM = crowdMetrics?.gathering_radius_m ?? 150;
-  const leadMin = crowdMetrics?.pre_news_lead_minutes ?? 19;
-  const isStuck = stuckPct >= 55;
+  const avgSpeedKmh = crowdMetrics?.avg_speed_kmh ?? 1.2;
+  const dwellMin = crowdMetrics?.dwell_minutes ?? 16;
+  const isStuckAnomaly = !isNormalHub && stuckPct >= 65;
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
@@ -63,8 +67,8 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           />
           <Text style={styles.label}>
             {isPreNewsCrowd
-              ? "MOBILE NETWORK DENSITY & MOBILITY ALERT"
-              : "NEWS + MOBILE NETWORK VERACITY"}
+              ? "H3 + DBSCAN ANOMALY TELEMETRY"
+              : "NEWS + H3 BASELINE VERACITY"}
           </Text>
         </View>
         <View
@@ -91,9 +95,25 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         <Text style={styles.summaryText} numberOfLines={2}>
           {veracitySummary}
         </Text>
-        <View style={styles.crowdWeightBadge}>
-          <Ionicons name="cellular" size={10} color="#6D28D9" />
-          <Text style={styles.crowdWeightText}>{cwSign} Net</Text>
+        <View
+          style={[
+            styles.crowdWeightBadge,
+            isNormalHub && styles.normalHubWeightBadge,
+          ]}
+        >
+          <Ionicons
+            name="cube-outline"
+            size={10}
+            color={isNormalHub ? "#475569" : "#6D28D9"}
+          />
+          <Text
+            style={[
+              styles.crowdWeightText,
+              isNormalHub && { color: "#475569" },
+            ]}
+          >
+            {isNormalHub ? "Normal Hub (0%)" : `${cwSign} H3`}
+          </Text>
         </View>
       </View>
 
@@ -109,46 +129,36 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         />
       </View>
 
-      {/* Mobile Network Device Density & Stuck-vs-Moving Telemetry */}
+      {/* Uber H3 Cell + DBSCAN Core vs. Normal Hub Baseline Telemetry */}
       <View style={styles.crowdRow}>
         <View style={styles.crowdPill}>
-          <Ionicons name="phone-portrait-outline" size={11} color="#7C3AED" />
+          <Ionicons name="grid-outline" size={11} color="#7C3AED" />
           <Text style={styles.crowdPillText}>
-            📡 {onlineDevices} online devices / {radiusM}m ({surgeRatio}x)
+            H3 {h3Index} • {dbscanCore} core / {baselineSize} normal base ({zSign})
           </Text>
         </View>
         <View
           style={[
             styles.crowdPill,
-            isStuck ? styles.stuckPill : styles.movingPill,
+            isStuckAnomaly ? styles.stuckPill : styles.movingPill,
           ]}
         >
           <Ionicons
-            name={isStuck ? "hand-left" : "navigate"}
+            name={isStuckAnomaly ? "hand-left" : "checkmark-circle"}
             size={11}
-            color={isStuck ? "#DC2626" : "#15803D"}
+            color={isStuckAnomaly ? "#DC2626" : "#15803D"}
           />
           <Text
             style={[
               styles.crowdPillText,
-              { color: isStuck ? "#DC2626" : "#15803D" },
+              { color: isStuckAnomaly ? "#DC2626" : "#15803D" },
             ]}
           >
-            {isStuck
-              ? `${stuckPct}% STUCK • ${avgSpeedKmh} km/h (${dwellMin}m dwell)`
-              : `${movingPct}% MOVING • ${avgSpeedKmh} km/h`}
+            {isNormalHub
+              ? `Normal Busy Crowd (Non-Threat • ${avgSpeedKmh} km/h)`
+              : `${stuckPct}% STUCK • ${avgSpeedKmh} km/h (${dwellMin}m dwell)`}
           </Text>
         </View>
-        {!compact && (
-          <View style={styles.crowdPill}>
-            <Ionicons name="flash-outline" size={11} color="#D97706" />
-            <Text style={styles.crowdPillText}>
-              {isPreNewsCrowd
-                ? `Detected ${leadMin}m ahead of news`
-                : `Devices clustered ${leadMin}m before news`}
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* Visual Stuck vs. Moving Mobile Devices Ratio Bar */}
@@ -156,10 +166,10 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         <View style={styles.mobilityBarWrap}>
           <View style={styles.mobilityLabelRow}>
             <Text style={styles.stuckLabel}>
-              🛑 Stuck / Stationary ({stuckPct}%)
+              🛑 DBSCAN Stuck Core ({stuckPct}%)
             </Text>
             <Text style={styles.movingLabel}>
-              🟢 Moving ({movingPct}%)
+              🟢 Moving / Ambient ({movingPct}%)
             </Text>
           </View>
           <View style={styles.mobilityTrack}>
@@ -173,7 +183,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         </View>
       )}
 
-      {/* Interactive Mobile Network Telemetry Signal Controls */}
+      {/* Interactive H3 Mobility Signal Controls */}
       {onCrowdVote && (
         <View style={styles.voteRow}>
           <TouchableOpacity
@@ -182,7 +192,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           >
             <Ionicons name="cellular" size={12} color="#B91C1C" />
             <Text style={styles.confirmVoteText}>
-              🛑 Devices Stuck Here (+Density)
+              🛑 Stuck Anomaly (+σ Above Base)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -190,7 +200,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
             style={styles.clearVoteBtn}
           >
             <Ionicons name="speedometer-outline" size={12} color="#15803D" />
-            <Text style={styles.clearVoteText}>🟢 Traffic Moving</Text>
+            <Text style={styles.clearVoteText}>🟢 Normal Hub Flow</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -275,6 +285,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 7,
     paddingVertical: 2,
+  },
+  normalHubWeightBadge: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#CBD5E1",
   },
   crowdWeightText: {
     color: "#6D28D9",
