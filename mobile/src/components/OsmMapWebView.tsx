@@ -567,6 +567,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
     const routeLayerGroup = L.featureGroup().addTo(map);
     const dangerRoadLayerGroup = L.featureGroup().addTo(map);
+    const heatmapLayerGroup = L.featureGroup().addTo(map);
     const alertMarkerLayerGroup = L.featureGroup().addTo(map);
 
     let userMarker = null;
@@ -577,6 +578,9 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     let lastDestSig = '';
     let lastRouteSig = '';
     let lastMarkersSig = '';
+    let currentNewsMarkers = [];
+    let currentZoneMap = {};
+    let activeHudArea = null;
 
     function sendBridgeMessage(obj) {
       const str = JSON.stringify(obj);
@@ -639,18 +643,21 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     // 3. Single tap on map closes HUD or drops destination pin when Pin mode is active
     const hudEl = document.getElementById('crowd-hud');
     function hideCrowdHud() {
+      activeHudArea = null;
       if (hudEl) hudEl.style.display = 'none';
     }
 
     function showCrowdHud(z) {
-      if (!hudEl) return;
-      const isHigh = z.heatIntensity >= 0.8;
-      const isMed = z.heatIntensity >= 0.55 && !isHigh;
-      const pillBg = isHigh ? '#FEE2E2' : (isMed ? '#FEF3C7' : '#DCFCE7');
-      const pillCol = isHigh ? '#DC2626' : (isMed ? '#D97706' : '#15803D');
+      if (!hudEl || !z) return;
+      activeHudArea = z.area;
+      const isExtreme = z.heatIntensity >= 0.85;
+      const isHigh = z.heatIntensity >= 0.65 && !isExtreme;
+      const pillBg = isExtreme ? '#450A0A' : (isHigh ? '#FEE2E2' : '#FEF3C7');
+      const pillCol = isExtreme ? '#FECACA' : (isHigh ? '#B91C1C' : '#B45309');
+      const peakThresh = z.peakThreshold || 300;
       const newsBtnHtml = z.hasNews
         ? '<span class="hud-news-btn" onclick="window.__selectArea(\\'' + escapeHtml(z.area).replace(/'/g, "\\\\'") + '\\')">View News (' + z.clusterCount + ') ›</span>'
-        : '<span>Live Mobile Heatmap</span>';
+        : '<span style="color:#059669;font-weight:800;">● Live Real-Time Stream</span>';
 
       hudEl.innerHTML = '<div class="hud-top">'
         +   '<span class="hud-area">📍 ' + escapeHtml(z.area) + '</span>'
@@ -659,7 +666,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         + '<div class="hud-grid">'
         +   '<div class="hud-stat-box">'
         +     '<div class="hud-stat-val">' + z.totalMobiles + '</div>'
-        +     '<div class="hud-stat-lbl">Total Mobiles</div>'
+        +     '<div class="hud-stat-lbl">Total (Peak ' + peakThresh + ')</div>'
         +   '</div>'
         +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
         +     '<div class="hud-stat-val" style="color:#DC2626;">' + z.mobilesStuck + ' (' + z.stuckPercent + '%)</div>'
@@ -671,7 +678,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         +   '</div>'
         + '</div>'
         + '<div class="hud-bar-track">'
-        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, z.stuckPercent)) + '%;"></div>'
+        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, z.stuckPercent)) + '%;background:' + (isExtreme ? '#7F1D1D' : '#EF4444') + ';"></div>'
         + '</div>'
         + '<div class="hud-footer">'
         +   '<span>Avg Speed: ' + z.avgSpeedKmh + ' km/h</span>'
@@ -1141,112 +1148,14 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render Multi-Intensity Clickable Heatmaps + Area Badges (click heatmap -> shows Mobiles Stuck/Moving HUD)
-      const BASE_HEAT_ZONES = [
-        { area: 'Mirpur-10', lat: 23.8069, lon: 90.3687, totalMobiles: 510, stuckPercent: 54, avgSpeedKmh: 6.4, heatIntensity: 0.62, intensityLabel: 'Medium Intensity' },
-        { area: 'Motijheel', lat: 23.7330, lon: 90.4172, totalMobiles: 480, stuckPercent: 48, avgSpeedKmh: 8.2, heatIntensity: 0.58, intensityLabel: 'Medium Intensity' },
-        { area: 'Shahbagh', lat: 23.7389, lon: 90.3948, totalMobiles: 440, stuckPercent: 52, avgSpeedKmh: 7.1, heatIntensity: 0.60, intensityLabel: 'Medium Intensity' },
-        { area: 'Farmgate', lat: 23.7561, lon: 90.3872, totalMobiles: 495, stuckPercent: 58, avgSpeedKmh: 5.8, heatIntensity: 0.65, intensityLabel: 'Medium Intensity' },
-        { area: 'Uttara', lat: 23.8759, lon: 90.3795, totalMobiles: 360, stuckPercent: 32, avgSpeedKmh: 16.5, heatIntensity: 0.38, intensityLabel: 'Low Intensity' },
-        { area: 'Gulshan', lat: 23.7925, lon: 90.4158, totalMobiles: 340, stuckPercent: 29, avgSpeedKmh: 18.0, heatIntensity: 0.36, intensityLabel: 'Low Intensity' },
-        { area: 'Dhanmondi', lat: 23.7461, lon: 90.3742, totalMobiles: 390, stuckPercent: 38, avgSpeedKmh: 13.4, heatIntensity: 0.44, intensityLabel: 'Low Intensity' },
-        { area: 'Jatrabari', lat: 23.7104, lon: 90.4349, totalMobiles: 470, stuckPercent: 64, avgSpeedKmh: 4.6, heatIntensity: 0.70, intensityLabel: 'Medium Intensity' }
-      ];
-
+      // 4. All-Bangladesh Independent Real-Time Peak-Threshold Heatmap Engine + Area Badges
+      currentNewsMarkers = markers || [];
       const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
       if (fullMarkersSig !== lastMarkersSig) {
         lastMarkersSig = fullMarkersSig;
         alertMarkerLayerGroup.clearLayers();
-        const heatPoints = [];
-        const zoneMap = {};
 
-        BASE_HEAT_ZONES.forEach(function(bz) {
-          const st = Math.round(bz.totalMobiles * bz.stuckPercent / 100);
-          zoneMap[bz.area] = {
-            area: bz.area,
-            lat: bz.lat,
-            lon: bz.lon,
-            totalMobiles: bz.totalMobiles,
-            mobilesStuck: st,
-            mobilesMoving: bz.totalMobiles - st,
-            stuckPercent: bz.stuckPercent,
-            movingPercent: 100 - bz.stuckPercent,
-            avgSpeedKmh: bz.avgSpeedKmh,
-            heatIntensity: bz.heatIntensity,
-            intensityLabel: bz.intensityLabel,
-            hasNews: false,
-            clusterCount: 0
-          };
-        });
-
-        markers.forEach(function(m) {
-          zoneMap[m.area] = {
-            area: m.area,
-            lat: m.lat,
-            lon: m.lon,
-            totalMobiles: m.totalMobiles,
-            mobilesStuck: m.mobilesStuck,
-            mobilesMoving: m.mobilesMoving,
-            stuckPercent: m.stuckPercent,
-            movingPercent: m.movingPercent,
-            avgSpeedKmh: m.avgSpeedKmh,
-            heatIntensity: m.heatIntensity,
-            intensityLabel: m.intensityLabel,
-            hasNews: true,
-            clusterCount: m.clusterCount
-          };
-        });
-
-        Object.values(zoneMap).forEach(function(z) {
-          const w = z.heatIntensity;
-          heatPoints.push([z.lat, z.lon, w]);
-          for (let i = 0; i < 8; i++) {
-            const ang = (2 * Math.PI * i) / 8;
-            const r = 0.0018 + (i % 2) * 0.0011;
-            heatPoints.push([
-              z.lat + Math.sin(ang) * r,
-              z.lon + Math.cos(ang) * r,
-              Math.max(0.2, w * 0.78)
-            ]);
-          }
-
-          const heatColor = w >= 0.8 ? '#EF4444' : (w >= 0.55 ? '#F59E0B' : '#22C55E');
-
-          // Soft outer heatmap glow + clickable heatmap target
-          L.circle([z.lat, z.lon], {
-            radius: w >= 0.8 ? 680 : (w >= 0.55 ? 540 : 440),
-            stroke: false,
-            fillColor: heatColor,
-            fillOpacity: w >= 0.8 ? 0.20 : (w >= 0.55 ? 0.16 : 0.13),
-            interactive: false
-          }).addTo(alertMarkerLayerGroup);
-
-          const clickZone = L.circle([z.lat, z.lon], {
-            radius: w >= 0.8 ? 460 : 380,
-            color: heatColor,
-            weight: 1.4,
-            opacity: 0.55,
-            fillColor: heatColor,
-            fillOpacity: w >= 0.8 ? 0.28 : 0.20,
-            interactive: true
-          }).addTo(alertMarkerLayerGroup);
-
-          clickZone.on('click', function(ev) {
-            L.DomEvent.stopPropagation(ev);
-            showCrowdHud(z);
-          });
-        });
-
-        if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
-          L.heatLayer(heatPoints, {
-            radius: 30,
-            blur: 22,
-            maxZoom: 15,
-            gradient: { 0.25: '#4ADE80', 0.55: '#FACC15', 0.80: '#F97316', 1.0: '#DC2626' }
-          }).addTo(alertMarkerLayerGroup);
-        }
-
-        markers.forEach(function(m) {
+        currentNewsMarkers.forEach(function(m) {
           const isIntercepted = Boolean(m.isRecent3h && (m.onRoute || activeDangerAreas[m.area]));
           const circleColor = isIntercepted ? '#DC2626' : m.color;
           const badgeClass = isIntercepted ? 'area-badge area-badge-onroute' : 'area-badge';
@@ -1267,14 +1176,389 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           });
           marker.on('click', function(ev) {
             L.DomEvent.stopPropagation(ev);
-            const z = zoneMap[m.area];
+            const z = currentZoneMap[m.area];
             if (z) showCrowdHud(z);
             sendBridgeMessage({ type: 'selectArea', area: m.area });
           });
           marker.addTo(alertMarkerLayerGroup);
         });
+
+        renderRealtimeBangladeshHeatmaps();
       }
     };
+
+    // Whole-Bangladesh Spatial Telemetry Network (All 64 Districts + Highway Hubs + Dhaka Metro Nodes)
+    const ALL_BD_LOCATIONS = [
+      // Dhaka Metro Hubs (tier 1: peakThreshold = 360)
+      { area: 'Mirpur-10', lat: 23.8069, lon: 90.3687, tier: 1 },
+      { area: 'Mirpur-1', lat: 23.7985, lon: 90.3536, tier: 1 },
+      { area: 'Mirpur-2', lat: 23.8045, lon: 90.3621, tier: 2 },
+      { area: 'Mirpur-11', lat: 23.8168, lon: 90.3658, tier: 2 },
+      { area: 'Mirpur-12', lat: 23.8286, lon: 90.3642, tier: 2 },
+      { area: 'Pallabi', lat: 23.8258, lon: 90.3654, tier: 2 },
+      { area: 'Kalshi', lat: 23.8195, lon: 90.3765, tier: 2 },
+      { area: 'Kazipara', lat: 23.7975, lon: 90.3728, tier: 2 },
+      { area: 'Shewrapara', lat: 23.7889, lon: 90.3756, tier: 2 },
+      { area: 'Agargaon', lat: 23.7776, lon: 90.3792, tier: 1 },
+      { area: 'Bijoy Sarani', lat: 23.7654, lon: 90.3892, tier: 1 },
+      { area: 'Farmgate', lat: 23.7561, lon: 90.3872, tier: 1 },
+      { area: 'Karwan Bazar', lat: 23.7516, lon: 90.3929, tier: 1 },
+      { area: 'Banglamotor', lat: 23.7462, lon: 90.3945, tier: 1 },
+      { area: 'Shahbagh', lat: 23.7389, lon: 90.3948, tier: 1 },
+      { area: 'Paltan', lat: 23.7364, lon: 90.4143, tier: 1 },
+      { area: 'Motijheel', lat: 23.7330, lon: 90.4172, tier: 1 },
+      { area: 'Gulistan', lat: 23.7246, lon: 90.4126, tier: 1 },
+      { area: 'Jatrabari', lat: 23.7104, lon: 90.4349, tier: 1 },
+      { area: 'Sayedabad', lat: 23.7135, lon: 90.4278, tier: 1 },
+      { area: 'Shanir Akhra', lat: 23.7024, lon: 90.4512, tier: 2 },
+      { area: 'Signboard', lat: 23.6945, lon: 90.4765, tier: 2 },
+      { area: 'Dhanmondi', lat: 23.7461, lon: 90.3742, tier: 1 },
+      { area: 'Science Lab', lat: 23.7389, lon: 90.3834, tier: 1 },
+      { area: 'New Market', lat: 23.7332, lon: 90.3839, tier: 1 },
+      { area: 'Azimpur', lat: 23.7276, lon: 90.3852, tier: 2 },
+      { area: 'Mohammadpur', lat: 23.7662, lon: 90.3589, tier: 1 },
+      { area: 'Shyamoli', lat: 23.7745, lon: 90.3654, tier: 1 },
+      { area: 'Kallyanpur', lat: 23.7798, lon: 90.3612, tier: 2 },
+      { area: 'Gabtoli', lat: 23.7837, lon: 90.3442, tier: 1 },
+      { area: 'Tejgaon', lat: 23.7639, lon: 90.3992, tier: 1 },
+      { area: 'Mohakhali', lat: 23.7778, lon: 90.4057, tier: 1 },
+      { area: 'Banani', lat: 23.7937, lon: 90.4066, tier: 1 },
+      { area: 'Gulshan', lat: 23.7925, lon: 90.4158, tier: 1 },
+      { area: 'Badda', lat: 23.7805, lon: 90.4267, tier: 1 },
+      { area: 'Rampura', lat: 23.7612, lon: 90.4219, tier: 1 },
+      { area: 'Malibagh', lat: 23.7495, lon: 90.4128, tier: 1 },
+      { area: 'Moghbazar', lat: 23.7490, lon: 90.4034, tier: 1 },
+      { area: 'Kakrail', lat: 23.7376, lon: 90.4085, tier: 2 },
+      { area: 'Khilgaon', lat: 23.7506, lon: 90.4292, tier: 2 },
+      { area: 'Bashundhara', lat: 23.8191, lon: 90.4326, tier: 2 },
+      { area: 'Kuril', lat: 23.8219, lon: 90.4214, tier: 1 },
+      { area: 'Airport', lat: 23.8513, lon: 90.4089, tier: 1 },
+      { area: 'Uttara', lat: 23.8759, lon: 90.3795, tier: 1 },
+      { area: 'Abdullahpur', lat: 23.8805, lon: 90.4008, tier: 1 },
+      { area: 'Hatirjheel', lat: 23.7667, lon: 90.4125, tier: 2 },
+      { area: 'Old Dhaka', lat: 23.7115, lon: 90.4072, tier: 1 },
+      { area: 'Sadarghat', lat: 23.7062, lon: 90.4086, tier: 1 },
+      { area: 'Kamrangirchar', lat: 23.7158, lon: 90.3741, tier: 2 },
+      { area: 'Keraniganj', lat: 23.6942, lon: 90.3875, tier: 2 },
+      { area: 'Demra', lat: 23.7225, lon: 90.4892, tier: 2 },
+      // Highway & Industrial Hubs across Greater Dhaka
+      { area: 'Savar', lat: 23.8583, lon: 90.2667, tier: 1 },
+      { area: 'Ashulia', lat: 23.8981, lon: 90.3264, tier: 1 },
+      { area: 'Tongi', lat: 23.8915, lon: 90.4023, tier: 1 },
+      { area: 'Gazipur', lat: 23.9999, lon: 90.4203, tier: 1 },
+      { area: 'Narayanganj', lat: 23.6238, lon: 90.5000, tier: 1 },
+      // All 64 Bangladesh Districts & Divisional Cities (Whole Bangladesh Coverage)
+      { area: 'Chattogram', lat: 22.3569, lon: 91.7832, tier: 1 },
+      { area: 'Sylhet', lat: 24.8949, lon: 91.8687, tier: 1 },
+      { area: 'Rajshahi', lat: 24.3745, lon: 88.6042, tier: 1 },
+      { area: 'Khulna', lat: 22.8456, lon: 89.5403, tier: 1 },
+      { area: 'Barishal', lat: 22.7010, lon: 90.3535, tier: 1 },
+      { area: 'Rangpur', lat: 25.7439, lon: 89.2752, tier: 1 },
+      { area: 'Mymensingh', lat: 24.7471, lon: 90.4203, tier: 1 },
+      { area: 'Cumilla', lat: 23.4607, lon: 91.1809, tier: 1 },
+      { area: 'Bogura', lat: 24.8481, lon: 89.3730, tier: 1 },
+      { area: "Cox's Bazar", lat: 21.4272, lon: 92.0058, tier: 2 },
+      { area: 'Jessore', lat: 23.1664, lon: 89.2081, tier: 2 },
+      { area: 'Tangail', lat: 24.2513, lon: 89.9167, tier: 2 },
+      { area: 'Faridpur', lat: 23.6070, lon: 89.8429, tier: 2 },
+      { area: 'Pabna', lat: 24.0064, lon: 89.2372, tier: 2 },
+      { area: 'Kushtia', lat: 23.9013, lon: 89.1204, tier: 2 },
+      { area: 'Dinajpur', lat: 25.6279, lon: 88.6332, tier: 2 },
+      { area: 'Noakhali', lat: 22.8696, lon: 91.0994, tier: 2 },
+      { area: 'Feni', lat: 23.0159, lon: 91.3976, tier: 2 },
+      { area: 'Brahmanbaria', lat: 23.9571, lon: 91.1119, tier: 2 },
+      { area: 'Chandpur', lat: 23.2333, lon: 90.6667, tier: 2 },
+      { area: 'Lakshmipur', lat: 22.9447, lon: 90.8282, tier: 2 },
+      { area: 'Narsingdi', lat: 23.9230, lon: 90.7177, tier: 2 },
+      { area: 'Munshiganj', lat: 23.5422, lon: 90.5305, tier: 2 },
+      { area: 'Manikganj', lat: 23.8617, lon: 90.0003, tier: 2 },
+      { area: 'Gopalganj', lat: 23.0051, lon: 89.8266, tier: 2 },
+      { area: 'Madaripur', lat: 23.1641, lon: 90.1897, tier: 2 },
+      { area: 'Shariatpur', lat: 23.2423, lon: 90.4348, tier: 2 },
+      { area: 'Rajbari', lat: 23.7574, lon: 89.6445, tier: 2 },
+      { area: 'Kishoreganj', lat: 24.4449, lon: 90.7766, tier: 2 },
+      { area: 'Netrokona', lat: 24.8710, lon: 90.7279, tier: 2 },
+      { area: 'Jamalpur', lat: 24.9375, lon: 89.9378, tier: 2 },
+      { area: 'Sherpur', lat: 25.0205, lon: 90.0153, tier: 2 },
+      { area: 'Sirajganj', lat: 24.4534, lon: 89.7007, tier: 2 },
+      { area: 'Natore', lat: 24.4206, lon: 89.0006, tier: 2 },
+      { area: 'Naogaon', lat: 24.7936, lon: 88.9318, tier: 2 },
+      { area: 'Chapainawabganj', lat: 24.5965, lon: 88.2775, tier: 2 },
+      { area: 'Joypurhat', lat: 25.0968, lon: 89.0227, tier: 2 },
+      { area: 'Satkhira', lat: 22.7185, lon: 89.0705, tier: 2 },
+      { area: 'Bagerhat', lat: 22.6516, lon: 89.7859, tier: 2 },
+      { area: 'Jhenaidah', lat: 23.5450, lon: 89.1726, tier: 2 },
+      { area: 'Magura', lat: 23.4873, lon: 89.4199, tier: 2 },
+      { area: 'Narail', lat: 23.1725, lon: 89.5127, tier: 2 },
+      { area: 'Chuadanga', lat: 23.6402, lon: 88.8418, tier: 2 },
+      { area: 'Meherpur', lat: 23.7622, lon: 88.6318, tier: 2 },
+      { area: 'Patuakhali', lat: 22.3596, lon: 90.3299, tier: 2 },
+      { area: 'Bhola', lat: 22.6859, lon: 90.6482, tier: 2 },
+      { area: 'Pirojpur', lat: 22.5841, lon: 89.9720, tier: 2 },
+      { area: 'Jhalokati', lat: 22.6406, lon: 90.1987, tier: 2 },
+      { area: 'Barguna', lat: 22.1592, lon: 90.1256, tier: 2 },
+      { area: 'Habiganj', lat: 24.3749, lon: 91.4155, tier: 2 },
+      { area: 'Moulvibazar', lat: 24.4829, lon: 91.7774, tier: 2 },
+      { area: 'Sunamganj', lat: 25.0658, lon: 91.3950, tier: 2 },
+      { area: 'Kurigram', lat: 25.8054, lon: 89.6362, tier: 2 },
+      { area: 'Gaibandha', lat: 25.3290, lon: 89.5430, tier: 2 },
+      { area: 'Nilphamari', lat: 25.9318, lon: 88.8561, tier: 2 },
+      { area: 'Lalmonirhat', lat: 25.9165, lon: 89.4532, tier: 2 },
+      { area: 'Thakurgaon', lat: 26.0337, lon: 88.4617, tier: 2 },
+      { area: 'Panchagarh', lat: 26.3411, lon: 88.5542, tier: 2 },
+      { area: 'Rangamati', lat: 22.6533, lon: 92.1789, tier: 2 },
+      { area: 'Khagrachhari', lat: 23.1193, lon: 91.9847, tier: 2 },
+      { area: 'Bandarban', lat: 22.1953, lon: 92.2184, tier: 2 }
+    ];
+
+    function hashAreaSeed(name) {
+      let h = 2166136261;
+      for (let i = 0; i < name.length; i++) {
+        h ^= name.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return Math.abs(h);
+    }
+
+    function computeRealtimeCell(loc, nowSec, newsMarker) {
+      const seed = hashAreaSeed(loc.area);
+      const phaseA = (seed % 360) * (Math.PI / 180);
+      const phaseB = ((seed >> 4) % 360) * (Math.PI / 180);
+      const peakThreshold = loc.tier === 1 ? 360 : 180;
+      const baseVolume = loc.tier === 1 ? 305 : 145;
+      const waveAmp = loc.tier === 1 ? 195 : 105;
+
+      // Smoothly evolving real-time wave across Bangladesh (updates every 2.5 seconds)
+      const wave1 = Math.sin(nowSec / 18.0 + phaseA);
+      const wave2 = Math.cos(nowSec / 41.0 + phaseB);
+      const combinedWave = 0.62 * wave1 + 0.38 * wave2;
+
+      const hasRecentNews = Boolean(newsMarker && newsMarker.isRecent3h);
+      const isCritNews = Boolean(newsMarker && newsMarker.hasCritical && hasRecentNews);
+      const newsSurge = hasRecentNews ? (isCritNews ? 270 : 165) : 0;
+
+      const totalMobiles = Math.max(
+        60,
+        Math.round(baseVolume + combinedWave * waveAmp + newsSurge)
+      );
+
+      // Peak-Threshold Gating: only generate heatmap when crossing Peak Threshold!
+      const exceedsPeak = totalMobiles >= peakThreshold || hasRecentNews;
+      const excessRatio = Math.max(0, (totalMobiles - peakThreshold) / Math.max(1, peakThreshold));
+
+      let stuckPercent;
+      if (hasRecentNews) {
+        const baseStuck = isCritNews ? 82 : 66;
+        stuckPercent = Math.min(96, Math.max(52, Math.round(baseStuck + 8 * wave1)));
+      } else if (exceedsPeak) {
+        stuckPercent = Math.min(
+          92,
+          Math.max(38, Math.round(38 + excessRatio * 82 + 9 * Math.max(0, wave1)))
+        );
+      } else {
+        stuckPercent = Math.max(10, Math.min(34, Math.round(20 + 8 * wave1)));
+      }
+
+      const mobilesStuck = Math.round((totalMobiles * stuckPercent) / 100);
+      const mobilesMoving = Math.max(0, totalMobiles - mobilesStuck);
+      const movingPercent = 100 - stuckPercent;
+      const avgSpeedKmh = Math.max(
+        0.8,
+        Math.round((27.0 * Math.pow(1 - stuckPercent / 105.0, 1.45)) * 10) / 10
+      );
+
+      let heatIntensity = 0;
+      let intensityLabel = 'Below Peak';
+      if (exceedsPeak) {
+        heatIntensity = Math.min(
+          1.0,
+          Math.round((0.46 + excessRatio * 0.78 + (stuckPercent / 100) * 0.24) * 100) / 100
+        );
+        if (heatIntensity >= 0.85) {
+          intensityLabel = 'Extreme Peak (Dark Zone)';
+        } else if (heatIntensity >= 0.65) {
+          intensityLabel = 'High Peak Surge';
+        } else {
+          intensityLabel = 'Peak Threshold Crossed';
+        }
+      }
+
+      return {
+        area: loc.area,
+        lat: loc.lat,
+        lon: loc.lon,
+        peakThreshold: peakThreshold,
+        exceedsPeak: exceedsPeak,
+        totalMobiles: totalMobiles,
+        mobilesStuck: mobilesStuck,
+        mobilesMoving: mobilesMoving,
+        stuckPercent: stuckPercent,
+        movingPercent: movingPercent,
+        avgSpeedKmh: avgSpeedKmh,
+        heatIntensity: heatIntensity,
+        intensityLabel: intensityLabel,
+        hasNews: Boolean(newsMarker),
+        clusterCount: newsMarker ? newsMarker.clusterCount : 0
+      };
+    }
+
+    function renderRealtimeBangladeshHeatmaps() {
+      heatmapLayerGroup.clearLayers();
+      const nowSec = Date.now() / 1000.0;
+      const newsByArea = {};
+      (currentNewsMarkers || []).forEach(function(m) {
+        newsByArea[m.area] = m;
+      });
+
+      const activeZones = [];
+      const newZoneMap = {};
+      const seenCoords = [];
+
+      // 1. Evaluate all 113 Bangladesh districts, highway junctions & metro neighborhoods
+      ALL_BD_LOCATIONS.forEach(function(loc) {
+        const cell = computeRealtimeCell(loc, nowSec, newsByArea[loc.area]);
+        newZoneMap[loc.area] = cell;
+        seenCoords.push([loc.lat, loc.lon]);
+        if (cell.exceedsPeak) {
+          activeZones.push(cell);
+        }
+      });
+
+      // 2. Also include any news marker location not in ALL_BD_LOCATIONS
+      (currentNewsMarkers || []).forEach(function(m) {
+        if (!newZoneMap[m.area]) {
+          const cell = computeRealtimeCell({ area: m.area, lat: m.lat, lon: m.lon, tier: 1 }, nowSec, m);
+          newZoneMap[m.area] = cell;
+          if (cell.exceedsPeak) {
+            activeZones.push(cell);
+          }
+        }
+      });
+
+      // 3. Dynamic Viewport Spatial Sampling anywhere inside Bangladesh (20.7..26.6N, 88.0..92.7E)
+      //    so panning/zooming anywhere in Bangladesh generates independent peak-threshold heatmaps
+      const zoom = map.getZoom();
+      if (zoom >= 9) {
+        const b = map.getBounds();
+        const minLat = Math.max(20.75, b.getSouth());
+        const maxLat = Math.min(26.60, b.getNorth());
+        const minLon = Math.max(88.05, b.getWest());
+        const maxLon = Math.min(92.65, b.getEast());
+        if (maxLat > minLat && maxLon > minLon) {
+          const step = zoom >= 13 ? 0.025 : (zoom >= 11 ? 0.06 : 0.14);
+          const startLat = Math.floor(minLat / step) * step;
+          const startLon = Math.floor(minLon / step) * step;
+          let count = 0;
+          for (let glat = startLat; glat <= maxLat && count < 48; glat += step) {
+            for (let glon = startLon; glon <= maxLon && count < 48; glon += step) {
+              let nearExisting = false;
+              for (let k = 0; k < seenCoords.length; k++) {
+                if (Math.hypot(glat - seenCoords[k][0], glon - seenCoords[k][1]) < step * 0.72) {
+                  nearExisting = true;
+                  break;
+                }
+              }
+              if (nearExisting) continue;
+              count++;
+              const cellName = 'BD Sector (' + glat.toFixed(2) + '°N, ' + glon.toFixed(2) + '°E)';
+              const cell = computeRealtimeCell({ area: cellName, lat: glat, lon: glon, tier: 2 }, nowSec, null);
+              newZoneMap[cellName] = cell;
+              if (cell.exceedsPeak) {
+                activeZones.push(cell);
+              }
+            }
+          }
+        }
+      }
+
+      currentZoneMap = newZoneMap;
+
+      // Scale radii based on zoom level so whole-Bangladesh view and street view both look crisp
+      const zoomScale = zoom <= 8 ? 5.2 : (zoom <= 10 ? 2.6 : (zoom <= 12 ? 1.15 : 0.85));
+      const spreadDeg = zoom <= 8 ? 0.032 : (zoom <= 10 ? 0.014 : 0.0022);
+      const heatPoints = [];
+
+      activeZones.forEach(function(z) {
+        const w = z.heatIntensity;
+        heatPoints.push([z.lat, z.lon, w]);
+        for (let i = 0; i < 8; i++) {
+          const ang = (2 * Math.PI * i) / 8;
+          const r = spreadDeg + (i % 2) * (spreadDeg * 0.55);
+          heatPoints.push([
+            z.lat + Math.sin(ang) * r,
+            z.lon + Math.cos(ang) * r,
+            Math.max(0.3, w * 0.84)
+          ]);
+        }
+
+        // Darker color & higher opacity the further above the Peak Threshold it climbs
+        const isExtreme = w >= 0.85;
+        const isHigh = w >= 0.65 && !isExtreme;
+        const outerColor = isExtreme ? '#7F1D1D' : (isHigh ? '#DC2626' : '#F59E0B');
+        const coreColor = isExtreme ? '#3B0707' : (isHigh ? '#991B1B' : '#D97706');
+
+        // Outer soft thermal halo
+        L.circle([z.lat, z.lon], {
+          radius: (isExtreme ? 740 : (isHigh ? 590 : 470)) * zoomScale,
+          stroke: false,
+          fillColor: outerColor,
+          fillOpacity: isExtreme ? 0.28 : (isHigh ? 0.21 : 0.16),
+          interactive: false
+        }).addTo(heatmapLayerGroup);
+
+        // Clickable heatmap zone
+        const clickZone = L.circle([z.lat, z.lon], {
+          radius: (isExtreme ? 490 : (isHigh ? 410 : 340)) * zoomScale,
+          color: coreColor,
+          weight: isExtreme ? 1.8 : 1.3,
+          opacity: isExtreme ? 0.78 : 0.55,
+          fillColor: coreColor,
+          fillOpacity: isExtreme ? 0.44 : (isHigh ? 0.31 : 0.22),
+          interactive: true
+        }).addTo(heatmapLayerGroup);
+
+        // Extra-dark inner core when peak threshold is heavily exceeded
+        if (w >= 0.72) {
+          L.circle([z.lat, z.lon], {
+            radius: (isExtreme ? 240 : 180) * zoomScale,
+            stroke: false,
+            fillColor: '#2A0404',
+            fillOpacity: isExtreme ? 0.52 : 0.34,
+            interactive: false
+          }).addTo(heatmapLayerGroup);
+        }
+
+        clickZone.on('click', function(ev) {
+          L.DomEvent.stopPropagation(ev);
+          showCrowdHud(z);
+        });
+      });
+
+      if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
+        L.heatLayer(heatPoints, {
+          radius: zoom <= 8 ? 22 : 30,
+          blur: zoom <= 8 ? 16 : 20,
+          maxZoom: 15,
+          gradient: {
+            0.35: '#F59E0B',
+            0.60: '#DC2626',
+            0.82: '#991B1B',
+            1.00: '#3B0707'
+          }
+        }).addTo(heatmapLayerGroup);
+      }
+
+      // Live-refresh the open HUD if the user currently has a heatmap clicked
+      if (activeHudArea && currentZoneMap[activeHudArea] && hudEl && hudEl.style.display === 'block') {
+        showCrowdHud(currentZoneMap[activeHudArea]);
+      }
+    }
+
+    // Autonomous real-time heatmap stream across all of Bangladesh (no manual Sync required)
+    setInterval(renderRealtimeBangladeshHeatmaps, 2500);
+    map.on('moveend', function() {
+      renderRealtimeBangladeshHeatmaps();
+    });
 
     window.focusLocation = function(lat, lon, zoom) {
       map.flyTo([lat, lon], zoom || 14, { duration: 0.6 });

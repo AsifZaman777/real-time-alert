@@ -9,6 +9,8 @@ export interface AlertArticle {
 
 export interface CrowdMetrics {
   total_mobiles?: number;
+  peak_threshold?: number;
+  exceeds_peak?: boolean;
   mobiles_stuck?: number;
   mobiles_moving?: number;
   stuck_percent?: number;

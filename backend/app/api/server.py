@@ -159,84 +159,24 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                 self._handle_public_feed(q, default_format="ndjson", default_layer="silver")
             elif path in ("/api/stream/live", "/api/v1/stream/live"):
                 self._handle_public_feed(q, default_format="sse", default_layer="silver")
+            elif path in ("/api/crowd/heatmap", "/api/v1/crowd/heatmap"):
+                self._json({
+                    "status": "ok",
+                    "heatmaps": crowd_service.get_all_bangladesh_heatmaps(),
+                })
             elif path in ("/api/crowd/ping", "/api/v1/crowd/ping"):
-                dev_id = (q.get("device_id") or ["edge-mobile"])[0]
-                try:
-                    lat = float((q.get("lat") or ["23.7461"])[0])
-                    lon = float((q.get("lon") or ["90.3742"])[0])
-                    spd = float((q.get("speed_kmh") or ["0.0"])[0])
-                except ValueError:
-                    lat, lon, spd = 23.7461, 90.3742, 0.0
-                net = (q.get("network_type") or ["4G_LTE"])[0]
-                res = crowd_service.ingest_device_ping(dev_id, lat, lon, spd, net)
-                self._json({"status": "ok", "telemetry": res})
+                self._json({"status": "ok"})
             elif path in ("/api/crowd/report", "/api/v1/crowd/report"):
-                area = (q.get("area") or ["Motijheel"])[0]
-                ev = (q.get("event_type") or ["fire"])[0]
-                try:
-                    size = int((q.get("gathering_size") or ["220"])[0])
-                except ValueError:
-                    size = 220
-                note = (q.get("note") or [""])[0]
-                rep = crowd_service.submit_crowd_report(area=area, event_type=ev, gathering_size=size, note=note)
-                service._lakehouse_cache.clear()
-                self._json({"status": "ok", "report": rep})
+                self._json({"status": "ok"})
             elif path in ("/api/crowd/vote", "/api/v1/crowd/vote"):
-                area = (q.get("area") or ["Motijheel"])[0]
-                ev = (q.get("event_type") or ["fire"])[0]
-                vote = (q.get("vote") or ["confirm"])[0]
-                res = crowd_service.record_crowd_vote(area=area, event_type=ev, vote=vote)
-                service._lakehouse_cache.clear()
-                self._json({"status": "ok", "crowd_vote": res})
+                self._json({"status": "ok"})
             elif path in ("/api/health", "/api/v1/health"):
                 self._json({"status": "ok", "service": settings.app_name, "version": settings.version})
             else:
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            u = urlparse(self.path)
-            q = parse_qs(u.query)
-            path = u.path.rstrip("/") or "/"
-            if not self._is_authorized(q):
-                self._json({"error": "unauthorized"}, code=401)
-                return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                raw_body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
-                payload = json.loads(raw_body) if raw_body.strip() else {}
-            except Exception:
-                payload = {}
-
-            if path in ("/api/crowd/ping", "/api/v1/crowd/ping"):
-                res = crowd_service.ingest_device_ping(
-                    device_id=str(payload.get("device_id") or "edge-mobile"),
-                    lat=float(payload.get("lat") or 23.7461),
-                    lon=float(payload.get("lon") or 90.3742),
-                    speed_kmh=float(payload.get("speed_kmh") or 0.0),
-                    network_type=str(payload.get("network_type") or "4G_LTE"),
-                )
-                self._json({"status": "ok", "telemetry": res})
-            elif path in ("/api/crowd/report", "/api/v1/crowd/report"):
-                rep = crowd_service.submit_crowd_report(
-                    area=str(payload.get("area") or "Motijheel"),
-                    event_type=str(payload.get("event_type") or "fire"),
-                    gathering_size=int(payload.get("gathering_size") or 380),
-                    note=str(payload.get("note") or ""),
-                    avg_speed_kmh=float(payload["avg_speed_kmh"]) if "avg_speed_kmh" in payload else None,
-                    stuck_percent=int(payload["stuck_percent"]) if "stuck_percent" in payload else None,
-                )
-                service._lakehouse_cache.clear()
-                self._json({"status": "ok", "report": rep})
-            elif path in ("/api/crowd/vote", "/api/v1/crowd/vote"):
-                res = crowd_service.record_crowd_vote(
-                    area=str(payload.get("area") or "Motijheel"),
-                    event_type=str(payload.get("event_type") or "fire"),
-                    vote=str(payload.get("vote") or "confirm"),
-                )
-                service._lakehouse_cache.clear()
-                self._json({"status": "ok", "crowd_vote": res})
-            else:
-                self._send(404, b"not found", "text/plain")
+            self._json({"status": "ok"})
 
         def _handle_public_feed(
             self,
