@@ -144,18 +144,16 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
                 </a>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/60">
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex items-center gap-1.5">
                     <Badge
-                      variant={cl.source_count >= 2 || cl.is_pre_news_crowd ? "success" : "warning"}
+                      variant={cl.source_count >= 2 ? "success" : "warning"}
                     >
                       {Math.round(cl.credibility_score * 100)}% score
                     </Badge>
-                    <Badge variant="outline">
-                      H3 {(cl.crowd_metrics?.h3_index || "893c06a4").slice(0, 8)} • {cl.crowd_metrics?.dbscan_core_devices ?? 340} core / {cl.crowd_metrics?.baseline_size ?? 520} base ({(cl.crowd_metrics?.z_score_sigma ?? 1.8) >= 0 ? `+${cl.crowd_metrics?.z_score_sigma ?? 1.8}` : cl.crowd_metrics?.z_score_sigma}σ • {cl.crowd_metrics?.is_normal_hub_crowd ? "Normal Hub 0%" : `+${cl.crowd_metrics?.crowd_weight_percent ?? 14}% H3`})
-                    </Badge>
-                    {cl.is_pre_news_crowd && (
-                      <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>
-                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      ({cl.source_count}{" "}
+                      {cl.source_count === 1 ? "paper" : "papers"})
+                    </span>
                   </div>
                   <span className="font-mono text-[10px] text-muted-foreground">
                     {cl.lat.toFixed(3)}°N, {cl.lon.toFixed(3)}°E
@@ -212,20 +210,18 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
                       <Badge variant="destructive">⚠️ {cl.event_type}</Badge>
                     </td>
                     <td className="p-2.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="flex items-center gap-1.5">
                         <Badge
                           variant={
-                            cl.source_count >= 2 || cl.is_pre_news_crowd ? "success" : "warning"
+                            cl.source_count >= 2 ? "success" : "warning"
                           }
                         >
                           {Math.round(cl.credibility_score * 100)}% score
                         </Badge>
-                        <Badge variant="outline">
-                          H3 {(cl.crowd_metrics?.h3_index || "893c06a4").slice(0, 8)} • {cl.crowd_metrics?.dbscan_core_devices ?? 340} core vs {cl.crowd_metrics?.baseline_size ?? 520} base ({(cl.crowd_metrics?.z_score_sigma ?? 1.8) >= 0 ? `+${cl.crowd_metrics?.z_score_sigma ?? 1.8}` : cl.crowd_metrics?.z_score_sigma}σ • {cl.crowd_metrics?.is_normal_hub_crowd ? "Normal Hub 0%" : `+${cl.crowd_metrics?.crowd_weight_percent ?? 14}% H3`})
-                        </Badge>
-                        {cl.is_pre_news_crowd && (
-                          <Badge variant="default">⚡ Pre-News</Badge>
-                        )}
+                        <span className="text-[11px] text-muted-foreground">
+                          ({cl.source_count}{" "}
+                          {cl.source_count === 1 ? "paper" : "papers"})
+                        </span>
                       </div>
                     </td>
                     <td className="p-2.5">

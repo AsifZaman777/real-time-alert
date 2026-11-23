@@ -248,37 +248,31 @@ class MedallionLakehouseManager:
             cluster_age = int(cl.get("min_age_minutes", 9999))
             cluster_is_recent = cluster_age <= MAX_RECENT_MINUTES
 
-            # Public Gathering & Crowd-Sensing Telemetry + Hybrid Veracity Weighting
+            # Veracity / Credibility score based purely on newspaper/portal corroboration
+            credibility_score = min(
+                0.99,
+                round(0.45 + 0.18 * num_sources + (0.08 if len(cl["languages"]) > 1 else 0.0), 2),
+            )
+            veracity_percent = int(round(credibility_score * 100))
+            if num_sources >= 3:
+                status = "VERIFIED (Multi-Source)"
+                veracity_tier = "HIGH"
+            elif num_sources == 2:
+                status = "CONFIRMED"
+                veracity_tier = "MEDIUM"
+            else:
+                status = "UNCONFIRMED (Single Source)"
+                veracity_tier = "LOW"
+
+            severity, color = EVENT_SEVERITY.get(cl["event_type"], ("MODERATE", "#6B7280"))
+            source_word = "newspaper/portal" if num_sources == 1 else "newspapers/portals"
+
             crowd_metrics = crowd_service.compute_crowd_metrics_for_cluster(
                 area=cl["area"],
                 event_type=cl["event_type"],
                 source_count=num_sources,
                 is_recent_3h=cluster_is_recent,
             )
-            media_base_score = 0.42 + 0.16 * num_sources + (0.07 if len(cl["languages"]) > 1 else 0.0)
-            credibility_score = min(
-                0.99,
-                max(0.25, round(media_base_score + crowd_metrics["crowd_weight_bonus"], 2)),
-            )
-            veracity_percent = int(round(credibility_score * 100))
-            if num_sources >= 3 or (num_sources >= 2 and crowd_metrics["surge_ratio"] >= 2.2):
-                status = "VERIFIED (News + Crowd)"
-                veracity_tier = "HIGH"
-            elif num_sources == 2 or (num_sources == 1 and crowd_metrics["surge_ratio"] >= 2.4):
-                status = "CONFIRMED (Crowd Weighted)"
-                veracity_tier = "MEDIUM"
-            else:
-                status = "SINGLE SOURCE + CROWD"
-                veracity_tier = "LOW"
-
-            severity, color = EVENT_SEVERITY.get(cl["event_type"], ("MODERATE", "#6B7280"))
-            source_word = "portal" if num_sources == 1 else "portals"
-            cw_pct = crowd_metrics["crowd_weight_percent"]
-            cw_sign = f"+{cw_pct}%" if cw_pct >= 0 else f"{cw_pct}%"
-
-            z_sig = crowd_metrics.get("z_score_sigma", 0.0)
-            base_sz = crowd_metrics.get("baseline_size", 110)
-            core_sz = crowd_metrics.get("dbscan_core_devices", crowd_metrics["gathering_size"])
 
             gold_alerts.append(
                 {
@@ -296,10 +290,7 @@ class MedallionLakehouseManager:
                     "veracity_percent": veracity_percent,
                     "veracity_tier": veracity_tier,
                     "veracity_status": status,
-                    "veracity_summary": (
-                        f"{num_sources} {source_word} • H3: {core_sz} core stuck vs {base_sz} base "
-                        f"({z_sig:+.1f}σ, {cw_sign} net)"
-                    ),
+                    "veracity_summary": f"Verified by {num_sources} {source_word}",
                     "source_count": num_sources,
                     "sources": sorted(cl["sources"]),
                     "languages": sorted(cl["languages"]),
@@ -308,18 +299,11 @@ class MedallionLakehouseManager:
                     "last_updated": cl["last_updated"],
                     "age_minutes": cluster_age,
                     "is_recent_3h": cluster_is_recent,
-                    "is_pre_news_crowd": False,
-                    "alert_origin": "NEWS_AND_CROWD",
                     "crowd_metrics": crowd_metrics,
                     "sample_headline": sorted_articles[0]["headline"] if sorted_articles else "",
                     "articles": sorted_articles,
                 }
             )
-
-        # Inject active Pre-News Public Gathering Alerts (crowd accumulation detected BEFORE news publishes)
-        existing_area_events = {(g["area"], g["event_type"]) for g in gold_alerts if g.get("is_recent_3h")}
-        pre_news_clusters = crowd_service.get_pre_news_crowd_clusters(day, existing_area_events)
-        gold_alerts.extend(pre_news_clusters)
 
         gold_alerts.sort(
             key=lambda x: (

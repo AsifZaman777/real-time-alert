@@ -343,21 +343,14 @@ export function MobileEdgeSimulator({ snapshot }: Props) {
                           : `${distKm} km from ${profile.currentArea}`}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge
-                        variant={
-                          cluster.source_count >= 2 || cluster.is_pre_news_crowd ? "success" : "warning"
-                        }
-                      >
-                        {Math.round(cluster.credibility_score * 100)}% veracity
-                      </Badge>
-                      <Badge variant="outline">
-                        H3 {(cluster.crowd_metrics?.h3_index || "893c06a4").slice(0, 8)} • {cluster.crowd_metrics?.dbscan_core_devices ?? 340} core vs {cluster.crowd_metrics?.baseline_size ?? 520} normal ({(cluster.crowd_metrics?.z_score_sigma ?? 1.8) >= 0 ? `+${cluster.crowd_metrics?.z_score_sigma ?? 1.8}` : cluster.crowd_metrics?.z_score_sigma}σ)
-                      </Badge>
-                      {cluster.is_pre_news_crowd && (
-                        <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>
-                      )}
-                    </div>
+                    <Badge
+                      variant={
+                        cluster.source_count >= 2 ? "success" : "warning"
+                      }
+                    >
+                      {cluster.source_count} sources (
+                      {Math.round(cluster.credibility_score * 100)}% confidence)
+                    </Badge>
                   </div>
                   <p className="mt-1.5 font-semibold text-foreground">
                     {cluster.sample_headline}

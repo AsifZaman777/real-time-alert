@@ -67,20 +67,14 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         veracitySummary: string;
         affectedRoad?: string;
         isRecent3h: boolean;
-        onlineDevices: number;
+        totalMobiles: number;
+        mobilesStuck: number;
+        mobilesMoving: number;
         stuckPercent: number;
+        movingPercent: number;
         avgSpeedKmh: number;
-        mobilityState: string;
-        h3Index: string;
-        h3Boundary: number[][];
-        zScoreSigma: number;
-        deviceDots: Array<{
-          lat: number;
-          lon: number;
-          stuck: boolean;
-          core?: boolean;
-          intensity?: number;
-        }>;
+        heatIntensity: number;
+        intensityLabel: string;
       }
     >();
 
@@ -98,15 +92,26 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         latestArt?.ingested_at
       );
       const cm = a.crowd_metrics;
-      const onlineDevs = cm?.online_devices ?? cm?.gathering_size ?? 320;
-      const stuckPct = cm?.stuck_percent ?? 85;
-      const spdKmh = cm?.avg_speed_kmh ?? 1.2;
-      const mobState =
-        cm?.mobility_state ?? (stuckPct >= 70 ? "H3 ANOMALY GRIDLOCK" : "NORMAL HUB BASELINE");
-      const h3Idx = cm?.h3_index ?? "893c06a4c27ffff";
-      const h3Poly = cm?.h3_boundary ?? [];
-      const zSig = cm?.z_score_sigma ?? 1.9;
-      const devDots = cm?.device_dots ?? [];
+      const totalMobs =
+        cm?.total_mobiles ?? (isRecent ? (isRed ? 540 : 380) : 260);
+      const stuckPct =
+        cm?.stuck_percent ?? (isRecent ? (isRed ? 84 : 62) : 28);
+      const mobsStuck =
+        cm?.mobiles_stuck ?? Math.round((totalMobs * stuckPct) / 100);
+      const mobsMoving =
+        cm?.mobiles_moving ?? Math.max(0, totalMobs - mobsStuck);
+      const movingPct = cm?.moving_percent ?? 100 - stuckPct;
+      const spdKmh =
+        cm?.avg_speed_kmh ?? (stuckPct >= 75 ? 1.2 : stuckPct >= 50 ? 5.4 : 18.2);
+      const heatInt =
+        cm?.heat_intensity ?? (isRecent && isRed ? 0.95 : isRecent ? 0.68 : 0.42);
+      const intLabel =
+        cm?.intensity_label ??
+        (heatInt >= 0.8
+          ? "High Intensity"
+          : heatInt >= 0.55
+          ? "Medium Intensity"
+          : "Normal Flow");
 
       if (!existing) {
         grouped.set(a.area, {
@@ -125,14 +130,14 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           veracitySummary: a.veracity_summary || "",
           affectedRoad: a.affected_road,
           isRecent3h: isRecent,
-          onlineDevices: onlineDevs,
+          totalMobiles: totalMobs,
+          mobilesStuck: mobsStuck,
+          mobilesMoving: mobsMoving,
           stuckPercent: stuckPct,
+          movingPercent: movingPct,
           avgSpeedKmh: spdKmh,
-          mobilityState: mobState,
-          h3Index: h3Idx,
-          h3Boundary: h3Poly,
-          zScoreSigma: zSig,
-          deviceDots: devDots,
+          heatIntensity: heatInt,
+          intensityLabel: intLabel,
         });
       } else {
         existing.clusterCount += 1;
@@ -141,15 +146,15 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         existing.onRoute = existing.onRoute || isRoute;
         existing.isRecent3h = existing.isRecent3h || isRecent;
         existing.maxSources = Math.max(existing.maxSources, a.source_count);
-        existing.onlineDevices = Math.max(existing.onlineDevices, onlineDevs);
+        existing.totalMobiles = Math.max(existing.totalMobiles, totalMobs);
+        existing.mobilesStuck = Math.max(existing.mobilesStuck, mobsStuck);
+        existing.mobilesMoving = Math.max(
+          0,
+          existing.totalMobiles - existing.mobilesStuck
+        );
         existing.stuckPercent = Math.max(existing.stuckPercent, stuckPct);
-        existing.zScoreSigma = Math.max(existing.zScoreSigma, zSig);
-        if (!existing.h3Boundary.length && h3Poly.length) {
-          existing.h3Boundary = h3Poly;
-        }
-        if (!existing.deviceDots.length && devDots.length) {
-          existing.deviceDots = devDots;
-        }
+        existing.movingPercent = 100 - existing.stuckPercent;
+        existing.heatIntensity = Math.max(existing.heatIntensity, heatInt);
         if (!existing.affectedRoad && a.affected_road) {
           existing.affectedRoad = a.affected_road;
         }
@@ -450,10 +455,100 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     .leaflet-danger-road {
       animation: dangerPulse 1.5s ease-in-out infinite;
     }
+
+    /* Clickable Heatmap Floating Crowd HUD */
+    #crowd-hud {
+      position: fixed;
+      left: 50%;
+      bottom: 88px;
+      transform: translateX(-50%);
+      width: min(310px, calc(100vw - 24px));
+      background: rgba(255, 255, 255, 0.97);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1.5px solid #CBD5E1;
+      border-radius: 18px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+      z-index: 1200;
+      display: none;
+    }
+    .hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .hud-area {
+      color: #0F172A;
+      font-size: 14.5px;
+      font-weight: 800;
+    }
+    .hud-intensity-pill {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2.5px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .hud-stat-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .hud-stat-val {
+      font-size: 14px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .hud-stat-lbl {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #64748B;
+      margin-top: 1px;
+    }
+    .hud-bar-track {
+      height: 7px;
+      background: #22C55E;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .hud-bar-stuck {
+      height: 100%;
+      background: #EF4444;
+    }
+    .hud-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .hud-news-btn {
+      background: #EFF6FF;
+      color: #1D4ED8;
+      border: 1px solid #BFDBFE;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 10px;
+      font-weight: 800;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="crowd-hud"></div>
   <script>
     const map = L.map('map', {
       zoomControl: false,
@@ -541,8 +636,52 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
     }, { passive: true });
 
-    // 3. Single tap when Pin mode button is toggled on
+    // 3. Single tap on map closes HUD or drops destination pin when Pin mode is active
+    const hudEl = document.getElementById('crowd-hud');
+    function hideCrowdHud() {
+      if (hudEl) hudEl.style.display = 'none';
+    }
+
+    function showCrowdHud(z) {
+      if (!hudEl) return;
+      const isHigh = z.heatIntensity >= 0.8;
+      const isMed = z.heatIntensity >= 0.55 && !isHigh;
+      const pillBg = isHigh ? '#FEE2E2' : (isMed ? '#FEF3C7' : '#DCFCE7');
+      const pillCol = isHigh ? '#DC2626' : (isMed ? '#D97706' : '#15803D');
+      const newsBtnHtml = z.hasNews
+        ? '<span class="hud-news-btn" onclick="window.__selectArea(\\'' + escapeHtml(z.area).replace(/'/g, "\\\\'") + '\\')">View News (' + z.clusterCount + ') ›</span>'
+        : '<span>Live Mobile Heatmap</span>';
+
+      hudEl.innerHTML = '<div class="hud-top">'
+        +   '<span class="hud-area">📍 ' + escapeHtml(z.area) + '</span>'
+        +   '<span class="hud-intensity-pill" style="background:' + pillBg + ';color:' + pillCol + ';">' + escapeHtml(z.intensityLabel) + '</span>'
+        + '</div>'
+        + '<div class="hud-grid">'
+        +   '<div class="hud-stat-box">'
+        +     '<div class="hud-stat-val">' + z.totalMobiles + '</div>'
+        +     '<div class="hud-stat-lbl">Total Mobiles</div>'
+        +   '</div>'
+        +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
+        +     '<div class="hud-stat-val" style="color:#DC2626;">' + z.mobilesStuck + ' (' + z.stuckPercent + '%)</div>'
+        +     '<div class="hud-stat-lbl" style="color:#B91C1C;">Mobiles Stuck</div>'
+        +   '</div>'
+        +   '<div class="hud-stat-box" style="background:#F0FDF4;border-color:#BBF7D0;">'
+        +     '<div class="hud-stat-val" style="color:#15803D;">' + z.mobilesMoving + ' (' + z.movingPercent + '%)</div>'
+        +     '<div class="hud-stat-lbl" style="color:#166534;">Mobiles Moving</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="hud-bar-track">'
+        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, z.stuckPercent)) + '%;"></div>'
+        + '</div>'
+        + '<div class="hud-footer">'
+        +   '<span>Avg Speed: ' + z.avgSpeedKmh + ' km/h</span>'
+        +   newsBtnHtml
+        + '</div>';
+      hudEl.style.display = 'block';
+    }
+
     map.on('click', function(e) {
+      hideCrowdHud();
       if (currentPinMode) {
         triggerDropPin(e.latlng.lat, e.latlng.lng);
       }
@@ -1002,57 +1141,114 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render City Threat Markers + Uber H3 Hexagon Cells + Leaflet.heat Crowd Density Layer
+      // 4. Render Multi-Intensity Clickable Heatmaps + Area Badges (click heatmap -> shows Mobiles Stuck/Moving HUD)
+      const BASE_HEAT_ZONES = [
+        { area: 'Mirpur-10', lat: 23.8069, lon: 90.3687, totalMobiles: 510, stuckPercent: 54, avgSpeedKmh: 6.4, heatIntensity: 0.62, intensityLabel: 'Medium Intensity' },
+        { area: 'Motijheel', lat: 23.7330, lon: 90.4172, totalMobiles: 480, stuckPercent: 48, avgSpeedKmh: 8.2, heatIntensity: 0.58, intensityLabel: 'Medium Intensity' },
+        { area: 'Shahbagh', lat: 23.7389, lon: 90.3948, totalMobiles: 440, stuckPercent: 52, avgSpeedKmh: 7.1, heatIntensity: 0.60, intensityLabel: 'Medium Intensity' },
+        { area: 'Farmgate', lat: 23.7561, lon: 90.3872, totalMobiles: 495, stuckPercent: 58, avgSpeedKmh: 5.8, heatIntensity: 0.65, intensityLabel: 'Medium Intensity' },
+        { area: 'Uttara', lat: 23.8759, lon: 90.3795, totalMobiles: 360, stuckPercent: 32, avgSpeedKmh: 16.5, heatIntensity: 0.38, intensityLabel: 'Low Intensity' },
+        { area: 'Gulshan', lat: 23.7925, lon: 90.4158, totalMobiles: 340, stuckPercent: 29, avgSpeedKmh: 18.0, heatIntensity: 0.36, intensityLabel: 'Low Intensity' },
+        { area: 'Dhanmondi', lat: 23.7461, lon: 90.3742, totalMobiles: 390, stuckPercent: 38, avgSpeedKmh: 13.4, heatIntensity: 0.44, intensityLabel: 'Low Intensity' },
+        { area: 'Jatrabari', lat: 23.7104, lon: 90.4349, totalMobiles: 470, stuckPercent: 64, avgSpeedKmh: 4.6, heatIntensity: 0.70, intensityLabel: 'Medium Intensity' }
+      ];
+
       const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
       if (fullMarkersSig !== lastMarkersSig) {
         lastMarkersSig = fullMarkersSig;
         alertMarkerLayerGroup.clearLayers();
         const heatPoints = [];
+        const zoneMap = {};
+
+        BASE_HEAT_ZONES.forEach(function(bz) {
+          const st = Math.round(bz.totalMobiles * bz.stuckPercent / 100);
+          zoneMap[bz.area] = {
+            area: bz.area,
+            lat: bz.lat,
+            lon: bz.lon,
+            totalMobiles: bz.totalMobiles,
+            mobilesStuck: st,
+            mobilesMoving: bz.totalMobiles - st,
+            stuckPercent: bz.stuckPercent,
+            movingPercent: 100 - bz.stuckPercent,
+            avgSpeedKmh: bz.avgSpeedKmh,
+            heatIntensity: bz.heatIntensity,
+            intensityLabel: bz.intensityLabel,
+            hasNews: false,
+            clusterCount: 0
+          };
+        });
+
+        markers.forEach(function(m) {
+          zoneMap[m.area] = {
+            area: m.area,
+            lat: m.lat,
+            lon: m.lon,
+            totalMobiles: m.totalMobiles,
+            mobilesStuck: m.mobilesStuck,
+            mobilesMoving: m.mobilesMoving,
+            stuckPercent: m.stuckPercent,
+            movingPercent: m.movingPercent,
+            avgSpeedKmh: m.avgSpeedKmh,
+            heatIntensity: m.heatIntensity,
+            intensityLabel: m.intensityLabel,
+            hasNews: true,
+            clusterCount: m.clusterCount
+          };
+        });
+
+        Object.values(zoneMap).forEach(function(z) {
+          const w = z.heatIntensity;
+          heatPoints.push([z.lat, z.lon, w]);
+          for (let i = 0; i < 8; i++) {
+            const ang = (2 * Math.PI * i) / 8;
+            const r = 0.0018 + (i % 2) * 0.0011;
+            heatPoints.push([
+              z.lat + Math.sin(ang) * r,
+              z.lon + Math.cos(ang) * r,
+              Math.max(0.2, w * 0.78)
+            ]);
+          }
+
+          const heatColor = w >= 0.8 ? '#EF4444' : (w >= 0.55 ? '#F59E0B' : '#22C55E');
+
+          // Soft outer heatmap glow + clickable heatmap target
+          L.circle([z.lat, z.lon], {
+            radius: w >= 0.8 ? 680 : (w >= 0.55 ? 540 : 440),
+            stroke: false,
+            fillColor: heatColor,
+            fillOpacity: w >= 0.8 ? 0.20 : (w >= 0.55 ? 0.16 : 0.13),
+            interactive: false
+          }).addTo(alertMarkerLayerGroup);
+
+          const clickZone = L.circle([z.lat, z.lon], {
+            radius: w >= 0.8 ? 460 : 380,
+            color: heatColor,
+            weight: 1.4,
+            opacity: 0.55,
+            fillColor: heatColor,
+            fillOpacity: w >= 0.8 ? 0.28 : 0.20,
+            interactive: true
+          }).addTo(alertMarkerLayerGroup);
+
+          clickZone.on('click', function(ev) {
+            L.DomEvent.stopPropagation(ev);
+            showCrowdHud(z);
+          });
+        });
+
+        if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
+          L.heatLayer(heatPoints, {
+            radius: 30,
+            blur: 22,
+            maxZoom: 15,
+            gradient: { 0.25: '#4ADE80', 0.55: '#FACC15', 0.80: '#F97316', 1.0: '#DC2626' }
+          }).addTo(alertMarkerLayerGroup);
+        }
 
         markers.forEach(function(m) {
           const isIntercepted = Boolean(m.isRecent3h && (m.onRoute || activeDangerAreas[m.area]));
           const circleColor = isIntercepted ? '#DC2626' : m.color;
-
-          // Render Uber H3 Resolution-9 Hexagonal Cell Boundary for active <=3h events
-          if (m.isRecent3h && m.h3Boundary && m.h3Boundary.length >= 6) {
-            L.polygon(m.h3Boundary, {
-              color: isIntercepted ? '#DC2626' : '#7C3AED',
-              weight: isIntercepted ? 2.2 : 1.5,
-              opacity: isIntercepted ? 0.85 : 0.55,
-              fillColor: isIntercepted ? '#EF4444' : '#8B5CF6',
-              fillOpacity: isIntercepted ? 0.16 : 0.09,
-              dashArray: isIntercepted ? null : '3, 4',
-              interactive: false
-            }).addTo(alertMarkerLayerGroup);
-          }
-
-          L.circle([m.lat, m.lon], {
-            radius: isIntercepted ? 520 : 340,
-            color: circleColor,
-            weight: isIntercepted ? 2.4 : 1.2,
-            opacity: isIntercepted ? 0.85 : 0.45,
-            fillColor: circleColor,
-            fillOpacity: isIntercepted ? 0.18 : 0.08,
-            interactive: false
-          }).addTo(alertMarkerLayerGroup);
-
-          // Render DBSCAN Mobile Network Device Cluster nodes (Red = Stuck core, Green = Moving)
-          if (m.isRecent3h && m.deviceDots && m.deviceDots.length > 0) {
-            m.deviceDots.forEach(function(d) {
-              if (d.stuck) {
-                heatPoints.push([d.lat, d.lon, d.intensity || 0.85]);
-              }
-              L.circleMarker([d.lat, d.lon], {
-                radius: d.stuck ? (d.core ? 3.5 : 2.8) : 2.4,
-                color: '#FFFFFF',
-                weight: 1,
-                fillColor: d.stuck ? '#DC2626' : '#10B981',
-                fillOpacity: 0.9,
-                interactive: false
-              }).addTo(alertMarkerLayerGroup);
-            });
-          }
-
           const badgeClass = isIntercepted ? 'area-badge area-badge-onroute' : 'area-badge';
           const dotPrefix = isIntercepted ? '<span class="onroute-dot-indicator"></span>' : '';
           const htmlBadge = '<div class="' + badgeClass + '" style="background:' + circleColor + ';">'
@@ -1071,19 +1267,12 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           });
           marker.on('click', function(ev) {
             L.DomEvent.stopPropagation(ev);
+            const z = zoneMap[m.area];
+            if (z) showCrowdHud(z);
             sendBridgeMessage({ type: 'selectArea', area: m.area });
           });
           marker.addTo(alertMarkerLayerGroup);
         });
-
-        if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
-          L.heatLayer(heatPoints, {
-            radius: 22,
-            blur: 16,
-            maxZoom: 16,
-            gradient: { 0.3: '#FDE047', 0.65: '#F97316', 1.0: '#DC2626' }
-          }).addTo(alertMarkerLayerGroup);
-        }
       }
     };
 

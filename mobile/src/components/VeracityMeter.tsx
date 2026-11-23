@@ -1,7 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CrowdMetrics } from "../types/alert";
 
 interface VeracityMeterProps {
   veracityPercent: number;
@@ -9,9 +8,6 @@ interface VeracityMeterProps {
   veracityStatus: string;
   veracitySummary: string;
   sources: string[];
-  crowdMetrics?: CrowdMetrics;
-  isPreNewsCrowd?: boolean;
-  onCrowdVote?: (vote: "confirm" | "clear") => void;
   compact?: boolean;
 }
 
@@ -21,9 +17,6 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
   veracityStatus,
   veracitySummary,
   sources,
-  crowdMetrics,
-  isPreNewsCrowd = false,
-  onCrowdVote,
   compact = false,
 }) => {
   const barColor =
@@ -33,56 +26,19 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
       ? "#F59E0B"
       : "#F43F5E";
 
-  const cwPct = crowdMetrics?.crowd_weight_percent ?? 0;
-  const cwSign = cwPct >= 0 ? `+${cwPct}%` : `${cwPct}%`;
-  const h3Index = (crowdMetrics?.h3_index || "893c06a4c27ffff").slice(0, 10);
-  const onlineDevices =
-    crowdMetrics?.online_devices ?? crowdMetrics?.gathering_size ?? 420;
-  const baselineSize = crowdMetrics?.baseline_size ?? 520;
-  const dbscanCore =
-    crowdMetrics?.dbscan_core_devices ?? Math.round(onlineDevices * 0.72);
-  const zScore = crowdMetrics?.z_score_sigma ?? 1.8;
-  const zSign = zScore >= 0 ? `+${zScore.toFixed(1)}σ` : `${zScore.toFixed(1)}σ`;
-  const isNormalHub = crowdMetrics?.is_normal_hub_crowd ?? zScore < 1.3;
-  const stuckPct = crowdMetrics?.stuck_percent ?? 84;
-  const movingPct = crowdMetrics?.moving_percent ?? 100 - stuckPct;
-  const avgSpeedKmh = crowdMetrics?.avg_speed_kmh ?? 1.2;
-  const dwellMin = crowdMetrics?.dwell_minutes ?? 16;
-  const isStuckAnomaly = !isNormalHub && stuckPct >= 65;
-
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
       <View style={styles.headerRow}>
         <View style={styles.labelRow}>
           <Ionicons
-            name={
-              isPreNewsCrowd
-                ? "cellular"
-                : veracityPercent >= 60
-                ? "shield-checkmark"
-                : "alert-circle"
-            }
+            name={veracityPercent >= 60 ? "shield-checkmark" : "alert-circle"}
             size={13}
-            color={isPreNewsCrowd ? "#7C3AED" : barColor}
+            color={barColor}
           />
-          <Text style={styles.label}>
-            {isPreNewsCrowd
-              ? "H3 + DBSCAN ANOMALY TELEMETRY"
-              : "NEWS + H3 BASELINE VERACITY"}
-          </Text>
+          <Text style={styles.label}>VERACITY METER</Text>
         </View>
-        <View
-          style={[
-            styles.badge,
-            { borderColor: isPreNewsCrowd ? "#8B5CF6" : barColor },
-          ]}
-        >
-          <Text
-            style={[
-              styles.badgeText,
-              { color: isPreNewsCrowd ? "#6D28D9" : barColor },
-            ]}
-          >
+        <View style={[styles.badge, { borderColor: barColor }]}>
+          <Text style={[styles.badgeText, { color: barColor }]}>
             {veracityStatus}
           </Text>
         </View>
@@ -92,29 +48,10 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         <Text style={[styles.percentText, { color: barColor }]}>
           {veracityPercent}%
         </Text>
-        <Text style={styles.summaryText} numberOfLines={2}>
+        <Text style={styles.summaryText} numberOfLines={1}>
           {veracitySummary}
         </Text>
-        <View
-          style={[
-            styles.crowdWeightBadge,
-            isNormalHub && styles.normalHubWeightBadge,
-          ]}
-        >
-          <Ionicons
-            name="cube-outline"
-            size={10}
-            color={isNormalHub ? "#475569" : "#6D28D9"}
-          />
-          <Text
-            style={[
-              styles.crowdWeightText,
-              isNormalHub && { color: "#475569" },
-            ]}
-          >
-            {isNormalHub ? "Normal Hub (0%)" : `${cwSign} H3`}
-          </Text>
-        </View>
+        <Text style={styles.rawScore}>({credibilityScore.toFixed(2)})</Text>
       </View>
 
       <View style={styles.track}>
@@ -128,82 +65,6 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           ]}
         />
       </View>
-
-      {/* Uber H3 Cell + DBSCAN Core vs. Normal Hub Baseline Telemetry */}
-      <View style={styles.crowdRow}>
-        <View style={styles.crowdPill}>
-          <Ionicons name="grid-outline" size={11} color="#7C3AED" />
-          <Text style={styles.crowdPillText}>
-            H3 {h3Index} • {dbscanCore} core / {baselineSize} normal base ({zSign})
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.crowdPill,
-            isStuckAnomaly ? styles.stuckPill : styles.movingPill,
-          ]}
-        >
-          <Ionicons
-            name={isStuckAnomaly ? "hand-left" : "checkmark-circle"}
-            size={11}
-            color={isStuckAnomaly ? "#DC2626" : "#15803D"}
-          />
-          <Text
-            style={[
-              styles.crowdPillText,
-              { color: isStuckAnomaly ? "#DC2626" : "#15803D" },
-            ]}
-          >
-            {isNormalHub
-              ? `Normal Busy Crowd (Non-Threat • ${avgSpeedKmh} km/h)`
-              : `${stuckPct}% STUCK • ${avgSpeedKmh} km/h (${dwellMin}m dwell)`}
-          </Text>
-        </View>
-      </View>
-
-      {/* Visual Stuck vs. Moving Mobile Devices Ratio Bar */}
-      {!compact && (
-        <View style={styles.mobilityBarWrap}>
-          <View style={styles.mobilityLabelRow}>
-            <Text style={styles.stuckLabel}>
-              🛑 DBSCAN Stuck Core ({stuckPct}%)
-            </Text>
-            <Text style={styles.movingLabel}>
-              🟢 Moving / Ambient ({movingPct}%)
-            </Text>
-          </View>
-          <View style={styles.mobilityTrack}>
-            <View
-              style={[
-                styles.mobilityStuckFill,
-                { width: `${Math.min(100, Math.max(5, stuckPct))}%` },
-              ]}
-            />
-          </View>
-        </View>
-      )}
-
-      {/* Interactive H3 Mobility Signal Controls */}
-      {onCrowdVote && (
-        <View style={styles.voteRow}>
-          <TouchableOpacity
-            onPress={() => onCrowdVote("confirm")}
-            style={styles.confirmVoteBtn}
-          >
-            <Ionicons name="cellular" size={12} color="#B91C1C" />
-            <Text style={styles.confirmVoteText}>
-              🛑 Stuck Anomaly (+σ Above Base)
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => onCrowdVote("clear")}
-            style={styles.clearVoteBtn}
-          >
-            <Ionicons name="speedometer-outline" size={12} color="#15803D" />
-            <Text style={styles.clearVoteText}>🟢 Normal Hub Flow</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {!compact && sources.length > 0 && (
         <View style={styles.sourcesWrap}>
@@ -244,9 +105,9 @@ const styles = StyleSheet.create({
   },
   label: {
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 0.5,
+    letterSpacing: 0.7,
   },
   badge: {
     borderWidth: 1,
@@ -256,12 +117,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   badgeText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: "800",
   },
   scoreRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: 6,
     marginBottom: 6,
   },
@@ -271,29 +132,13 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     color: "#334155",
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: "600",
     flex: 1,
   },
-  crowdWeightBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "#F3E8FF",
-    borderColor: "#D8B4FE",
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  normalHubWeightBadge: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#CBD5E1",
-  },
-  crowdWeightText: {
-    color: "#6D28D9",
-    fontSize: 10,
-    fontWeight: "800",
+  rawScore: {
+    color: "#64748B",
+    fontSize: 11,
   },
   track: {
     height: 6,
@@ -304,108 +149,6 @@ const styles = StyleSheet.create({
   fill: {
     height: "100%",
     borderRadius: 999,
-  },
-  crowdRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 5,
-    marginTop: 7,
-  },
-  crowdPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-  },
-  stuckPill: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-  },
-  movingPill: {
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-  },
-  crowdPillText: {
-    color: "#475569",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  mobilityBarWrap: {
-    marginTop: 8,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 7,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  mobilityLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  stuckLabel: {
-    color: "#DC2626",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  movingLabel: {
-    color: "#15803D",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  mobilityTrack: {
-    height: 6,
-    backgroundColor: "#22C55E",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  mobilityStuckFill: {
-    height: "100%",
-    backgroundColor: "#EF4444",
-  },
-  voteRow: {
-    flexDirection: "row",
-    gap: 7,
-    marginTop: 8,
-  },
-  confirmVoteBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 6,
-  },
-  confirmVoteText: {
-    color: "#B91C1C",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
-  clearVoteBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: "#F0FDF4",
-    borderColor: "#BBF7D0",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  clearVoteText: {
-    color: "#15803D",
-    fontSize: 10.5,
-    fontWeight: "800",
   },
   sourcesWrap: {
     flexDirection: "row",

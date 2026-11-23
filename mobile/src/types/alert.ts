@@ -8,40 +8,15 @@ export interface AlertArticle {
 }
 
 export interface CrowdMetrics {
-  h3_index?: string;
-  h3_resolution?: number;
-  h3_boundary?: number[][];
-  gathering_size: number;
-  online_devices?: number;
-  dbscan_core_devices?: number;
-  ambient_noise_devices?: number;
-  dbscan_clusters?: number;
-  devices_per_100m?: number;
-  baseline_size: number;
-  surge_ratio: number;
-  z_score_sigma?: number;
-  is_normal_hub_crowd?: boolean;
-  avg_speed_kmh: number;
+  total_mobiles?: number;
+  mobiles_stuck?: number;
+  mobiles_moving?: number;
   stuck_percent?: number;
   moving_percent?: number;
-  mobility_state?: string;
-  dwell_minutes?: number;
-  gathering_radius_m: number;
-  citizen_reports: number;
-  confirm_votes: number;
-  clear_votes: number;
-  crowd_weight_bonus: number;
-  crowd_weight_percent: number;
-  pre_news_lead_minutes: number;
-  crowd_status: string;
-  is_pre_news_crowd: boolean;
-  device_dots?: Array<{
-    lat: number;
-    lon: number;
-    stuck: boolean;
-    core?: boolean;
-    intensity?: number;
-  }>;
+  avg_speed_kmh?: number;
+  heat_intensity?: number;
+  intensity_label?: string;
+  heat_points?: number[][];
 }
 
 export interface GoldAlert {

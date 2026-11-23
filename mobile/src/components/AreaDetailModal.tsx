@@ -187,13 +187,6 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                       veracityStatus={cluster.veracity_status}
                       veracitySummary={cluster.veracity_summary}
                       sources={cluster.sources}
-                      crowdMetrics={cluster.crowd_metrics}
-                      isPreNewsCrowd={cluster.is_pre_news_crowd}
-                      onCrowdVote={
-                        onCrowdVote
-                          ? (v) => onCrowdVote(cluster.area, cluster.event_type, v)
-                          : undefined
-                      }
                     />
 
                     <Text style={styles.headlinesTitle}>
