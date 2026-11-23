@@ -58,13 +58,22 @@ All `.env` / `.env.local` files are gitignored. Use the `.env.example` templates
 
 ---
 
-## 4. Deploying Backend Code Updates
+## 4. Deploying Backend Code Updates & Downloading New Dependencies on the Server
 
-Whenever you update code inside `backend/`, use `backend/deploy.sh` (automatically excludes `.DS_Store`, `__pycache__`, `*.pyc`, and local logs, and restarts the services):
+Whenever you update code inside `backend/` or add new packages to `backend/requirements.txt` (such as `h3`, `scikit-learn`, `numpy`, `lxml`), use `backend/deploy.sh`. It automatically syncs `backend/` via `rsync`, runs `pip3 install -r ~/real-time-alert/backend/requirements.txt --break-system-packages` on the server, and restarts `bigwarn-scraper` and `bigwarn-api`:
 
 ```bash
-./real-time-alert/backend/deploy.sh <USER>@<VM_IP>
+./real-time-alert/backend/deploy.sh asifdev777@172.198.62.94 ~/Downloads/bigwarn-vm_key.pem
 ```
+
+To manually download/install new Python dependencies on the VM via SSH at any time:
+
+```bash
+ssh -i ~/Downloads/bigwarn-vm_key.pem asifdev777@172.198.62.94 \
+  "pip3 install -r ~/real-time-alert/backend/requirements.txt --break-system-packages && sudo systemctl restart bigwarn-scraper bigwarn-api"
+```
+
+*(See [SERVER_DEPLOY_AND_UPDATE_GUIDE.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/SERVER_DEPLOY_AND_UPDATE_GUIDE.md) for the full SSH operations & troubleshooting reference.)*
 
 ---
 
