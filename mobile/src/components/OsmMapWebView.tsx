@@ -127,10 +127,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <style>
     html, body, #map {
       margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #0B1120;
+      background: #0A0F1C;
       -webkit-user-select: none; user-select: none;
       -webkit-touch-callout: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .leaflet-tile-pane {
+      filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
     }
     .custom-pin-wrapper {
       background: transparent !important;
@@ -374,10 +377,9 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       closePopupOnClick: true
     }).setView([23.7600, 90.3950], 12);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      subdomains: 'abcd',
-      attribution: '© OpenStreetMap © CARTO'
+      attribution: '© OpenStreetMap'
     }).addTo(map);
 
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
@@ -915,7 +917,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       <TypedWebView
         ref={webRef}
         originWhitelist={["*"]}
-        source={{ html }}
+        source={{ html, baseUrl: "https://bigwarn.app" }}
         style={styles.webview}
         onLoadEnd={pushStateToWebView}
         onMessage={handleMessage}
