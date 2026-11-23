@@ -1,38 +1,40 @@
 """
 Core configuration & constants for the BigWarn Backend.
-Centralizes paths, timezone settings, Kafka topics, and Hybrid/Cloud Lakehouse settings
-(Azure ADLS Gen2, AWS S3 / Cloudflare R2, Databricks, and Local Medallion Cache).
+Centralizes paths, timezone settings, Kafka topics, Cloudflare R2 archive,
+and Lakehouse directories.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DHAKA = timezone(timedelta(hours=6))  # Bangladesh Standard Time (UTC+6)
-DHAKA_TZ = DHAKA
-TWO_DAY_EPOCH = date(2026, 11, 18)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_ROOT.parent
 
 
-def _load_dotenv_if_present() -> None:
-    for env_path in (BACKEND_ROOT / ".env", PROJECT_ROOT / ".env"):
-        if env_path.exists():
-            try:
-                for line in env_path.read_text(encoding="utf-8").splitlines():
-                    ln = line.strip()
-                    if not ln or ln.startswith("#") or "=" not in ln:
-                        continue
-                    k, v = ln.split("=", 1)
-                    os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
-            except OSError:
-                pass
+def _load_dotenv(env_path: Path) -> None:
+    """Lightweight .env loader (no external dependency required)."""
+    if not env_path.exists():
+        return
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+    except OSError:
+        pass
 
 
-_load_dotenv_if_present()
+_load_dotenv(BACKEND_ROOT / ".env")
 
 DATA_DIR = Path(os.getenv("BIGWARN_DATA_DIR", str(BACKEND_ROOT / "data")))
 LOGS_DIR = DATA_DIR / "logs"
@@ -50,32 +52,27 @@ def now_dhaka() -> datetime:
     return datetime.now(DHAKA)
 
 
-def active_two_day_window(ref_day: str | None = None) -> tuple[str, str]:
-    """Returns the current deterministic 2-day (48h) window (day1_str, day2_str) anchored to TWO_DAY_EPOCH."""
-    if ref_day:
-        try:
-            ref_d = datetime.strptime(ref_day, "%Y-%m-%d").date()
-        except ValueError:
-            ref_d = now_dhaka().date()
-    else:
-        ref_d = now_dhaka().date()
-    cycle_idx = (ref_d - TWO_DAY_EPOCH).days // 2
-    start_d = TWO_DAY_EPOCH + timedelta(days=cycle_idx * 2)
-    end_d = start_d + timedelta(days=1)
-    return start_d.strftime("%Y-%m-%d"), end_d.strftime("%Y-%m-%d")
-
-
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "BigWarn Real-Time Disruption Alert Backend"
     version: str = "2.0.0"
     api_host: str = os.getenv("BIGWARN_API_HOST", "0.0.0.0")
     api_port: int = int(os.getenv("BIGWARN_API_PORT", "8765"))
+    feed_access_token: str = os.getenv("BIGWARN_FEED_TOKEN", "")
 
     # Storage paths
     data_dir: Path = field(default_factory=lambda: DATA_DIR)
     logs_dir: Path = field(default_factory=lambda: LOGS_DIR)
     seen_urls_path: Path = field(default_factory=lambda: DATA_DIR / "seen_urls.json")
+
+    # 48-hour rolling server retention & Cloudflare R2 archival
+    log_retention_hours: int = int(os.getenv("BIGWARN_LOG_RETENTION_HOURS", "48"))
+    cloud_provider: str = os.getenv("BIGWARN_CLOUD_PROVIDER", "s3_r2")
+    r2_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    r2_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    r2_region: str = os.getenv("AWS_DEFAULT_REGION", "auto")
+    r2_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
+    r2_bucket: str = os.getenv("S3_LAKEHOUSE_BUCKET", "bigwarn")
 
     # Kafka configuration (Stage 2 Buffering)
     kafka_enabled: bool = os.getenv("BIGWARN_KAFKA_ENABLED", "false").lower() == "true"
@@ -83,28 +80,11 @@ class Settings:
     kafka_raw_topic: str = os.getenv("BIGWARN_KAFKA_RAW_TOPIC", "bigwarn.raw.news")
     kafka_alerts_topic: str = os.getenv("BIGWARN_KAFKA_ALERTS_TOPIC", "bigwarn.gold.alerts")
 
-    # Local Medallion Lakehouse cache paths (Stage 4 Storage)
+    # Medallion Lakehouse paths (Stage 4 Storage)
     bronze_path: Path = field(default_factory=lambda: LAKEHOUSE_DIR / "bronze" / "articles")
     silver_path: Path = field(default_factory=lambda: LAKEHOUSE_DIR / "silver" / "disruptions")
     gold_path: Path = field(default_factory=lambda: LAKEHOUSE_DIR / "gold" / "area_alerts")
     checkpoint_path: Path = field(default_factory=lambda: LAKEHOUSE_DIR / "checkpoints")
-
-    # Cloud Lakehouse Provider ("azure_adls", "s3_r2", or "local")
-    cloud_lakehouse_provider: str = os.getenv("BIGWARN_CLOUD_PROVIDER", "local").lower()
-
-    # Option A: Azure Data Lake Storage Gen2 (ADLS Gen2 / Azure Blob SAS or Connection String)
-    azure_storage_account: str = os.getenv("AZURE_STORAGE_ACCOUNT", "")
-    azure_storage_key: str = os.getenv("AZURE_STORAGE_KEY", "")
-    azure_storage_connection_string: str = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
-    azure_storage_sas_url: str = os.getenv("AZURE_STORAGE_SAS_URL", "")
-    azure_container: str = os.getenv("AZURE_LAKEHOUSE_CONTAINER", "bigwarn-lakehouse")
-
-    # Option B: AWS S3 / Cloudflare R2 / MinIO Cloud (S3-Compatible Object Storage)
-    s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
-    s3_bucket: str = os.getenv("S3_LAKEHOUSE_BUCKET", "bigwarn-lakehouse")
-    s3_region: str = os.getenv("AWS_DEFAULT_REGION", "auto")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
 
 settings = Settings()

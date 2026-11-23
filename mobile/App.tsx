@@ -19,6 +19,7 @@ import {
   CLOUD_API_BASE_URL,
   DEFAULT_API_BASE_URL,
   DHAKA_PRESETS,
+  FEED_ACCESS_TOKEN,
   LOCAL_API_BASE_URL,
 } from "./src/config/api";
 import {
@@ -170,9 +171,14 @@ export default function App() {
         include_map: "1",
       });
 
+      const headers: Record<string, string> = {};
+      if (FEED_ACCESS_TOKEN) {
+        headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
+      }
+
       const routeRes = await fetch(
         `${cleanBase}/api/v1/alerts/route?${routeParams.toString()}`,
-        { signal: controller.signal }
+        { signal: controller.signal, headers }
       );
 
       if (!routeRes.ok) {
@@ -187,6 +193,7 @@ export default function App() {
       if (!mapAlerts) {
         const mapRes = await fetch(`${cleanBase}/api/v1/alerts/map?date=latest`, {
           signal: controller.signal,
+          headers,
         });
         if (mapRes.ok) {
           const mapData: MapAlertResponse = await mapRes.json();

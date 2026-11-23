@@ -10,6 +10,7 @@ export function hasLocalStreamFiles(): boolean {
 
 export function getRemoteBackendUrl(): string | null {
   const envUrl = (
+    process.env.BIGWARN_FEED_URL ||
     process.env.BIGWARN_API_URL ||
     process.env.NEXT_PUBLIC_BIGWARN_API_URL ||
     ""
@@ -17,12 +18,7 @@ export function getRemoteBackendUrl(): string | null {
     .trim()
     .replace(/\/+$/, "");
 
-  if (envUrl) return envUrl;
-  // On Vercel or serverless without local log files, default to Render public stream
-  if (!hasLocalStreamFiles()) {
-    return "https://real-time-alert-wuvs.onrender.com";
-  }
-  return null;
+  return envUrl || null;
 }
 
 export async function fetchFromRemoteBackend(endpointPath: string): Promise<any | null> {
@@ -31,9 +27,15 @@ export async function fetchFromRemoteBackend(endpointPath: string): Promise<any 
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
+    const headers: Record<string, string> = {};
+    const token = (process.env.BIGWARN_FEED_TOKEN || "").trim();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
     const res = await fetch(`${base}${endpointPath}`, {
       cache: "no-store",
       signal: controller.signal,
+      headers,
     });
     clearTimeout(timer);
     if (!res.ok) return null;

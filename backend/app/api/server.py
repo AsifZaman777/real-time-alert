@@ -18,13 +18,13 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from backend.app.api import dashboard_ui as legacy_dashboard  # noqa: E402
 from backend.app.core.config import settings  # noqa: E402
+from backend.app.services.r2_archive_service import R2ArchiveService, start_r2_archive_worker  # noqa: E402
 from backend.app.services.stream_service import DAY_RE, StreamService  # noqa: E402
 from backend.ingestion.sources.registry import get_all_sources_metadata  # noqa: E402
 
 
-def make_api_handler(service: StreamService):
+def make_api_handler(service: StreamService, archive_service: R2ArchiveService | None = None):
     class ApiHandler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
             print(f"[BigWarn API] {self.client_address[0]} - {format % args}")
@@ -36,9 +36,20 @@ def make_api_handler(service: StreamService):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
             self.end_headers()
             self.wfile.write(body)
+
+        def _is_authorized(self, q: dict[str, list[str]]) -> bool:
+            expected = settings.feed_access_token
+            if not expected:
+                return True
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer ") and auth[7:].strip() == expected:
+                return True
+            if (q.get("token") or [""])[0] == expected:
+                return True
+            return False
 
         def do_OPTIONS(self):
             self._send(204, b"", "text/plain")
@@ -55,9 +66,15 @@ def make_api_handler(service: StreamService):
             q = parse_qs(u.query)
             path = u.path.rstrip("/") or "/"
 
-            if path in ("/", "/index.html"):
-                self._send(200, legacy_dashboard.PAGE.encode("utf-8"), "text/html; charset=utf-8")
-            elif path in ("/api/days", "/api/v1/days"):
+            if path in ("/", "/index.html", "/api/health", "/api/v1/health"):
+                self._json({"status": "ok", "service": settings.app_name, "version": settings.version})
+                return
+
+            if not self._is_authorized(q):
+                self._json({"error": "unauthorized"}, code=401)
+                return
+
+            if path in ("/api/days", "/api/v1/days"):
                 self._json({"today": service.today_str(), "days": service.list_days()})
             elif path in ("/api/items", "/api/v1/items"):
                 day = (q.get("date") or [service.today_str()])[0]
@@ -121,6 +138,8 @@ def make_api_handler(service: StreamService):
                     "archive_dir": str(archive_dir),
                     "files": [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(archive_dir.glob("*"), reverse=True)],
                 })
+            elif path in ("/api/archive/status", "/api/v1/archive/status"):
+                self._json(archive_service.get_status() if archive_service else {"r2_configured": False})
             elif path in ("/api/stream/alerts", "/api/v1/stream/alerts"):
                 self._handle_sse_alerts(q)
             elif path in ("/api/stream/feed", "/api/v1/stream/feed", "/feed"):
@@ -261,6 +280,8 @@ def make_api_handler(service: StreamService):
 
 def create_server(logdir: Path | None = None, port: int = settings.api_port, host: str = settings.api_host) -> ThreadingHTTPServer:
     service = StreamService(primary_logdir=logdir)
+    archive_service = R2ArchiveService(logs_dir=service.primary_logdir)
+    start_r2_archive_worker(archive_service, interval_seconds=3600)
     # Pre-warm latest Medallion Lakehouse snapshot so first mobile request is instant
     try:
         snap = service.get_lakehouse_elt("latest")
@@ -272,7 +293,7 @@ def create_server(logdir: Path | None = None, port: int = settings.api_port, hos
         )
     except Exception as exc:
         print(f"[BigWarn ELT] Warmup skipped: {exc}")
-    return ThreadingHTTPServer((host, port), make_api_handler(service))
+    return ThreadingHTTPServer((host, port), make_api_handler(service, archive_service))
 
 
 def start_api_in_thread(logdir: Path | None = None, port: int = settings.api_port) -> str:
