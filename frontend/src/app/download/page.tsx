@@ -17,8 +17,8 @@ import {
 
 export default function DownloadAppPage() {
   return (
-    <div className="mx-auto max-w-3xl space-y-6 py-4">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-3xl space-y-5 px-3.5 py-4 sm:space-y-6 sm:px-6 sm:py-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
@@ -26,7 +26,7 @@ export default function DownloadAppPage() {
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Back to Live Stream Console</span>
         </Link>
-        <Badge variant="outline" className="font-mono text-[11px]">
+        <Badge variant="outline" className="font-mono text-[10.5px] sm:text-[11px]">
           Android 8.0+ • Samsung / All Android
         </Badge>
       </div>
@@ -37,14 +37,14 @@ export default function DownloadAppPage() {
             <img
               src="/icon.svg"
               alt="BigWarn Edge App Icon"
-              className="h-14 w-14 rounded-2xl border border-border shadow-md"
+              className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl border border-border shadow-md shrink-0"
             />
-            <div>
-              <CardTitle className="text-2xl font-extrabold tracking-tight">
+            <div className="min-w-0">
+              <CardTitle className="text-xl sm:text-2xl font-extrabold tracking-tight">
                 BigWarn Edge Mobile App
               </CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Real-Time Bangladesh Threat Navigation • OSRM Road Routing • 3-Hour Hazard Alerts
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Real-Time Bangladesh Threat Navigation • OSRM Road Routing • Live Hazard Alerts
               </p>
             </div>
           </div>

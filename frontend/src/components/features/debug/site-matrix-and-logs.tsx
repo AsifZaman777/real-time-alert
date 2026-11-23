@@ -108,12 +108,51 @@ export function SiteMatrixAndLogs({
               placeholder="Filter newspaper or site_key…"
               value={matrixQuery}
               onChange={(e) => setMatrixQuery(e.target.value)}
-              className="max-w-xs"
+              className="w-full sm:max-w-xs"
             />
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Mobile Phone Card View (< md) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 md:hidden">
+            {rows.map((r) => {
+              const avgW = r.count ? Math.round(r.words / r.count) : 0;
+              const bodyPct = r.count
+                ? Math.round((r.bodyOk / r.count) * 100)
+                : 0;
+              const pubPct = r.count
+                ? Math.round((r.pubOk / r.count) * 100)
+                : 0;
+              return (
+                <div
+                  key={r.source}
+                  onClick={() => onSelectSource(r.source)}
+                  className="cursor-pointer rounded-xl border border-border bg-card/60 p-3 text-xs space-y-2 hover:border-primary"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-primary truncate">
+                      {r.source}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="outline">{r.lang}</Badge>
+                      <span className="font-mono font-bold text-foreground">
+                        {r.count} art.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>Avg: {avgW}w</span>
+                    <span>Disruptions: {r.disruptions}</span>
+                    <span>Body: {bodyPct}%</span>
+                    <span>Pub: {pubPct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table View (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/60 text-muted-foreground">
@@ -199,17 +238,17 @@ export function SiteMatrixAndLogs({
             <CardTitle className="text-base">
               🖥️ Live Scraper Log Console (`news_stream_{debugData.date}.log`)
             </CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <Input
                 placeholder="Search log lines…"
                 value={logQuery}
                 onChange={(e) => setLogQuery(e.target.value)}
-                className="w-56"
+                className="w-full sm:w-56"
               />
               <select
                 value={logLevel}
                 onChange={(e) => setLogLevel(e.target.value as any)}
-                className="h-9 rounded-md border border-input bg-card px-2.5 text-xs"
+                className="h-9 flex-1 sm:flex-none rounded-md border border-input bg-card px-2.5 text-xs"
               >
                 <option value="all">All Log Lines</option>
                 <option value="err">⚠️ Warnings / Errors (!)</option>

@@ -81,6 +81,16 @@ export default function HomePage() {
   const [debugFilter, setDebugFilter] = useState<string>("all");
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
+
+  const activeFilterCount = [
+    selectedLang !== "all",
+    selectedEvent !== "all",
+    selectedArea !== "all",
+    selectedSection !== "all",
+    debugFilter !== "all",
+    selectedSource !== "all",
+  ].filter(Boolean).length;
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -328,32 +338,34 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#121312] text-[#ecebe6] text-[14.5px] leading-[1.45]">
-      {/* Sticky Python-Dashboard-Style Header */}
-      <header className="sticky top-0 z-20 bg-[#121312] border-b border-[#2e312e] px-4 py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
+    <div className="min-h-screen bg-[#121312] text-[#ecebe6] text-[14.5px] leading-[1.45] pb-20 sm:pb-8">
+      {/* Sticky Responsive Header */}
+      <header className="sticky top-0 z-20 bg-[#121312]/95 backdrop-blur border-b border-[#2e312e] px-3 sm:px-4 py-2 sm:py-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.2)]">
         <div className="mx-auto max-w-[1280px]">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h1 className="text-[17px] font-bold tracking-[-0.2px] text-[#ecebe6] m-0">
-              Bangladesh news stream
-            </h1>
+          <div className="flex flex-wrap items-center justify-between gap-x-2.5 gap-y-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-[15.5px] sm:text-[17px] font-bold tracking-[-0.2px] text-[#ecebe6] m-0 truncate">
+                Bangladesh news stream
+              </h1>
 
-            <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[#9a988f] bg-[#1c1e1c] px-2.5 py-0.5 rounded-full border border-[#2e312e]">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  paused ? "bg-[#9a988f]" : "bg-[#4fc59a] animate-pulse"
-                }`}
-              />
-              <span>
-                {loading
-                  ? "loading…"
-                  : paused
-                  ? "paused"
-                  : `${items.length} items`}
+              <span className="inline-flex items-center gap-1.5 text-[11.5px] sm:text-[12.5px] text-[#9a988f] bg-[#1c1e1c] px-2 sm:px-2.5 py-0.5 rounded-full border border-[#2e312e] shrink-0">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    paused ? "bg-[#9a988f]" : "bg-[#4fc59a] animate-pulse"
+                  }`}
+                />
+                <span>
+                  {loading
+                    ? "loading…"
+                    : paused
+                    ? "paused"
+                    : `${items.length} items`}
+                </span>
               </span>
-            </span>
+            </div>
 
-            {/* Segmented Tab Switcher */}
-            <div className="inline-flex bg-[#262926] p-[3px] rounded-[9px] border border-[#2e312e] gap-0.5 flex-wrap">
+            {/* Desktop Segmented Tab Switcher (hidden on phone; phone uses fixed bottom nav bar) */}
+            <div className="hidden sm:inline-flex bg-[#262926] p-[3px] rounded-[9px] border border-[#2e312e] gap-0.5 flex-wrap">
               <button
                 onClick={() => setActiveTab("stream")}
                 className={`border-0 text-[12.5px] font-semibold px-2.5 py-1 rounded-[6px] cursor-pointer transition-colors ${
@@ -396,14 +408,14 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="flex-1" />
+            <div className="hidden lg:block flex-1" />
 
             {/* Right Controls */}
             <div className="flex flex-wrap items-center gap-1.5">
               <select
                 value={selectedDay}
                 onChange={(e) => setSelectedDay(e.target.value)}
-                className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2.5 py-1 focus:outline-none focus:border-[#4fc59a]"
+                className="text-[12px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 sm:px-2.5 py-1 focus:outline-none focus:border-[#4fc59a]"
                 title="Day"
               >
                 {days.map((d) => (
@@ -415,14 +427,14 @@ export default function HomePage() {
 
               <button
                 onClick={() => setPaused((p) => !p)}
-                className="text-[13px] font-medium text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] hover:border-[#4fc59a] rounded-[7px] px-2.5 py-1 cursor-pointer"
+                className="text-[12px] sm:text-[13px] font-medium text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] hover:border-[#4fc59a] rounded-[7px] px-2 sm:px-2.5 py-1 cursor-pointer"
               >
                 {paused ? "Resume" : "Pause"}
               </button>
 
               <button
                 onClick={exportFilteredJsonl}
-                className="text-[13px] font-medium text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] hover:border-[#4fc59a] rounded-[7px] px-2.5 py-1 cursor-pointer"
+                className="hidden sm:inline-block text-[13px] font-medium text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] hover:border-[#4fc59a] rounded-[7px] px-2.5 py-1 cursor-pointer"
                 title="Download currently filtered articles as JSONL"
               >
                 ⬇ Export JSONL
@@ -430,9 +442,9 @@ export default function HomePage() {
 
               <Link
                 href="/download"
-                className="text-[13px] font-semibold text-[#121312] bg-[#4fc59a] hover:opacity-90 rounded-[7px] px-2.5 py-1 no-underline"
+                className="text-[12px] sm:text-[13px] font-semibold text-[#121312] bg-[#4fc59a] hover:opacity-90 rounded-[7px] px-2 sm:px-2.5 py-1 no-underline whitespace-nowrap"
               >
-                📱 Get Android App
+                📱 <span className="hidden xs:inline">Get </span>APK
               </Link>
             </div>
           </div>
@@ -440,14 +452,14 @@ export default function HomePage() {
           {/* Search, Sort & Debug Filters Toolbar */}
           {activeTab === "stream" && (
             <>
-              <div className="flex flex-wrap gap-[7px] items-center mt-2.5 pt-2.5 border-t border-dashed border-[#2e312e]">
-                <div className="relative flex-1 min-w-[220px] inline-flex items-center">
+              <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-dashed border-[#2e312e]">
+                <div className="relative flex-1 min-w-0 inline-flex items-center">
                   <input
                     ref={searchInputRef}
                     type="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search headline, body, URL, area, keyword, author… (Press / to focus)"
+                    placeholder="Search headline, area, keyword…"
                     className="w-full text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] pl-2.5 pr-7 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                   />
                   {searchQuery && (
@@ -461,10 +473,34 @@ export default function HomePage() {
                   )}
                 </div>
 
+                {/* Mobile Filter Toggle Button */}
+                <button
+                  onClick={() => setMobileFiltersOpen((v) => !v)}
+                  className={`sm:hidden inline-flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 rounded-[7px] border cursor-pointer shrink-0 ${
+                    mobileFiltersOpen || activeFilterCount > 0
+                      ? "bg-[#4fc59a]/15 border-[#4fc59a] text-[#4fc59a]"
+                      : "bg-[#1c1e1c] border-[#2e312e] text-[#ecebe6]"
+                  }`}
+                >
+                  <span>⚙️ Filters</span>
+                  {activeFilterCount > 0 && (
+                    <span className="bg-[#4fc59a] text-[#121312] rounded-full px-1.5 text-[10.5px] font-bold">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Filter Selects: Collapsible 2-col grid on mobile, inline flex-wrap on desktop */}
+              <div
+                className={`${
+                  mobileFiltersOpen ? "grid grid-cols-2 gap-1.5 mt-2" : "hidden"
+                } sm:flex sm:flex-wrap sm:gap-[7px] sm:items-center sm:mt-2`}
+              >
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                 >
                   <option value="updated">Sort: Latest updated</option>
                   <option value="published">Sort: Latest published</option>
@@ -479,7 +515,7 @@ export default function HomePage() {
                 <select
                   value={selectedLang}
                   onChange={(e) => setSelectedLang(e.target.value)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                 >
                   <option value="all">Lang: All (EN+BN)</option>
                   <option value="en">English (EN)</option>
@@ -489,7 +525,7 @@ export default function HomePage() {
                 <select
                   value={selectedEvent}
                   onChange={(e) => setSelectedEvent(e.target.value)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                 >
                   <option value="all">Events: All news</option>
                   <option value="any_disruption">⚠️ All Disruptions / Threats</option>
@@ -508,7 +544,7 @@ export default function HomePage() {
                 <select
                   value={selectedArea}
                   onChange={(e) => setSelectedArea(e.target.value)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                 >
                   <option value="all">Area: All locations</option>
                   {uniqueAreas.map(([loc, cnt]) => (
@@ -521,7 +557,7 @@ export default function HomePage() {
                 <select
                   value={selectedSection}
                   onChange={(e) => setSelectedSection(e.target.value)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a] max-w-[140px]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a] sm:max-w-[140px]"
                 >
                   <option value="all">Section: All</option>
                   {uniqueSections.map((sec) => (
@@ -534,7 +570,7 @@ export default function HomePage() {
                 <select
                   value={debugFilter}
                   onChange={(e) => setDebugFilter(e.target.value)}
-                  className="text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
+                  className="w-full sm:w-auto text-[12.5px] sm:text-[13px] text-[#ecebe6] bg-[#1c1e1c] border border-[#2e312e] rounded-[7px] px-2 py-1.5 focus:outline-none focus:border-[#4fc59a]"
                 >
                   <option value="all">Debug: All items</option>
                   <option value="missing_body">🐛 Missing/short body (&lt;30w)</option>
@@ -546,37 +582,41 @@ export default function HomePage() {
                 </select>
               </div>
 
-              {/* Stats Bar */}
-              <div className="flex flex-wrap gap-x-4 gap-y-2 items-center mt-2 text-[12.5px] text-[#9a988f]">
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
+              {/* Stats Bar: Horizontal scroll strip on mobile, wrap on desktop */}
+              <div className="flex overflow-x-auto sm:flex-wrap gap-2 sm:gap-x-3 sm:gap-y-2 items-center mt-2 text-[11.5px] sm:text-[12.5px] text-[#9a988f] no-scrollbar">
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
                   Total: <b className="text-[#ecebe6] font-mono">{stats.total}</b>
                 </span>
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
                   Showing: <b className="text-[#ecebe6] font-mono">{stats.showing}</b>
                 </span>
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
                   Disruptions: <b className="text-[#f87171] font-mono">{stats.disruptions}</b>
                 </span>
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
                   Avg Words: <b className="text-[#4ade80] font-mono">{stats.avgWords}</b>
                 </span>
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
-                  EN / BN:{" "}
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
+                  EN/BN:{" "}
                   <b className="text-[#ecebe6] font-mono">
-                    {stats.enCount} / {stats.bnCount}
+                    {stats.enCount}/{stats.bnCount}
                   </b>
                 </span>
-                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5">
+                <span className="bg-[#1c1e1c] border border-[#2e312e] rounded-[6px] px-2 py-0.5 whitespace-nowrap">
                   Sources: <b className="text-[#ecebe6] font-mono">{stats.sources}</b>
                 </span>
               </div>
 
-              {/* Interactive Newspaper Source Chips */}
+              {/* Interactive Newspaper Source Chips: Horizontal swipe on mobile, wrap on desktop */}
               {sourceCounts.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <div
+                  className={`${
+                    mobileFiltersOpen ? "flex" : "hidden sm:flex"
+                  } items-center gap-1.5 mt-2 overflow-x-auto sm:flex-wrap pb-0.5`}
+                >
                   <button
                     onClick={() => setSelectedSource("all")}
-                    className={`border rounded-full px-2.5 py-0.5 text-[12px] cursor-pointer transition-all ${
+                    className={`border rounded-full px-2.5 py-0.5 text-[11.5px] sm:text-[12px] cursor-pointer transition-all whitespace-nowrap shrink-0 ${
                       selectedSource === "all"
                         ? "bg-[#4fc59a] border-[#4fc59a] text-[#121312] font-bold"
                         : "bg-[#262926] border-[#2e312e] text-[#ecebe6] hover:border-[#4fc59a]"
@@ -590,7 +630,7 @@ export default function HomePage() {
                       onClick={() =>
                         setSelectedSource(selectedSource === src ? "all" : src)
                       }
-                      className={`border rounded-full px-2.5 py-0.5 text-[12px] cursor-pointer transition-all ${
+                      className={`border rounded-full px-2.5 py-0.5 text-[11.5px] sm:text-[12px] cursor-pointer transition-all whitespace-nowrap shrink-0 ${
                         selectedSource === src
                           ? "bg-[#4fc59a] border-[#4fc59a] text-[#121312] font-bold"
                           : "bg-[#262926] border-[#2e312e] text-[#ecebe6] hover:border-[#4fc59a]"
@@ -799,6 +839,54 @@ export default function HomePage() {
 
         {activeTab === "edge" && <MobileEdgeSimulator snapshot={lakehouse} />}
       </main>
+
+      {/* Fixed Bottom Navigation Bar for Mobile Phones */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#181a18]/95 backdrop-blur border-t border-[#2e312e] px-2 py-1.5 grid grid-cols-4 gap-1 shadow-[0_-4px_12px_rgba(0,0,0,0.4)]">
+        <button
+          onClick={() => setActiveTab("stream")}
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+            activeTab === "stream"
+              ? "bg-[#262926] text-[#4fc59a]"
+              : "bg-transparent text-[#9a988f]"
+          }`}
+        >
+          <span className="text-[14px]">📰</span>
+          <span>Stream</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("lakehouse")}
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+            activeTab === "lakehouse"
+              ? "bg-[#262926] text-[#4fc59a]"
+              : "bg-transparent text-[#9a988f]"
+          }`}
+        >
+          <span className="text-[14px]">🏛️</span>
+          <span>Lakehouse</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("matrix")}
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+            activeTab === "matrix"
+              ? "bg-[#262926] text-[#4fc59a]"
+              : "bg-transparent text-[#9a988f]"
+          }`}
+        >
+          <span className="text-[14px]">📊</span>
+          <span>Matrix</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("edge")}
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+            activeTab === "edge"
+              ? "bg-[#262926] text-[#4fc59a]"
+              : "bg-transparent text-[#9a988f]"
+          }`}
+        >
+          <span className="text-[14px]">📱</span>
+          <span>Edge Sim</span>
+        </button>
+      </nav>
     </div>
   );
 }

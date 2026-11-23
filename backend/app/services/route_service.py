@@ -158,12 +158,12 @@ def _analyze_alert_on_polyline(
     a_lon: float,
     polyline: list[list[float]],
     step_roads: list[dict[str, Any]],
-    danger_radius_km: float = 1.15,
+    danger_radius_km: float = 1.45,
 ) -> dict[str, Any]:
     """
-    Finds the minimum distance from an alert coordinate (a_lat, a_lon) to a road polyline,
-    extracts the exact red danger road stretch (sub-polyline), the midpoint for the tooltip,
-    and the closest street name from OSRM steps.
+    Finds the exact perpendicular closest point (snap_lat, snap_lon) from an alert coordinate
+    (a_lat, a_lon) to any segment of the road polyline, extracts a smoothly interpolated red
+    danger road stretch centered around (snap_lat, snap_lon), and resolves the closest street name.
     """
     min_dist = 9999.0
     snap_lat, snap_lon = a_lat, a_lon
@@ -178,17 +178,38 @@ def _analyze_alert_on_polyline(
             snap_lat, snap_lon = plat, plon
             closest_idx = i
 
-    # Extract the road sub-polyline stretch that falls inside the threat danger zone
+    # Build a dense, accurate road sub-polyline stretch around the intercepted road segment
     danger_coords: list[list[float]] = []
-    for pt in polyline:
-        if haversine_km(a_lat, a_lon, pt[0], pt[1]) <= danger_radius_km:
-            danger_coords.append(pt)
+    if min_dist <= danger_radius_km and len(polyline) >= 2:
+        for i in range(len(polyline) - 1):
+            p1 = polyline[i]
+            p2 = polyline[i + 1]
+            seg_d, _, _ = point_to_segment_info(a_lat, a_lon, p1[0], p1[1], p2[0], p2[1])
+            if seg_d <= danger_radius_km:
+                # Sample intermediate points along long segments so straight roads clip accurately
+                seg_len_km = haversine_km(p1[0], p1[1], p2[0], p2[1])
+                num_steps = max(1, min(12, int(math.ceil(seg_len_km / 0.15))))
+                for s in range(num_steps + 1):
+                    t = s / num_steps
+                    ilat = round(p1[0] + t * (p2[0] - p1[0]), 5)
+                    ilon = round(p1[1] + t * (p2[1] - p1[1]), 5)
+                    if haversine_km(a_lat, a_lon, ilat, ilon) <= danger_radius_km:
+                        pt = [ilat, ilon]
+                        if not danger_coords or danger_coords[-1] != pt:
+                            danger_coords.append(pt)
+            if i == closest_idx:
+                snap_pt = [round(snap_lat, 5), round(snap_lon, 5)]
+                if not danger_coords or danger_coords[-1] != snap_pt:
+                    danger_coords.append(snap_pt)
 
-    # Ensure at least a visible road stretch around closest_idx if the segment is long
-    if len(danger_coords) < 2 and min_dist <= danger_radius_km and len(polyline) >= 2:
-        start_i = max(0, closest_idx - 3)
-        end_i = min(len(polyline), closest_idx + 5)
-        danger_coords = polyline[start_i:end_i]
+        if len(danger_coords) < 2:
+            p1 = polyline[closest_idx]
+            p2 = polyline[min(len(polyline) - 1, closest_idx + 1)]
+            danger_coords = [
+                [round(p1[0], 5), round(p1[1], 5)],
+                [round(snap_lat, 5), round(snap_lon, 5)],
+                [round(p2[0], 5), round(p2[1], 5)],
+            ]
 
     # Find nearest named street from OSRM steps
     nearest_road = ""
@@ -199,18 +220,15 @@ def _analyze_alert_on_polyline(
             best_r_dist = rd
             nearest_road = sr["name"]
 
-    if danger_coords:
-        mid_pt = danger_coords[len(danger_coords) // 2]
-        tooltip_lat, tooltip_lon = mid_pt[0], mid_pt[1]
-    else:
-        tooltip_lat, tooltip_lon = round(snap_lat, 5), round(snap_lon, 5)
+    # Always place the blinking red hazard dot at the EXACT closest point on the route polyline
+    tooltip_lat, tooltip_lon = round(snap_lat, 5), round(snap_lon, 5)
 
     return {
         "min_dist_km": round(min_dist, 2),
-        "snap_lat": round(snap_lat, 5),
-        "snap_lon": round(snap_lon, 5),
-        "tooltip_lat": round(tooltip_lat, 5),
-        "tooltip_lon": round(tooltip_lon, 5),
+        "snap_lat": tooltip_lat,
+        "snap_lon": tooltip_lon,
+        "tooltip_lat": tooltip_lat,
+        "tooltip_lon": tooltip_lon,
         "danger_road_coords": danger_coords,
         "road_name": nearest_road,
     }
@@ -243,15 +261,15 @@ def filter_alerts_for_route(
     road_dist = primary_rt["distance_km"]
     duration_min = primary_rt["duration_min"]
 
-    # Tight road-corridor threshold so only threats actually hitting the road or destination trigger
-    corridor_thresh = min(max(radius_km, 0.8), 1.35)
-    dest_radius = 1.6
+    # Road-corridor threshold so any active event near or intercepted by the route triggers a blinking red dot
+    corridor_thresh = min(max(radius_km, 1.2), 1.65)
+    dest_radius = 1.65
 
     matched: list[dict[str, Any]] = []
     danger_by_area: dict[str, dict[str, Any]] = {}
 
     for alert in gold_alerts:
-        # Enforce 3-hour recency filter (<= 180 minutes) for route red dots & route alerts
+        # Strictly enforce 3-hour recency filter (<= 180 minutes) for route red dots & route alerts
         age_min = int(alert.get("age_minutes", 9999))
         is_recent = bool(alert.get("is_recent_3h", age_min <= 180))
         if not is_recent:
@@ -270,7 +288,12 @@ def filter_alerts_for_route(
         area_norm = _norm_area(str(alert.get("area", "")))
         mentioned_in_todo = bool(area_norm and len(area_norm) > 2 and area_norm in norm_todo)
 
-        on_route = dist_route <= corridor_thresh or dist_dest <= dest_radius or mentioned_in_todo
+        on_route = (
+            dist_route <= corridor_thresh
+            or dist_dest <= dest_radius
+            or dist_cur <= 1.2
+            or mentioned_in_todo
+        )
         if on_route:
             road_name = poly_info["road_name"] or f"{alert.get('area')} Road"
             reason = (
@@ -281,16 +304,12 @@ def filter_alerts_for_route(
             ev_label = str(alert.get("event_type", "threat")).replace("_", " ").upper()
             avoid_msg = f"AVOID {road_name.upper()} ({alert.get('area')}) • {ev_label}"
 
-            # Filter cluster articles to recent 3h first if available
-            recent_arts = [
-                a for a in (alert.get("articles") or [])
-                if bool(a.get("is_recent_3h", int(a.get("age_minutes", 0)) <= 180))
-            ] or (alert.get("articles") or [])
+            all_arts = alert.get("articles") or []
 
             enriched_alert = {
                 **alert,
-                "articles": recent_arts,
-                "sample_headline": recent_arts[0]["headline"] if recent_arts else alert.get("sample_headline", ""),
+                "articles": all_arts,
+                "sample_headline": all_arts[0]["headline"] if all_arts else alert.get("sample_headline", ""),
                 "on_route": True,
                 "route_match_reason": reason,
                 "affected_road": road_name,
@@ -304,34 +323,43 @@ def filter_alerts_for_route(
             }
             matched.append(enriched_alert)
 
-            if poly_info["danger_road_coords"]:
-                area_key = str(alert.get("area", "Unknown"))
-                age_label = f"{age_min}m ago" if age_min < 60 else f"{age_min // 60}h {age_min % 60}m ago"
-                if area_key not in danger_by_area:
-                    danger_by_area[area_key] = {
-                        "cluster_id": alert.get("cluster_id"),
-                        "area": area_key,
-                        "road_name": road_name,
-                        "event_type": str(alert.get("event_type", "")),
-                        "severity": alert.get("severity"),
-                        "color": "#EF4444",
-                        "headline": enriched_alert["sample_headline"],
-                        "veracity_percent": alert.get("veracity_percent"),
-                        "veracity_summary": f"{age_label} • {alert.get('veracity_summary', '')}",
-                        "age_minutes": age_min,
-                        "tooltip_lat": poly_info["tooltip_lat"],
-                        "tooltip_lon": poly_info["tooltip_lon"],
-                        "coords": poly_info["danger_road_coords"],
-                    }
-                else:
-                    existing_seg = danger_by_area[area_key]
-                    ev_cur = str(alert.get("event_type", ""))
-                    if ev_cur and ev_cur not in existing_seg["event_type"]:
-                        existing_seg["event_type"] = f"{existing_seg['event_type']} + {ev_cur}"
-                    if age_min < existing_seg.get("age_minutes", 9999):
-                        existing_seg["age_minutes"] = age_min
-                        existing_seg["headline"] = enriched_alert["sample_headline"]
-                        existing_seg["veracity_summary"] = f"{age_label} • {alert.get('veracity_summary', '')}"
+            area_key = str(alert.get("area", "Unknown"))
+            age_label = (
+                f"{age_min}m ago"
+                if age_min < 60
+                else (f"{age_min // 60}h {age_min % 60}m ago" if age_min < 1440 else f"{age_min // 1440}d ago")
+            )
+            seg_coords = poly_info["danger_road_coords"] or [
+                [poly_info["tooltip_lat"], poly_info["tooltip_lon"]],
+                [round(a_lat, 5), round(a_lon, 5)],
+            ]
+            if area_key not in danger_by_area:
+                danger_by_area[area_key] = {
+                    "cluster_id": alert.get("cluster_id"),
+                    "area": area_key,
+                    "road_name": road_name,
+                    "event_type": str(alert.get("event_type", "")),
+                    "severity": alert.get("severity"),
+                    "color": "#EF4444",
+                    "headline": enriched_alert["sample_headline"],
+                    "veracity_percent": alert.get("veracity_percent"),
+                    "veracity_summary": f"{age_label} • {alert.get('veracity_summary', '')}",
+                    "age_minutes": age_min,
+                    "tooltip_lat": poly_info["tooltip_lat"],
+                    "tooltip_lon": poly_info["tooltip_lon"],
+                    "event_lat": round(a_lat, 5),
+                    "event_lon": round(a_lon, 5),
+                    "coords": seg_coords,
+                }
+            else:
+                existing_seg = danger_by_area[area_key]
+                ev_cur = str(alert.get("event_type", ""))
+                if ev_cur and ev_cur not in existing_seg["event_type"]:
+                    existing_seg["event_type"] = f"{existing_seg['event_type']} + {ev_cur}"
+                if age_min < existing_seg.get("age_minutes", 9999):
+                    existing_seg["age_minutes"] = age_min
+                    existing_seg["headline"] = enriched_alert["sample_headline"]
+                    existing_seg["veracity_summary"] = f"{age_label} • {alert.get('veracity_summary', '')}"
 
     danger_segments = list(danger_by_area.values())
 

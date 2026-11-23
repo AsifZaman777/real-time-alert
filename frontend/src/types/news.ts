@@ -59,6 +59,22 @@ export interface DebugPayload {
   configured_sources?: ConfiguredSource[];
 }
 
+export interface CrowdMetrics {
+  gathering_size: number;
+  baseline_size: number;
+  surge_ratio: number;
+  avg_speed_kmh: number;
+  gathering_radius_m: number;
+  citizen_reports: number;
+  confirm_votes: number;
+  clear_votes: number;
+  crowd_weight_bonus: number;
+  crowd_weight_percent: number;
+  pre_news_lead_minutes: number;
+  crowd_status: string;
+  is_pre_news_crowd: boolean;
+}
+
 export interface GoldAlertCluster {
   cluster_id: string;
   date: string;
@@ -75,6 +91,8 @@ export interface GoldAlertCluster {
   time_windows: string[];
   first_reported: string | null;
   last_updated: string | null;
+  is_pre_news_crowd?: boolean;
+  crowd_metrics?: CrowdMetrics;
   sample_headline: string;
   articles: Array<{
     headline: string;

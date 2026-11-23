@@ -19,6 +19,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from backend.app.core.config import settings  # noqa: E402
+from backend.app.services.crowd_service import crowd_service  # noqa: E402
 from backend.app.services.r2_archive_service import R2ArchiveService, start_r2_archive_worker  # noqa: E402
 from backend.app.services.stream_service import DAY_RE, StreamService  # noqa: E402
 from backend.ingestion.sources.registry import get_all_sources_metadata  # noqa: E402
@@ -35,7 +36,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
             self.end_headers()
             self.wfile.write(body)
@@ -158,8 +159,60 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                 self._handle_public_feed(q, default_format="ndjson", default_layer="silver")
             elif path in ("/api/stream/live", "/api/v1/stream/live"):
                 self._handle_public_feed(q, default_format="sse", default_layer="silver")
+            elif path in ("/api/crowd/report", "/api/v1/crowd/report"):
+                area = (q.get("area") or ["Motijheel"])[0]
+                ev = (q.get("event_type") or ["fire"])[0]
+                try:
+                    size = int((q.get("gathering_size") or ["220"])[0])
+                except ValueError:
+                    size = 220
+                note = (q.get("note") or [""])[0]
+                rep = crowd_service.submit_crowd_report(area=area, event_type=ev, gathering_size=size, note=note)
+                service._lakehouse_cache.clear()
+                self._json({"status": "ok", "report": rep})
+            elif path in ("/api/crowd/vote", "/api/v1/crowd/vote"):
+                area = (q.get("area") or ["Motijheel"])[0]
+                ev = (q.get("event_type") or ["fire"])[0]
+                vote = (q.get("vote") or ["confirm"])[0]
+                res = crowd_service.record_crowd_vote(area=area, event_type=ev, vote=vote)
+                service._lakehouse_cache.clear()
+                self._json({"status": "ok", "crowd_vote": res})
             elif path in ("/api/health", "/api/v1/health"):
                 self._json({"status": "ok", "service": settings.app_name, "version": settings.version})
+            else:
+                self._send(404, b"not found", "text/plain")
+
+        def do_POST(self):
+            u = urlparse(self.path)
+            q = parse_qs(u.query)
+            path = u.path.rstrip("/") or "/"
+            if not self._is_authorized(q):
+                self._json({"error": "unauthorized"}, code=401)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw_body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+                payload = json.loads(raw_body) if raw_body.strip() else {}
+            except Exception:
+                payload = {}
+
+            if path in ("/api/crowd/report", "/api/v1/crowd/report"):
+                rep = crowd_service.submit_crowd_report(
+                    area=str(payload.get("area") or "Motijheel"),
+                    event_type=str(payload.get("event_type") or "fire"),
+                    gathering_size=int(payload.get("gathering_size") or 220),
+                    note=str(payload.get("note") or ""),
+                )
+                service._lakehouse_cache.clear()
+                self._json({"status": "ok", "report": rep})
+            elif path in ("/api/crowd/vote", "/api/v1/crowd/vote"):
+                res = crowd_service.record_crowd_vote(
+                    area=str(payload.get("area") or "Motijheel"),
+                    event_type=str(payload.get("event_type") or "fire"),
+                    vote=str(payload.get("vote") or "confirm"),
+                )
+                service._lakehouse_cache.clear()
+                self._json({"status": "ok", "crowd_vote": res})
             else:
                 self._send(404, b"not found", "text/plain")
 

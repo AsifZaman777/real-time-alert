@@ -168,42 +168,81 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       100% { transform: scale(1.9); opacity: 0; }
     }
 
-    /* Pulsing Red Hazard Dot placed directly on the affected road */
+    /* High-Precision Blinking Red Hazard Dot placed directly on the intercepted road & event */
     .road-hazard-dot-wrap {
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
+      width: 36px;
+      height: 36px;
       transform: translate(-50%, -50%);
       cursor: pointer;
     }
+    .road-hazard-pulse-outer {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(220, 38, 38, 0.28);
+      border: 1.5px solid rgba(239, 68, 68, 0.65);
+      animation: hazardRipple 1.25s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    }
     .road-hazard-pulse {
       position: absolute;
-      width: 34px;
-      height: 34px;
+      width: 32px;
+      height: 32px;
       border-radius: 50%;
-      background: rgba(239, 68, 68, 0.35);
-      animation: pulseRing 1.5s ease-out infinite;
+      background: rgba(239, 68, 68, 0.52);
+      animation: hazardRipple 1.25s cubic-bezier(0.16, 1, 0.3, 1) 0.35s infinite;
     }
     .road-hazard-core {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: #DC2626;
       border: 2.5px solid #FFFFFF;
-      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.65);
+      box-shadow: 0 0 12px rgba(220, 38, 38, 0.95), 0 2px 6px rgba(15, 23, 42, 0.45);
       z-index: 3;
       display: flex;
       align-items: center;
       justify-content: center;
+      animation: coreBlink 0.9s ease-in-out infinite alternate;
     }
     .road-hazard-inner {
-      width: 5px;
-      height: 5px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: #FFFFFF;
+    }
+    @keyframes hazardRipple {
+      0% { transform: scale(0.45); opacity: 1; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+    @keyframes coreBlink {
+      0% { background: #EF4444; transform: scale(0.94); box-shadow: 0 0 8px rgba(239, 68, 68, 0.8); }
+      100% { background: #B91C1C; transform: scale(1.1); box-shadow: 0 0 16px rgba(220, 38, 38, 1); }
+    }
+
+    /* Blinking Red Badge for On-Route / Intercepted Event Centers */
+    .area-badge-onroute {
+      background: #DC2626 !important;
+      border: 2px solid #FFFFFF !important;
+      box-shadow: 0 0 14px rgba(220, 38, 38, 0.85), 0 3px 8px rgba(15, 23, 42, 0.35) !important;
+      animation: badgeAlertBlink 0.95s ease-in-out infinite alternate;
+      opacity: 1 !important;
+      z-index: 10;
+    }
+    .onroute-dot-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 0 6px #FFFFFF;
+    }
+    @keyframes badgeAlertBlink {
+      0% { transform: translate(-50%, -50%) scale(0.97); background: #EF4444; }
+      100% { transform: translate(-50%, -50%) scale(1.06); background: #B91C1C; }
     }
 
     /* Google Maps-style Teardrop Pin with Drop Bounce */
@@ -479,6 +518,95 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       sendBridgeMessage({ type: 'selectArea', area: areaName });
     };
 
+    // Exact perpendicular point-to-segment projection onto the route polyline (in meters)
+    function projectPointToSegmentMeters(pLat, pLon, aLat, aLon, bLat, bLon) {
+      const cosLat = Math.cos(((aLat + bLat) * 0.5) * Math.PI / 180);
+      const mPerDegLat = 111320.0;
+      const mPerDegLon = 111320.0 * cosLat;
+
+      const bx = (bLon - aLon) * mPerDegLon;
+      const by = (bLat - aLat) * mPerDegLat;
+      const px = (pLon - aLon) * mPerDegLon;
+      const py = (pLat - aLat) * mPerDegLat;
+
+      const segLenSq = bx * bx + by * by;
+      const t = segLenSq > 1e-6 ? Math.max(0.0, Math.min(1.0, (px * bx + py * by) / segLenSq)) : 0.0;
+      const projX = t * bx;
+      const projY = t * by;
+      const distMeters = Math.hypot(px - projX, py - projY);
+      const snapLat = aLat + t * (bLat - aLat);
+      const snapLon = aLon + t * (bLon - aLon);
+      return { distMeters: distMeters, snapLat: snapLat, snapLon: snapLon };
+    }
+
+    function projectPointToPolyline(lat, lon, poly, radiusMeters) {
+      if (!poly || poly.length === 0) return null;
+      if (poly.length === 1) {
+        const d0 = L.latLng(lat, lon).distanceTo(L.latLng(poly[0][0], poly[0][1]));
+        return {
+          minDistMeters: d0,
+          snapLat: poly[0][0],
+          snapLon: poly[0][1],
+          subCoords: [[poly[0][0], poly[0][1]], [lat, lon]]
+        };
+      }
+
+      let minD = 9999999;
+      let bestSnapLat = poly[0][0];
+      let bestSnapLon = poly[0][1];
+      let bestIdx = 0;
+
+      for (let i = 0; i < poly.length - 1; i++) {
+        const a = poly[i];
+        const b = poly[i + 1];
+        const info = projectPointToSegmentMeters(lat, lon, a[0], a[1], b[0], b[1]);
+        if (info.distMeters < minD) {
+          minD = info.distMeters;
+          bestSnapLat = info.snapLat;
+          bestSnapLon = info.snapLon;
+          bestIdx = i;
+        }
+      }
+
+      const subCoords = [];
+      const eventLL = L.latLng(lat, lon);
+      if (minD <= radiusMeters) {
+        for (let i = 0; i < poly.length - 1; i++) {
+          const a = poly[i];
+          const b = poly[i + 1];
+          const segInfo = projectPointToSegmentMeters(lat, lon, a[0], a[1], b[0], b[1]);
+          if (segInfo.distMeters <= radiusMeters) {
+            const segLen = L.latLng(a[0], a[1]).distanceTo(L.latLng(b[0], b[1]));
+            const steps = Math.max(1, Math.min(10, Math.ceil(segLen / 140)));
+            for (let s = 0; s <= steps; s++) {
+              const t = s / steps;
+              const ilat = a[0] + t * (b[0] - a[0]);
+              const ilon = a[1] + t * (b[1] - a[1]);
+              if (eventLL.distanceTo(L.latLng(ilat, ilon)) <= radiusMeters) {
+                subCoords.push([ilat, ilon]);
+              }
+            }
+          }
+          if (i === bestIdx) {
+            subCoords.push([bestSnapLat, bestSnapLon]);
+          }
+        }
+      }
+
+      if (subCoords.length < 2 && minD <= radiusMeters) {
+        const a = poly[bestIdx];
+        const b = poly[Math.min(poly.length - 1, bestIdx + 1)];
+        subCoords.push([a[0], a[1]], [bestSnapLat, bestSnapLon], [b[0], b[1]]);
+      }
+
+      return {
+        minDistMeters: minD,
+        snapLat: bestSnapLat,
+        snapLon: bestSnapLon,
+        subCoords: subCoords
+      };
+    }
+
     function renderLeafletRoadNavigation(primaryPoly, altPoly, distKm, durMin, dangerSegs, markers) {
       routeLayerGroup.clearLayers();
       dangerRoadLayerGroup.clearLayers();
@@ -534,58 +662,86 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // C. Highlight Affected Road Stretches in RED + Place Interactive Pulsing Red Dots
-      //    (Tooltips are NOT permanently open — clicking a red dot opens a transparent glass popup!)
-      let effectiveDangers = dangerSegs || [];
+      // C. Highlight Affected Road Stretches in RED + Place Accurate Blinking Red Dots
+      //    Strictly enforces the 3-hour recency filter (isRecent3h) and snaps every red dot
+      //    to the EXACT perpendicular closest point on the rendered road polyline!
+      const INTERCEPT_RADIUS_M = 1350;
+      const mergedByArea = {};
 
-      if ((!effectiveDangers || effectiveDangers.length === 0) && primaryPoly && primaryPoly.length >= 2) {
-        effectiveDangers = [];
-        (markers || []).forEach(function(m) {
-          if (!m.isRecent3h) return;
-          const mLatLng = L.latLng(m.lat, m.lon);
-          const subCoords = [];
-          let closestPt = null;
-          let minD = 999999;
+      (dangerSegs || []).forEach(function(seg) {
+        if (!seg || !seg.area) return;
+        let snapLat = seg.tooltip_lat;
+        let snapLon = seg.tooltip_lon;
+        let coords = seg.coords || [];
 
-          for (let i = 0; i < primaryPoly.length; i++) {
-            const pt = primaryPoly[i];
-            const dMeters = mLatLng.distanceTo(L.latLng(pt[0], pt[1]));
-            if (dMeters < minD) {
-              minD = dMeters;
-              closestPt = pt;
-            }
-            if (dMeters <= 1250) {
-              subCoords.push(pt);
+        if (primaryPoly && primaryPoly.length >= 2) {
+          const refLat = seg.event_lat || seg.tooltip_lat;
+          const refLon = seg.event_lon || seg.tooltip_lon;
+          const proj = projectPointToPolyline(refLat, refLon, primaryPoly, INTERCEPT_RADIUS_M);
+          if (proj) {
+            snapLat = proj.snapLat;
+            snapLon = proj.snapLon;
+            if (proj.subCoords && proj.subCoords.length >= 2) {
+              coords = proj.subCoords;
             }
           }
+        }
 
-          if (minD <= 1250 && closestPt) {
-            effectiveDangers.push({
-              area: m.area,
-              road_name: m.affectedRoad || (m.area + ' Road'),
-              event_type: m.topEventLabel || m.topEvent,
-              headline: m.topHeadline || ('Active ' + m.topEvent + ' reported in ' + m.area),
-              veracity_summary: m.veracitySummary || (m.maxSources + ' source(s)'),
-              tooltip_lat: subCoords.length ? subCoords[Math.floor(subCoords.length / 2)][0] : closestPt[0],
-              tooltip_lon: subCoords.length ? subCoords[Math.floor(subCoords.length / 2)][1] : closestPt[1],
-              coords: subCoords.length >= 2 ? subCoords : [closestPt, [m.lat, m.lon]]
-            });
+        mergedByArea[seg.area] = {
+          area: seg.area,
+          road_name: seg.road_name || (seg.area + ' Road'),
+          event_type: seg.event_type,
+          headline: seg.headline,
+          veracity_summary: seg.veracity_summary,
+          tooltip_lat: snapLat,
+          tooltip_lon: snapLon,
+          event_lat: seg.event_lat || snapLat,
+          event_lon: seg.event_lon || snapLon,
+          coords: coords
+        };
+      });
+
+      if (primaryPoly && primaryPoly.length >= 2) {
+        (markers || []).forEach(function(m) {
+          // Strictly skip alerts older than 3 hours!
+          if (!m.isRecent3h) return;
+          const proj = projectPointToPolyline(m.lat, m.lon, primaryPoly, INTERCEPT_RADIUS_M);
+          if (!proj) return;
+          if (proj.minDistMeters <= INTERCEPT_RADIUS_M) {
+            const existing = mergedByArea[m.area];
+            if (!existing) {
+              mergedByArea[m.area] = {
+                area: m.area,
+                road_name: m.affectedRoad || (m.area + ' Road'),
+                event_type: m.topEventLabel || m.topEvent,
+                headline: m.topHeadline || ('Active ' + m.topEvent + ' reported in ' + m.area),
+                veracity_summary: m.veracitySummary || (m.maxSources + ' source(s)'),
+                tooltip_lat: proj.snapLat,
+                tooltip_lon: proj.snapLon,
+                event_lat: m.lat,
+                event_lon: m.lon,
+                coords: proj.subCoords && proj.subCoords.length >= 2
+                  ? proj.subCoords
+                  : [[proj.snapLat, proj.snapLon], [m.lat, m.lon]]
+              };
+            } else {
+              existing.tooltip_lat = proj.snapLat;
+              existing.tooltip_lon = proj.snapLon;
+              existing.event_lat = m.lat;
+              existing.event_lon = m.lon;
+              if (proj.subCoords && proj.subCoords.length >= 2) {
+                existing.coords = proj.subCoords;
+              }
+            }
           }
         });
       }
 
-      // Deduplicate danger segments by area so each affected stretch has 1 clean red dot
+      const uniqueDangers = Object.values(mergedByArea);
       const seenDangerAreas = {};
-      const uniqueDangers = [];
-      effectiveDangers.forEach(function(seg) {
-        const k = seg.area || (seg.tooltip_lat + ',' + seg.tooltip_lon);
-        if (!seenDangerAreas[k]) {
-          seenDangerAreas[k] = true;
-          uniqueDangers.push(seg);
-        }
-      });
 
       uniqueDangers.forEach(function(seg) {
+        seenDangerAreas[seg.area] = true;
         const evText = escapeHtml(String(seg.event_type || 'THREAT').replace(/_/g, ' ').toUpperCase());
         const roadTitle = escapeHtml(seg.road_name || (seg.area + ' Road'));
         const areaTitle = escapeHtml(seg.area || '');
@@ -617,7 +773,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           L.polyline(seg.coords, {
             color: '#7F1D1D',
             weight: 11,
-            opacity: 0.65,
+            opacity: 0.72,
             lineCap: 'round',
             lineJoin: 'round'
           }).addTo(dangerRoadLayerGroup);
@@ -625,7 +781,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           const redRoad = L.polyline(seg.coords, {
             color: '#EF4444',
             weight: 6.5,
-            opacity: 0.96,
+            opacity: 0.98,
             lineCap: 'round',
             lineJoin: 'round',
             className: 'leaflet-danger-road'
@@ -634,9 +790,28 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           redRoad.bindPopup(popupHtml, popupOpts);
         }
 
-        // 2. Place a Pulsing Red Hazard Dot right on the affected road (click to open transparent tooltip!)
+        // 2. If event center is offset from the road snap point, draw a dashed red proximity connector
+        if (seg.tooltip_lat && seg.tooltip_lon && seg.event_lat && seg.event_lon) {
+          const sepMeters = L.latLng(seg.tooltip_lat, seg.tooltip_lon).distanceTo(
+            L.latLng(seg.event_lat, seg.event_lon)
+          );
+          if (sepMeters > 55 && sepMeters <= INTERCEPT_RADIUS_M + 200) {
+            L.polyline(
+              [[seg.tooltip_lat, seg.tooltip_lon], [seg.event_lat, seg.event_lon]],
+              {
+                color: '#DC2626',
+                weight: 2.5,
+                opacity: 0.8,
+                dashArray: '4, 6'
+              }
+            ).addTo(dangerRoadLayerGroup);
+          }
+        }
+
+        // 3. Place the High-Precision Blinking Red Hazard Dot right on the intercepted route point
         if (seg.tooltip_lat && seg.tooltip_lon) {
           const redDotHtml = '<div class="road-hazard-dot-wrap">'
+            + '<div class="road-hazard-pulse-outer"></div>'
             + '<div class="road-hazard-pulse"></div>'
             + '<div class="road-hazard-core"><div class="road-hazard-inner"></div></div>'
             + '</div>';
@@ -645,10 +820,10 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
             icon: L.divIcon({
               className: 'custom-pin-wrapper',
               html: redDotHtml,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14]
+              iconSize: [36, 36],
+              iconAnchor: [18, 18]
             }),
-            zIndexOffset: 950
+            zIndexOffset: 980
           }).addTo(dangerRoadLayerGroup);
 
           dotMarker.bindPopup(popupHtml, popupOpts);
@@ -715,25 +890,40 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         });
       }
 
-      // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots (only if route/threats changed)
+      // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots
+      const markersSig = (markers || []).map(function(m) {
+        return m.area + ':' + m.clusterCount + ':' + (m.onRoute ? '1' : '0') + ':' + m.color;
+      }).join('|');
       const polyLen = (routeGeometry && routeGeometry.polyline) ? routeGeometry.polyline.length : 0;
       const dangerKeys = (routeGeometry && routeGeometry.danger_segments)
         ? routeGeometry.danger_segments.map(function(d) { return d.area + ':' + d.event_type; }).join('|')
         : '';
       const routeSig = userSig + '->' + destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5)
-        + '|p:' + polyLen + '|d:' + dangerKeys;
+        + '|p:' + polyLen + '|d:' + dangerKeys + '|m:' + markersSig;
 
+      const isFallbackStraightLine =
+        routeGeometry &&
+        routeGeometry.road_names &&
+        routeGeometry.road_names.length === 1 &&
+        routeGeometry.road_names[0] === 'Direct Road Corridor';
+
+      let activeDangerAreas = {};
       if (routeSig !== lastRouteSig) {
         lastRouteSig = routeSig;
-        if (routeGeometry && routeGeometry.polyline && routeGeometry.polyline.length >= 2) {
-          renderLeafletRoadNavigation(
+        if (
+          routeGeometry &&
+          routeGeometry.polyline &&
+          routeGeometry.polyline.length >= 2 &&
+          !isFallbackStraightLine
+        ) {
+          activeDangerAreas = renderLeafletRoadNavigation(
             routeGeometry.polyline,
             routeGeometry.alt_polyline || [],
             routeGeometry.route_distance_km,
             routeGeometry.duration_min,
             routeGeometry.danger_segments || [],
             markers
-          );
+          ) || {};
         } else {
           const fetchId = ++lastRouteFetchId;
           const osrmUrl = 'https://router.project-osrm.org/route/v1/driving/'
@@ -770,44 +960,45 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render City Threat Markers (only if markers changed)
-      const markersSig = (markers || []).map(function(m) {
-        return m.area + ':' + m.clusterCount + ':' + (m.onRoute ? '1' : '0') + ':' + m.color;
-      }).join('|');
-
-      if (markersSig !== lastMarkersSig) {
-        lastMarkersSig = markersSig;
+      // 4. Render City Threat Markers (always show intercepted on-route events with a blinking red beacon!)
+      const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
+      if (fullMarkersSig !== lastMarkersSig) {
+        lastMarkersSig = fullMarkersSig;
         alertMarkerLayerGroup.clearLayers();
         markers.forEach(function(m) {
+          const isIntercepted = Boolean(m.isRecent3h && (m.onRoute || activeDangerAreas[m.area]));
+          const circleColor = isIntercepted ? '#DC2626' : m.color;
           L.circle([m.lat, m.lon], {
-            radius: m.onRoute ? 480 : 340,
-            color: m.color,
-            weight: m.onRoute ? 2 : 1.2,
-            opacity: m.onRoute ? 0.65 : 0.45,
-            fillColor: m.color,
-            fillOpacity: m.onRoute ? 0.16 : 0.10,
+            radius: isIntercepted ? 520 : 340,
+            color: circleColor,
+            weight: isIntercepted ? 2.4 : 1.2,
+            opacity: isIntercepted ? 0.85 : 0.45,
+            fillColor: circleColor,
+            fillOpacity: isIntercepted ? 0.22 : 0.10,
             interactive: false
           }).addTo(alertMarkerLayerGroup);
 
-          if (!m.onRoute) {
-            const htmlBadge = '<div class="area-badge" style="background:' + m.color + ';">'
-              + '<span>' + escapeHtml(m.area) + '</span>'
-              + '<span class="area-count">' + m.clusterCount + '</span>'
-              + '</div>';
-            const marker = L.marker([m.lat, m.lon], {
-              icon: L.divIcon({
-                className: 'custom-pin-wrapper',
-                html: htmlBadge,
-                iconSize: [0, 0],
-                iconAnchor: [0, 0]
-              })
-            });
-            marker.on('click', function(ev) {
-              L.DomEvent.stopPropagation(ev);
-              sendBridgeMessage({ type: 'selectArea', area: m.area });
-            });
-            marker.addTo(alertMarkerLayerGroup);
-          }
+          const badgeClass = isIntercepted ? 'area-badge area-badge-onroute' : 'area-badge';
+          const dotPrefix = isIntercepted ? '<span class="onroute-dot-indicator"></span>' : '';
+          const htmlBadge = '<div class="' + badgeClass + '" style="background:' + circleColor + ';">'
+            + dotPrefix
+            + '<span>' + escapeHtml(m.area) + '</span>'
+            + '<span class="area-count">' + m.clusterCount + '</span>'
+            + '</div>';
+          const marker = L.marker([m.lat, m.lon], {
+            icon: L.divIcon({
+              className: 'custom-pin-wrapper',
+              html: htmlBadge,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            }),
+            zIndexOffset: isIntercepted ? 920 : 400
+          });
+          marker.on('click', function(ev) {
+            L.DomEvent.stopPropagation(ev);
+            sendBridgeMessage({ type: 'selectArea', area: m.area });
+          });
+          marker.addTo(alertMarkerLayerGroup);
         });
       }
     };

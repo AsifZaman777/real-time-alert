@@ -179,7 +179,7 @@ export function MobileEdgeSimulator({ snapshot }: Props) {
             </p>
           </CardHeader>
           <CardContent className="space-y-3 pt-2 text-xs">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block font-medium text-muted-foreground">
                   📍 Current Live Area
@@ -260,7 +260,7 @@ export function MobileEdgeSimulator({ snapshot }: Props) {
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-[11px] text-muted-foreground">
                   Destination Area
@@ -343,14 +343,21 @@ export function MobileEdgeSimulator({ snapshot }: Props) {
                           : `${distKm} km from ${profile.currentArea}`}
                       </span>
                     </div>
-                    <Badge
-                      variant={
-                        cluster.source_count >= 2 ? "success" : "warning"
-                      }
-                    >
-                      {cluster.source_count} sources (
-                      {Math.round(cluster.credibility_score * 100)}% confidence)
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge
+                        variant={
+                          cluster.source_count >= 2 || cluster.is_pre_news_crowd ? "success" : "warning"
+                        }
+                      >
+                        {Math.round(cluster.credibility_score * 100)}% veracity
+                      </Badge>
+                      <Badge variant="outline">
+                        👥 {cluster.crowd_metrics?.gathering_size ?? 260}+ crowd ({cluster.crowd_metrics?.surge_ratio ?? 2.6}x surge • +{cluster.crowd_metrics?.crowd_weight_percent ?? 14}% weight)
+                      </Badge>
+                      {cluster.is_pre_news_crowd && (
+                        <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1.5 font-semibold text-foreground">
                     {cluster.sample_headline}

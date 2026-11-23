@@ -7,6 +7,22 @@ export interface AlertArticle {
   ingested_at?: string;
 }
 
+export interface CrowdMetrics {
+  gathering_size: number;
+  baseline_size: number;
+  surge_ratio: number;
+  avg_speed_kmh: number;
+  gathering_radius_m: number;
+  citizen_reports: number;
+  confirm_votes: number;
+  clear_votes: number;
+  crowd_weight_bonus: number;
+  crowd_weight_percent: number;
+  pre_news_lead_minutes: number;
+  crowd_status: string;
+  is_pre_news_crowd: boolean;
+}
+
 export interface GoldAlert {
   cluster_id: string;
   date: string;
@@ -30,6 +46,9 @@ export interface GoldAlert {
   last_updated?: string;
   age_minutes?: number;
   is_recent_3h?: boolean;
+  is_pre_news_crowd?: boolean;
+  alert_origin?: "PRE_NEWS_CROWD" | "NEWS_AND_CROWD" | string;
+  crowd_metrics?: CrowdMetrics;
   sample_headline: string;
   articles: AlertArticle[];
   on_route?: boolean;
@@ -56,6 +75,8 @@ export interface DangerRoadSegment {
   veracity_summary: string;
   tooltip_lat: number;
   tooltip_lon: number;
+  event_lat?: number;
+  event_lon?: number;
   coords: number[][];
 }
 

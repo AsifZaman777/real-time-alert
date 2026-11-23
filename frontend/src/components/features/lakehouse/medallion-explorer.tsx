@@ -117,7 +117,69 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Mobile Phone Card View (< md) */}
+          <div className="space-y-3 md:hidden">
+            {snapshot.gold_alerts.map((cl) => (
+              <div
+                key={cl.cluster_id}
+                className="rounded-xl border border-border bg-card/60 p-3 text-xs space-y-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    onClick={() => onSelectArea && onSelectArea(cl.area)}
+                    className="font-bold text-sm text-primary hover:underline text-left"
+                  >
+                    📍 {cl.area}
+                  </button>
+                  <Badge variant="destructive">⚠️ {cl.event_type}</Badge>
+                </div>
+
+                <a
+                  href={cl.articles[0]?.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block font-medium text-foreground hover:underline leading-snug"
+                >
+                  {cl.sample_headline}
+                </a>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/60">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge
+                      variant={cl.source_count >= 2 || cl.is_pre_news_crowd ? "success" : "warning"}
+                    >
+                      {Math.round(cl.credibility_score * 100)}% score
+                    </Badge>
+                    <Badge variant="outline">
+                      👥 {cl.crowd_metrics?.gathering_size ?? 240}+ gathered ({cl.crowd_metrics?.surge_ratio ?? 2.4}x • +{cl.crowd_metrics?.crowd_weight_percent ?? 12}% crowd)
+                    </Badge>
+                    {cl.is_pre_news_crowd && (
+                      <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>
+                    )}
+                  </div>
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {cl.lat.toFixed(3)}°N, {cl.lon.toFixed(3)}°E
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {cl.sources.map((s) => (
+                    <Badge key={s} variant="secondary">
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {snapshot.gold_alerts.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No disruption clusters detected for this date yet.
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Table View (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/60 text-muted-foreground">
@@ -150,18 +212,20 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
                       <Badge variant="destructive">⚠️ {cl.event_type}</Badge>
                     </td>
                     <td className="p-2.5">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <Badge
                           variant={
-                            cl.source_count >= 2 ? "success" : "warning"
+                            cl.source_count >= 2 || cl.is_pre_news_crowd ? "success" : "warning"
                           }
                         >
                           {Math.round(cl.credibility_score * 100)}% score
                         </Badge>
-                        <span className="text-[11px] text-muted-foreground">
-                          ({cl.source_count}{" "}
-                          {cl.source_count === 1 ? "paper" : "papers"})
-                        </span>
+                        <Badge variant="outline">
+                          👥 {cl.crowd_metrics?.gathering_size ?? 240}+ ({cl.crowd_metrics?.surge_ratio ?? 2.4}x • +{cl.crowd_metrics?.crowd_weight_percent ?? 12}% crowd)
+                        </Badge>
+                        {cl.is_pre_news_crowd && (
+                          <Badge variant="default">⚡ Pre-News</Badge>
+                        )}
                       </div>
                     </td>
                     <td className="p-2.5">
