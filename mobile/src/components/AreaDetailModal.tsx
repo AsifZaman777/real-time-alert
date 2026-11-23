@@ -175,19 +175,19 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(2, 6, 23, 0.72)",
+    backgroundColor: "rgba(5, 8, 18, 0.78)",
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#0B1120",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: "#0E1525",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: "84%",
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 18,
     paddingBottom: 24,
     borderTopWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.2)",
   },
   header: {
     flexDirection: "row",

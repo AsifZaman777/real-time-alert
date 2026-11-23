@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Platform,
   SafeAreaView,
@@ -16,11 +17,9 @@ import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
-  CLOUD_API_BASE_URL,
-  DEFAULT_API_BASE_URL,
+  API_BASE_URL,
   DHAKA_PRESETS,
   FEED_ACCESS_TOKEN,
-  LOCAL_API_BASE_URL,
 } from "./src/config/api";
 import {
   CitySummary,
@@ -40,42 +39,50 @@ import {
 
 const RISK_META: Record<
   string,
-  { color: string; bg: string; border: string; label: string; icon: "warning" | "checkmark-circle" }
+  {
+    color: string;
+    accent: string;
+    bg: string;
+    border: string;
+    label: string;
+    icon: "warning" | "checkmark-circle";
+  }
 > = {
   BLOCKED: {
-    color: "#FCA5A5",
-    bg: "rgba(127, 29, 29, 0.92)",
-    border: "#EF4444",
-    label: "ROUTE ANOMALY • CHANGE ROUTE",
+    color: "#FECDD3",
+    accent: "#FB7185",
+    bg: "rgba(136, 19, 55, 0.88)",
+    border: "rgba(244, 63, 94, 0.6)",
+    label: "ROUTE ANOMALY • REROUTE ADVISED",
     icon: "warning",
   },
   HIGH_RISK: {
-    color: "#FDBA74",
-    bg: "rgba(124, 45, 18, 0.92)",
-    border: "#F97316",
-    label: "HIGH RISK ON ROUTE",
+    color: "#FDE68A",
+    accent: "#FBBF24",
+    bg: "rgba(120, 53, 15, 0.88)",
+    border: "rgba(245, 158, 11, 0.55)",
+    label: "HIGH RISK ALONG ROUTE",
     icon: "warning",
   },
   CAUTION: {
-    color: "#FDE047",
-    bg: "rgba(113, 63, 18, 0.92)",
-    border: "#F59E0B",
+    color: "#FEF08A",
+    accent: "#FACC15",
+    bg: "rgba(113, 63, 18, 0.86)",
+    border: "rgba(234, 179, 8, 0.5)",
     label: "CAUTION ON ROUTE",
     icon: "warning",
   },
   CLEAR: {
-    color: "#6EE7B7",
-    bg: "rgba(6, 78, 59, 0.9)",
-    border: "#10B981",
+    color: "#A7F3D0",
+    accent: "#34D399",
+    bg: "rgba(6, 78, 59, 0.86)",
+    border: "rgba(16, 185, 129, 0.45)",
     label: "ROUTE CLEAR",
     icon: "checkmark-circle",
   },
 };
 
 export default function App() {
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_BASE_URL);
-  const [showSettings, setShowSettings] = useState(false);
-
   const [currentLocation, setCurrentLocation] = useState<Coordinates>(
     DHAKA_PRESETS.Dhanmondi
   );
@@ -97,8 +104,8 @@ export default function App() {
   const [layers, setLayers] = useState<LakehouseLayerStats | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("ALL");
   const [availableCities, setAvailableCities] = useState<CitySummary[]>([]);
-  const [streamStatus, setStreamStatus] = useState<string>("CONNECTING");
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [streamStatus, setStreamStatus] = useState<"LIVE" | "SYNCING" | "OFFLINE">("SYNCING");
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   const [showAllOnMap, setShowAllOnMap] = useState<boolean>(true);
   const [sheetExpanded, setSheetExpanded] = useState<boolean>(false);
@@ -113,10 +120,37 @@ export default function App() {
 
   const lastPollSigRef = useRef<string>("");
 
-  const handleLocateMe = useCallback(async (flyTo: boolean = true) => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+  const handleLocateMe = useCallback(
+    async (flyTo: boolean = true) => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          if (flyTo) {
+            setFocusCoords({
+              lat: currentLocation.lat,
+              lon: currentLocation.lon,
+              zoom: 14,
+              nonce: Date.now(),
+            });
+          }
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({});
+        const next = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          label: "My Location",
+        };
+        setCurrentLocation(next);
+        if (flyTo) {
+          setFocusCoords({
+            lat: next.lat,
+            lon: next.lon,
+            zoom: 15,
+            nonce: Date.now(),
+          });
+        }
+      } catch {
         if (flyTo) {
           setFocusCoords({
             lat: currentLocation.lat,
@@ -125,136 +159,114 @@ export default function App() {
             nonce: Date.now(),
           });
         }
-        return;
       }
-      const pos = await Location.getCurrentPositionAsync({});
-      const next = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        label: "My Location",
-      };
-      setCurrentLocation(next);
-      if (flyTo) {
-        setFocusCoords({
-          lat: next.lat,
-          lon: next.lon,
-          zoom: 15,
-          nonce: Date.now(),
-        });
-      }
-    } catch {
-      if (flyTo) {
-        setFocusCoords({
-          lat: currentLocation.lat,
-          lon: currentLocation.lon,
-          zoom: 14,
-          nonce: Date.now(),
-        });
-      }
-    }
-  }, [currentLocation.lat, currentLocation.lon]);
+    },
+    [currentLocation.lat, currentLocation.lon]
+  );
 
   useEffect(() => {
     handleLocateMe(false);
   }, []);
 
-  const fetchAlerts = useCallback(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    try {
-      const cleanBase = apiUrl.trim().replace(/\/+$/, "");
-      const routeParams = new URLSearchParams({
-        date: "latest",
-        cur_lat: String(currentLocation.lat),
-        cur_lon: String(currentLocation.lon),
-        dest_lat: String(destination.lat),
-        dest_lon: String(destination.lon),
-        todo: todoText,
-        radius_km: "2.5",
-        include_map: "1",
-        city: selectedCity,
-      });
-
-      const headers: Record<string, string> = {};
-      if (FEED_ACCESS_TOKEN) {
-        headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
+  const fetchAlerts = useCallback(
+    async (manualSync: boolean = false) => {
+      if (manualSync) {
+        setIsSyncing(true);
       }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        const routeParams = new URLSearchParams({
+          date: "latest",
+          cur_lat: String(currentLocation.lat),
+          cur_lon: String(currentLocation.lon),
+          dest_lat: String(destination.lat),
+          dest_lon: String(destination.lon),
+          todo: todoText,
+          radius_km: "2.5",
+          include_map: "1",
+          city: selectedCity,
+        });
 
-      const routeRes = await fetch(
-        `${cleanBase}/api/v1/alerts/route?${routeParams.toString()}`,
-        { signal: controller.signal, headers }
-      );
+        const headers: Record<string, string> = {};
+        if (FEED_ACCESS_TOKEN) {
+          headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
+        }
 
-      if (!routeRes.ok) {
+        const routeRes = await fetch(
+          `${API_BASE_URL}/api/v1/alerts/route?${routeParams.toString()}`,
+          { signal: controller.signal, headers }
+        );
+
+        if (!routeRes.ok) {
+          setStreamStatus("OFFLINE");
+          return;
+        }
+
+        const routeData: RouteAlertResponse = await routeRes.json();
+        let mapAlerts = routeData.map_alerts;
+        if (!mapAlerts) {
+          const mapRes = await fetch(
+            `${API_BASE_URL}/api/v1/alerts/map?date=latest&city=${encodeURIComponent(selectedCity)}`,
+            { signal: controller.signal, headers }
+          );
+          if (mapRes.ok) {
+            const mapData: MapAlertResponse = await mapRes.json();
+            mapAlerts = mapData.alerts || [];
+          }
+        }
+
+        const nextRouteAlerts = routeData.route_alerts || [];
+        const pollSig = [
+          selectedCity,
+          currentLocation.lat.toFixed(4),
+          currentLocation.lon.toFixed(4),
+          destination.lat.toFixed(4),
+          destination.lon.toFixed(4),
+          routeData.route_risk_level,
+          routeData.route?.route_distance_km,
+          nextRouteAlerts.map((a) => `${a.cluster_id}:${a.last_updated}`).join(","),
+          (mapAlerts || []).length,
+        ].join("|");
+
+        setStreamStatus("LIVE");
+
+        if (pollSig !== lastPollSigRef.current || manualSync) {
+          lastPollSigRef.current = pollSig;
+          setRouteAlerts(nextRouteAlerts);
+          setRiskLevel(routeData.route_risk_level || "CLEAR");
+          setRouteDistKm(routeData.route?.route_distance_km || 0);
+          setRouteDurationMin(routeData.route?.duration_min || 0);
+          setRouteGeometry({
+            polyline: routeData.route?.polyline,
+            alt_polyline: routeData.route?.alt_polyline,
+            route_distance_km: routeData.route?.route_distance_km,
+            duration_min: routeData.route?.duration_min,
+            road_names: routeData.route?.road_names,
+            danger_segments: routeData.route?.danger_segments,
+          });
+          setSuppressedCount(routeData.suppressed_count || 0);
+          setAllMapAlerts(mapAlerts || []);
+          setLayers(routeData.layers);
+          if (routeData.available_cities) {
+            setAvailableCities(routeData.available_cities);
+          }
+        }
+      } catch {
         setStreamStatus("OFFLINE");
-        setLastError(`HTTP ${routeRes.status}`);
-        setShowSettings(true);
-        return;
-      }
-
-      const routeData: RouteAlertResponse = await routeRes.json();
-      let mapAlerts = routeData.map_alerts;
-      if (!mapAlerts) {
-        const mapRes = await fetch(`${cleanBase}/api/v1/alerts/map?date=latest`, {
-          signal: controller.signal,
-          headers,
-        });
-        if (mapRes.ok) {
-          const mapData: MapAlertResponse = await mapRes.json();
-          mapAlerts = mapData.alerts || [];
+      } finally {
+        clearTimeout(timeoutId);
+        if (manualSync) {
+          setIsSyncing(false);
         }
       }
-
-      const nextRouteAlerts = routeData.route_alerts || [];
-      const pollSig = [
-        selectedCity,
-        currentLocation.lat.toFixed(4),
-        currentLocation.lon.toFixed(4),
-        destination.lat.toFixed(4),
-        destination.lon.toFixed(4),
-        routeData.route_risk_level,
-        routeData.route?.route_distance_km,
-        nextRouteAlerts.map((a) => `${a.cluster_id}:${a.last_updated}`).join(","),
-        (mapAlerts || []).length,
-      ].join("|");
-
-      setStreamStatus("LIVE");
-      setLastError(null);
-
-      // Only trigger state updates if route or alert data actually changed (prevents 8s poll flicker)
-      if (pollSig !== lastPollSigRef.current) {
-        lastPollSigRef.current = pollSig;
-        setRouteAlerts(nextRouteAlerts);
-        setRiskLevel(routeData.route_risk_level || "CLEAR");
-        setRouteDistKm(routeData.route?.route_distance_km || 0);
-        setRouteDurationMin(routeData.route?.duration_min || 0);
-        setRouteGeometry({
-          polyline: routeData.route?.polyline,
-          alt_polyline: routeData.route?.alt_polyline,
-          route_distance_km: routeData.route?.route_distance_km,
-          duration_min: routeData.route?.duration_min,
-          road_names: routeData.route?.road_names,
-          danger_segments: routeData.route?.danger_segments,
-        });
-        setSuppressedCount(routeData.suppressed_count || 0);
-        setAllMapAlerts(mapAlerts || []);
-        setLayers(routeData.layers);
-        if (routeData.available_cities) {
-          setAvailableCities(routeData.available_cities);
-        }
-      }
-    } catch (err: any) {
-      setStreamStatus("OFFLINE");
-      setLastError(err?.name === "AbortError" ? "Timeout" : "Unreachable");
-      setShowSettings(true);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }, [apiUrl, currentLocation, destination, todoText, selectedCity]);
+    },
+    [currentLocation, destination, todoText, selectedCity]
+  );
 
   useEffect(() => {
-    fetchAlerts();
-    const timer = setInterval(fetchAlerts, 8000);
+    fetchAlerts(false);
+    const timer = setInterval(() => fetchAlerts(false), 6000);
     return () => clearInterval(timer);
   }, [fetchAlerts]);
 
@@ -269,9 +281,8 @@ export default function App() {
 
   const handleMapPin = (lat: number, lon: number) => {
     try {
-      Vibration.vibrate(45);
+      Vibration.vibrate(40);
     } catch {}
-    // Find nearest known area name for context if close
     let nearestLabel = "";
     let bestD = 999;
     Object.entries(DHAKA_PRESETS).forEach(([name, c]) => {
@@ -286,11 +297,7 @@ export default function App() {
         ? `Pin near ${nearestLabel}`
         : `Pinned (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
 
-    setDestination({
-      lat,
-      lon,
-      label: pinLabel,
-    });
+    setDestination({ lat, lon, label: pinLabel });
     setTodoText(pinLabel);
     setPinMode(false);
   };
@@ -332,8 +339,8 @@ export default function App() {
   }, [routeAlerts]);
 
   const routeAlertIds = useMemo(
-    () => new Set(routeAlerts.map((a) => a.cluster_id)),
-    [routeAlerts]
+    () => new Set(sortedRouteAlerts.map((a) => a.cluster_id)),
+    [sortedRouteAlerts]
   );
 
   const visibleMapAlerts = showAllOnMap ? allMapAlerts : sortedRouteAlerts;
@@ -361,15 +368,34 @@ export default function App() {
 
   const riskMeta = RISK_META[riskLevel] || RISK_META.CLEAR;
   const topRouteAlert = sortedRouteAlerts[0] || null;
-  const anomalyBannerText = topRouteAlert
-    ? `⛔ AVOID ${(topRouteAlert.affected_road || topRouteAlert.area).toUpperCase()}: ${formatEventLabel(topRouteAlert.event_type)} in ${topRouteAlert.area} — ${topRouteAlert.sample_headline}`
-    : `Hold anywhere on map to pin destination • Minimum road route is clear (${suppressedCount} city alerts filtered)`;
+  const advisoryText = topRouteAlert
+    ? `Avoid ${topRouteAlert.affected_road || topRouteAlert.area}: ${formatEventLabel(topRouteAlert.event_type)} — ${topRouteAlert.sample_headline}`
+    : `Clear route • ${suppressedCount} off-route threats filtered`;
+
+  const statusColor =
+    streamStatus === "LIVE"
+      ? "#34D399"
+      : streamStatus === "SYNCING"
+      ? "#38BDF8"
+      : "#FB7185";
+  const statusBorder =
+    streamStatus === "LIVE"
+      ? "rgba(16, 185, 129, 0.45)"
+      : streamStatus === "SYNCING"
+      ? "rgba(56, 189, 248, 0.45)"
+      : "rgba(244, 63, 94, 0.5)";
+  const statusBg =
+    streamStatus === "LIVE"
+      ? "rgba(16, 185, 129, 0.14)"
+      : streamStatus === "SYNCING"
+      ? "rgba(56, 189, 248, 0.14)"
+      : "rgba(244, 63, 94, 0.16)";
 
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
 
-      {/* Full-Screen OpenStreetMap */}
+      {/* Full-Screen Map Canvas */}
       <View style={StyleSheet.absoluteFill}>
         <OsmMapWebView
           currentLocation={currentLocation}
@@ -386,85 +412,56 @@ export default function App() {
         />
       </View>
 
-      {/* Top Floating Overlay */}
+      {/* Top Floating Navigation & Filter Card */}
       <SafeAreaView style={styles.topOverlay} pointerEvents="box-none">
         <View style={styles.topCard}>
+          {/* Header: Brand + Live Pill + Route ETA + Sync Button */}
           <View style={styles.headerRow}>
             <View style={styles.brandRow}>
-              <Ionicons name="shield-checkmark" size={18} color="#38BDF8" />
+              <View style={styles.brandIconBadge}>
+                <Ionicons name="shield-checkmark" size={15} color="#38BDF8" />
+              </View>
               <Text style={styles.brand}>BigWarn</Text>
               <View
                 style={[
                   styles.statusPill,
-                  {
-                    borderColor:
-                      streamStatus === "LIVE" ? "#10B981" : "#EF4444",
-                    backgroundColor:
-                      streamStatus === "LIVE"
-                        ? "rgba(16,185,129,0.14)"
-                        : "rgba(239,68,68,0.14)",
-                  },
+                  { borderColor: statusBorder, backgroundColor: statusBg },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: streamStatus === "LIVE" ? "#34D399" : "#F87171" },
-                  ]}
-                >
+                <View style={[styles.liveDot, { backgroundColor: statusColor }]} />
+                <Text style={[styles.statusText, { color: statusColor }]}>
                   {streamStatus}
-                  {lastError ? ` (${lastError})` : ""}
                 </Text>
               </View>
             </View>
 
             <View style={styles.headerActions}>
               {routeDistKm > 0 && (
-                <View style={styles.statusPill}>
-                  <Text style={[styles.statusText, { color: riskMeta.color }]}>
+                <View style={styles.etaPill}>
+                  <Text style={styles.etaText}>
                     {routeDistKm} km{routeDurationMin > 0 ? ` • ${routeDurationMin}m` : ""}
                   </Text>
                 </View>
               )}
               <TouchableOpacity
-                onPress={() => setShowSettings((s) => !s)}
-                style={styles.iconBtn}
+                onPress={() => fetchAlerts(true)}
+                disabled={isSyncing}
+                style={styles.syncBtn}
+                accessibilityLabel="Sync live feed"
               >
-                <Ionicons name="settings-outline" size={16} color="#CBD5E1" />
+                {isSyncing ? (
+                  <ActivityIndicator size="small" color="#38BDF8" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={14} color="#38BDF8" />
+                    <Text style={styles.syncText}>Sync</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
 
-          {showSettings && (
-            <View style={styles.settingsBar}>
-              <TextInput
-                style={styles.settingsInput}
-                value={apiUrl}
-                onChangeText={setApiUrl}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder={LOCAL_API_BASE_URL}
-                placeholderTextColor="#64748B"
-              />
-              <TouchableOpacity
-                onPress={() => setApiUrl(CLOUD_API_BASE_URL)}
-                style={styles.applyBtn}
-              >
-                <Text style={styles.applyText}>Cloud</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setApiUrl(LOCAL_API_BASE_URL)}
-                style={[styles.applyBtn, { backgroundColor: "#334155" }]}
-              >
-                <Text style={[styles.applyText, { color: "#E2E8F0" }]}>Local</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={fetchAlerts} style={styles.applyBtn}>
-                <Text style={styles.applyText}>Sync</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Destination Todo + Pin Bar */}
+          {/* Todo Destination Input + Map Pin Toggle */}
           <View style={styles.todoRow}>
             <View style={styles.inputWrap}>
               <Ionicons name="navigate-outline" size={15} color="#64748B" />
@@ -472,7 +469,7 @@ export default function App() {
                 style={styles.todoInput}
                 value={todoText}
                 onChangeText={setTodoText}
-                placeholder="Where to go? (e.g. Motijheel)"
+                placeholder="Where are you heading? (e.g. Motijheel)"
                 placeholderTextColor="#64748B"
               />
             </View>
@@ -481,7 +478,7 @@ export default function App() {
               style={[styles.pinBtn, pinMode && styles.pinBtnActive]}
             >
               <Ionicons
-                name={pinMode ? "locate" : "location"}
+                name={pinMode ? "locate" : "location-outline"}
                 size={14}
                 color="#F8FAFC"
               />
@@ -491,22 +488,22 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          {/* Dynamic Region / District Selector (All BD, Dhaka, Cumilla, etc.) */}
+          {/* Region / District Filter Chips */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.presetRow}
+            style={styles.chipScroll}
           >
             <TouchableOpacity
               onPress={() => handleSelectCity("ALL")}
               style={[
-                styles.presetChip,
+                styles.chip,
                 selectedCity === "ALL" && styles.cityChipActive,
               ]}
             >
               <Text
                 style={[
-                  styles.presetChipText,
+                  styles.chipText,
                   selectedCity === "ALL" && styles.cityChipTextActive,
                 ]}
               >
@@ -519,16 +516,10 @@ export default function App() {
                 <TouchableOpacity
                   key={c.city}
                   onPress={() => handleSelectCity(c.city, c.lat, c.lon)}
-                  style={[
-                    styles.presetChip,
-                    active && styles.cityChipActive,
-                  ]}
+                  style={[styles.chip, active && styles.cityChipActive]}
                 >
                   <Text
-                    style={[
-                      styles.presetChipText,
-                      active && styles.cityChipTextActive,
-                    ]}
+                    style={[styles.chipText, active && styles.cityChipTextActive]}
                   >
                     {c.city} ({c.alert_count})
                   </Text>
@@ -537,11 +528,11 @@ export default function App() {
             })}
           </ScrollView>
 
-          {/* Quick Destinations */}
+          {/* Quick Dhaka Route Destinations */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.presetRow}
+            style={styles.chipScroll}
           >
             {["Motijheel", "Mirpur-10", "Shahbagh", "Uttara", "Gulshan", "Farmgate"].map(
               (name) => {
@@ -550,15 +541,12 @@ export default function App() {
                   <TouchableOpacity
                     key={name}
                     onPress={() => handleSelectPresetDest(name)}
-                    style={[
-                      styles.presetChip,
-                      active && styles.presetChipActive,
-                    ]}
+                    style={[styles.chip, active && styles.destChipActive]}
                   >
                     <Text
                       style={[
-                        styles.presetChipText,
-                        active && styles.presetChipTextActive,
+                        styles.chipText,
+                        active && styles.destChipTextActive,
                       ]}
                     >
                       {name}
@@ -569,9 +557,29 @@ export default function App() {
             )}
           </ScrollView>
         </View>
+
+        {/* Sleek Route Advisory Strip */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => topRouteAlert && setSelectedArea(topRouteAlert.area)}
+          style={[
+            styles.advisoryPill,
+            { backgroundColor: riskMeta.bg, borderColor: riskMeta.border },
+          ]}
+        >
+          <View style={styles.advisoryHeader}>
+            <Ionicons name={riskMeta.icon} size={13} color={riskMeta.accent} />
+            <Text style={[styles.advisoryTitle, { color: riskMeta.color }]}>
+              {riskMeta.label}
+            </Text>
+          </View>
+          <Text style={styles.advisoryBody} numberOfLines={2}>
+            {advisoryText}
+          </Text>
+        </TouchableOpacity>
       </SafeAreaView>
 
-      {/* Bottom-Right Map Action Stack (My Location Icon + Map Controls) */}
+      {/* Bottom-Right Map Action Stack */}
       <View
         style={[
           styles.mapActionStack,
@@ -584,7 +592,7 @@ export default function App() {
           style={styles.locateBtn}
           accessibilityLabel="Center on my current location"
         >
-          <MaterialIcons name="my-location" size={22} color="#FFFFFF" />
+          <MaterialIcons name="my-location" size={21} color="#FFFFFF" />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -599,9 +607,9 @@ export default function App() {
           onPress={() => setShowAllOnMap((v) => !v)}
           style={styles.mapPillBtn}
         >
-          <Ionicons name="layers-outline" size={14} color="#CBD5E1" />
+          <Ionicons name="layers-outline" size={14} color="#94A3B8" />
           <Text style={styles.mapPillText}>
-            {showAllOnMap ? "All City" : "Route Only"}
+            {showAllOnMap ? "All Areas" : "Route Only"}
           </Text>
         </TouchableOpacity>
 
@@ -609,12 +617,12 @@ export default function App() {
           onPress={() => handleFocusArea("Mirpur-10")}
           style={styles.mapPillBtn}
         >
-          <Ionicons name="compass-outline" size={14} color="#F87171" />
+          <Ionicons name="compass-outline" size={14} color="#FB7185" />
           <Text style={styles.mapPillText}>Mirpur-10</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Collapsible Bottom Sheet */}
+      {/* Collapsible Bottom Route Alerts Sheet */}
       <View
         style={[
           styles.bottomSheet,
@@ -628,7 +636,7 @@ export default function App() {
           <View style={styles.handleBar} />
           <View style={styles.sheetHeaderRow}>
             <Text style={styles.feedTitle}>
-              {routeAlerts.length} ROAD THREATS ON ROUTE
+              {sortedRouteAlerts.length} ROUTE ALERTS
             </Text>
             <View style={styles.sheetRightRow}>
               <Text style={styles.suppressedLabel}>
@@ -652,7 +660,7 @@ export default function App() {
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <Text style={styles.emptyFeed}>
-                Your navigated roads look clear. No threats, firing, or blockades detected.
+                Your navigated route is clear. No strikes, firing, or blockades detected.
               </Text>
             }
             renderItem={({ item }) => {
@@ -681,12 +689,12 @@ export default function App() {
                       </View>
                     </View>
                     <Text style={styles.alertDist}>
-                      {item.distance_to_route_km} km from road
+                      {item.distance_to_route_km} km
                     </Text>
                   </View>
                   {item.affected_road ? (
                     <Text style={styles.avoidRoadText}>
-                      ⛔ Avoid Road: {item.affected_road}
+                      Avoid: {item.affected_road}
                     </Text>
                   ) : null}
                   <Text style={styles.alertHeadline} numberOfLines={2}>
@@ -724,7 +732,7 @@ export default function App() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#020617",
+    backgroundColor: "#0A0F1C",
   },
   topOverlay: {
     position: "absolute",
@@ -734,11 +742,15 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   topCard: {
-    backgroundColor: "rgba(9, 13, 22, 0.92)",
-    borderRadius: 16,
-    padding: 10,
+    backgroundColor: "rgba(15, 23, 42, 0.92)",
+    borderRadius: 18,
+    padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.65)",
+    borderColor: "rgba(148, 163, 184, 0.16)",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
     gap: 8,
   },
   headerRow: {
@@ -746,7 +758,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  brandIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "rgba(56, 189, 248, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   brand: {
     color: "#F8FAFC",
     fontSize: 17,
@@ -754,134 +776,115 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  statusText: { fontSize: 10, fontWeight: "800" },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  iconBtn: {
-    backgroundColor: "#0F172A",
+  etaPill: {
+    backgroundColor: "rgba(30, 41, 59, 0.85)",
     borderWidth: 1,
-    borderColor: "#1E293B",
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 9,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
-  iconBtnActive: {
-    borderColor: "#38BDF8",
-    backgroundColor: "rgba(56, 189, 248, 0.14)",
-  },
-  iconBtnText: { fontSize: 13 },
-  settingsBar: {
+  etaText: { color: "#E2E8F0", fontSize: 10, fontWeight: "700" },
+  syncBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-  },
-  settingsInput: {
-    flex: 1,
-    backgroundColor: "#1E293B",
-    color: "#F8FAFC",
-    borderRadius: 8,
+    gap: 4,
+    backgroundColor: "rgba(14, 165, 233, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.35)",
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    minWidth: 62,
+    justifyContent: "center",
   },
-  applyBtn: {
-    backgroundColor: "#0284C7",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  applyText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
-  todoRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  syncText: { color: "#BAE6FD", fontSize: 11, fontWeight: "700" },
+  todoRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   inputWrap: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 10,
+    backgroundColor: "rgba(30, 41, 59, 0.78)",
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.18)",
     paddingHorizontal: 10,
-    gap: 6,
+    gap: 7,
   },
   todoInput: {
     flex: 1,
     color: "#F8FAFC",
-    paddingVertical: 7,
+    paddingVertical: 8,
     fontSize: 13,
     fontWeight: "600",
   },
   pinBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#1E293B",
+    gap: 5,
+    backgroundColor: "rgba(30, 41, 59, 0.9)",
     borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    borderRadius: 10,
+    borderColor: "rgba(148, 163, 184, 0.25)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
   },
   pinBtnActive: {
     backgroundColor: "#0284C7",
     borderColor: "#38BDF8",
   },
   pinBtnText: { color: "#F8FAFC", fontSize: 12, fontWeight: "700" },
-  presetRow: { flexDirection: "row" },
-  presetChip: {
-    backgroundColor: "#0F172A",
+  chipScroll: { flexDirection: "row" },
+  chip: {
+    backgroundColor: "rgba(30, 41, 59, 0.72)",
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.16)",
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 4.5,
     borderRadius: 999,
     marginRight: 6,
   },
-  presetChipActive: {
-    backgroundColor: "rgba(16, 185, 129, 0.18)",
-    borderColor: "#10B981",
-  },
-  presetChipText: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
-  presetChipTextActive: { color: "#34D399", fontWeight: "800" },
+  chipText: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
   cityChipActive: {
-    backgroundColor: "rgba(56, 189, 248, 0.18)",
-    borderColor: "#38BDF8",
+    backgroundColor: "rgba(56, 189, 248, 0.16)",
+    borderColor: "rgba(56, 189, 248, 0.55)",
   },
-  cityChipTextActive: { color: "#7DD3FC", fontWeight: "800" },
-  anomalyBanner: {
+  cityChipTextActive: { color: "#BAE6FD", fontWeight: "800" },
+  destChipActive: {
+    backgroundColor: "rgba(16, 185, 129, 0.16)",
+    borderColor: "rgba(16, 185, 129, 0.55)",
+  },
+  destChipTextActive: { color: "#A7F3D0", fontWeight: "800" },
+  advisoryPill: {
     marginTop: 7,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  anomalyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 2,
-  },
-  anomalyTitleRow: {
+  advisoryHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    flex: 1,
+    marginBottom: 2,
   },
-  anomalyTitle: { fontSize: 11, fontWeight: "900", letterSpacing: 0.4 },
-  testNotifyBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  testNotifyText: { color: "#F8FAFC", fontSize: 10, fontWeight: "700" },
-  anomalyBody: { color: "#F1F5F9", fontSize: 11, lineHeight: 15 },
+  advisoryTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+  advisoryBody: { color: "#F1F5F9", fontSize: 11.5, lineHeight: 15.5 },
   mapActionStack: {
     position: "absolute",
     right: 12,
@@ -897,44 +900,38 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#0EA5E9",
+    backgroundColor: "#0284C7",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: "#E0F2FE",
     shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
     elevation: 6,
-  },
-  locateIcon: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 24,
   },
   mapPillBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(9, 13, 22, 0.9)",
+    backgroundColor: "rgba(15, 23, 42, 0.9)",
     borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "rgba(148, 163, 184, 0.22)",
+    paddingHorizontal: 11,
+    paddingVertical: 6.5,
     borderRadius: 999,
   },
-  mapPillText: { color: "#F8FAFC", fontSize: 11, fontWeight: "700" },
+  mapPillText: { color: "#E2E8F0", fontSize: 11, fontWeight: "700" },
   bottomSheet: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(9, 13, 22, 0.96)",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: "rgba(14, 21, 37, 0.96)",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderTopWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.18)",
     paddingHorizontal: 14,
     paddingBottom: Platform.OS === "ios" ? 22 : 12,
     zIndex: 20,
@@ -944,13 +941,13 @@ const styles = StyleSheet.create({
   },
   sheetHandleArea: {
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: 9,
   },
   handleBar: {
     width: 38,
     height: 4,
     borderRadius: 999,
-    backgroundColor: "#334155",
+    backgroundColor: "#475569",
     alignSelf: "center",
     marginBottom: 8,
   },
@@ -975,15 +972,15 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 13,
     textAlign: "center",
-    marginTop: 18,
+    marginTop: 20,
   },
   alertCard: {
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    padding: 11,
-    marginBottom: 8,
+    backgroundColor: "rgba(30, 41, 59, 0.55)",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 9,
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.15)",
     borderLeftWidth: 4,
   },
   alertTop: {
@@ -993,22 +990,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   alertTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  alertArea: { color: "#F8FAFC", fontSize: 13, fontWeight: "800" },
-  eventTag: { borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  alertArea: { color: "#F8FAFC", fontSize: 13.5, fontWeight: "800" },
+  eventTag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   eventTagText: { fontSize: 10, fontWeight: "800" },
   alertDist: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
   avoidRoadText: {
-    color: "#FCA5A5",
+    color: "#FDA4AF",
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "700",
     marginBottom: 3,
   },
-  alertHeadline: { color: "#CBD5E1", fontSize: 12, lineHeight: 17 },
+  alertHeadline: { color: "#E2E8F0", fontSize: 12.5, lineHeight: 17.5 },
   alertTimeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 4,
+    marginTop: 5,
     marginBottom: 2,
   },
   alertTimeText: {

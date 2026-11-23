@@ -374,9 +374,10 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       closePopupOnClick: true
     }).setView([23.7600, 90.3950], 12);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap'
+      subdomains: 'abcd',
+      attribution: '© OpenStreetMap © CARTO'
     }).addTo(map);
 
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
@@ -511,7 +512,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
         // Compact translucent ETA pill offset slightly from the route
         if (distKm) {
-          const etaLabel = '🚗 ' + distKm + ' km' + (durMin ? (' • ' + durMin + 'm') : '');
+          const etaLabel = distKm + ' km' + (durMin ? (' • ' + durMin + ' min') : '');
           const etaIdx = Math.floor(primaryPoly.length * 0.22);
           const etaLatLng = L.latLng(primaryPoly[etaIdx] || primaryPoly[0]);
           L.tooltip({
@@ -586,13 +587,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
         const popupHtml = '<div onclick="window.__selectArea(\\'' + areaTitle.replace(/'/g, "\\\\'") + '\\')">'
           + '<div class="avoid-header">'
-          +   '<span class="avoid-badge-text">⛔ AVOID • ' + evText + '</span>'
+          +   '<span class="avoid-badge-text">AVOID • ' + evText + '</span>'
           + '</div>'
-          + '<div class="avoid-road-name">📍 ' + roadTitle + ' (' + areaTitle + ')</div>'
+          + '<div class="avoid-road-name">' + roadTitle + ' (' + areaTitle + ')</div>'
           + (headText ? ('<div class="avoid-headline">' + headText + '</div>') : '')
           + '<div class="avoid-footer">'
           +   '<span>' + verText + '</span>'
-          +   '<span class="avoid-open-btn">Full News ›</span>'
+          +   '<span class="avoid-open-btn">Details ›</span>'
           + '</div>'
           + '</div>';
 

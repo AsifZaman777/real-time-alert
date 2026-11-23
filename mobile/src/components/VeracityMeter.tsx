@@ -24,7 +24,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
       ? "#10B981"
       : veracityPercent >= 60
       ? "#F59E0B"
-      : "#EF4444";
+      : "#F43F5E";
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
@@ -79,11 +79,11 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#0F172A",
-    borderRadius: 10,
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "rgba(148, 163, 184, 0.14)",
     marginTop: 8,
   },
   compactContainer: {

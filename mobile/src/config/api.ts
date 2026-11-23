@@ -80,16 +80,11 @@ function detectDevHost(): string | null {
   return null;
 }
 
-const envFeedUrl = (process.env.EXPO_PUBLIC_BIGWARN_FEED_URL || "").trim();
+const envFeedUrl = (process.env.EXPO_PUBLIC_BIGWARN_FEED_URL || "").trim().replace(/\/+$/, "");
 const detectedHost = detectDevHost();
 
-export const LOCAL_API_BASE_URL = detectedHost
-  ? `http://${detectedHost}:8765`
-  : "http://127.0.0.1:8765";
-
-export const CLOUD_API_BASE_URL = envFeedUrl;
-
-export const DEFAULT_API_BASE_URL = envFeedUrl || LOCAL_API_BASE_URL;
+export const API_BASE_URL =
+  envFeedUrl || (detectedHost ? `http://${detectedHost}:8765` : "http://127.0.0.1:8765");
 
 export const FEED_ACCESS_TOKEN = (process.env.EXPO_PUBLIC_BIGWARN_FEED_TOKEN || "").trim();
 
