@@ -283,13 +283,36 @@ class StreamService:
                 return d
         return self.today_str()
 
-    def get_map_alerts(self, day: str | None = None) -> dict[str, Any]:
+    @staticmethod
+    def _filter_by_city(alerts: list[dict[str, Any]], city: str | None) -> list[dict[str, Any]]:
+        if not city:
+            return alerts
+        c_norm = city.strip().lower()
+        if not c_norm or c_norm in ("all", "all bd", "bangladesh"):
+            return alerts
+        return [
+            a for a in alerts
+            if str(a.get("city") or "").strip().lower() == c_norm
+            or str(a.get("area") or "").strip().lower() == c_norm
+        ]
+
+    def get_available_cities(self, day: str | None = None) -> dict[str, Any]:
         snapshot = self.get_lakehouse_elt(day or "latest")
         return {
             "date": snapshot["date"],
+            "cities": snapshot.get("available_cities", []),
+        }
+
+    def get_map_alerts(self, day: str | None = None, city: str | None = None) -> dict[str, Any]:
+        snapshot = self.get_lakehouse_elt(day or "latest")
+        alerts = self._filter_by_city(snapshot["gold_alerts"], city)
+        return {
+            "date": snapshot["date"],
+            "city_filter": city or "ALL",
             "layers": snapshot["layers"],
-            "total_alerts": len(snapshot["gold_alerts"]),
-            "alerts": snapshot["gold_alerts"],
+            "available_cities": snapshot.get("available_cities", []),
+            "total_alerts": len(alerts),
+            "alerts": alerts,
             "area_metadata": snapshot["area_metadata"],
         }
 
@@ -303,10 +326,12 @@ class StreamService:
         todo: str = "",
         radius_km: float = 2.5,
         include_map: bool = False,
+        city: str | None = None,
     ) -> dict[str, Any]:
         snapshot = self.get_lakehouse_elt(day or "latest")
+        city_alerts = self._filter_by_city(snapshot["gold_alerts"], city)
         filtered = filter_alerts_for_route(
-            gold_alerts=snapshot["gold_alerts"],
+            gold_alerts=city_alerts,
             cur_lat=cur_lat,
             cur_lon=cur_lon,
             dest_lat=dest_lat,
@@ -316,11 +341,13 @@ class StreamService:
         )
         result = {
             "date": snapshot["date"],
+            "city_filter": city or "ALL",
             "layers": snapshot["layers"],
+            "available_cities": snapshot.get("available_cities", []),
             **filtered,
         }
         if include_map:
-            result["map_alerts"] = snapshot["gold_alerts"]
+            result["map_alerts"] = city_alerts
         return result
 
     def get_public_feed(
@@ -328,6 +355,7 @@ class StreamService:
         day: str | None = "latest",
         layer: str = "gold",
         area: str | None = None,
+        city: str | None = None,
         event_type: str | None = None,
         lang: str | None = None,
         recent_hours: float | None = None,
@@ -370,13 +398,18 @@ class StreamService:
             layer_norm = "gold"
             records = list(snapshot.get("gold_alerts", []))
 
-        # Apply optional filters (area, event_type, lang, recent_hours)
+        # Apply optional filters (area, city, event_type, lang, recent_hours)
         filtered: list[dict[str, Any]] = []
         area_q = area.strip().lower() if area else None
+        city_q = city.strip().lower() if city and city.strip().lower() not in ("all", "all bd", "bangladesh") else None
         ev_q = event_type.strip().lower() if event_type else None
         lang_q = lang.strip().lower() if lang else None
 
         for rec in records:
+            if city_q:
+                rec_city = str(rec.get("city") or rec.get("parent_city") or "").lower()
+                if city_q != rec_city:
+                    continue
             if area_q:
                 rec_area = str(rec.get("area") or rec.get("primary_area") or "").lower()
                 rec_locs = [str(x).lower() for x in (rec.get("locations") or [])]

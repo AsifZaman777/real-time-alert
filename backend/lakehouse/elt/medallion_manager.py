@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from backend.app.core.config import active_two_day_window, settings
-from backend.ingestion.enrichment.taxonomy import AREA_METADATA, extract_disruption_tags
+from backend.ingestion.enrichment.dynamic_geocoder import get_dynamic_cache_snapshot, resolve_area_metadata
+from backend.ingestion.enrichment.taxonomy import AREA_METADATA, TAG_VERSION, extract_disruption_tags
 from backend.lakehouse.elt.cloud_lakehouse import cloud_connector
 
 DHAKA_TZ = timezone(timedelta(hours=6))
@@ -108,11 +109,17 @@ class MedallionLakehouseManager:
             cache_k = item.get("url") or item.get("headline") or ""
             tags = self._tag_cache.get(cache_k) if cache_k else None
             if tags is None:
-                if "location_events" in item and isinstance(item.get("location_events"), dict):
+                if (
+                    item.get("tag_version", 1) >= TAG_VERSION
+                    and "location_events" in item
+                    and isinstance(item.get("location_events"), dict)
+                ):
                     tags = {
+                        "tag_version": item.get("tag_version", TAG_VERSION),
                         "event_types": item.get("event_types", []),
                         "locations": item.get("locations", []),
                         "location_events": item.get("location_events", {}),
+                        "parent_city": item.get("parent_city"),
                         "time_windows": item.get("time_windows", []),
                         "is_disruption": item.get("is_disruption", False),
                     }
@@ -132,12 +139,13 @@ class MedallionLakehouseManager:
 
             locs = item.get("locations") or []
             ev_types = item.get("event_types") or []
+            parent_city = item.get("parent_city")
             location_events: dict[str, list[str]] = item.get("location_events") or {
                 loc: ev_types for loc in locs
             }
 
             primary_loc = locs[0]
-            coords = AREA_METADATA.get(primary_loc, {"lat": 23.8103, "lon": 90.4125, "city": "Dhaka"})
+            coords = resolve_area_metadata(primary_loc, AREA_METADATA, fallback_city=parent_city)
 
             norm_ts, age_min, is_recent = _normalize_article_ts(
                 item.get("published"),
@@ -159,11 +167,9 @@ class MedallionLakehouseManager:
 
             # Group into Gold corroborated disruption clusters by exact (area -> bound_event_types)
             for loc, bound_events in location_events.items():
-                if loc not in AREA_METADATA:
-                    continue
+                c_meta = resolve_area_metadata(loc, AREA_METADATA, fallback_city=parent_city)
                 for ev in bound_events:
                     cluster_id = f"{day}:{loc}:{ev}"
-                    c_meta = AREA_METADATA[loc]
                     item_ts = norm_ts
                     cluster = event_clusters.setdefault(
                         cluster_id,
@@ -174,6 +180,7 @@ class MedallionLakehouseManager:
                             "city": c_meta["city"],
                             "lat": c_meta["lat"],
                             "lon": c_meta["lon"],
+                            "is_dynamic_area": bool(c_meta.get("dynamic")),
                             "event_type": ev,
                             "sources": set(),
                             "languages": set(),
@@ -252,6 +259,7 @@ class MedallionLakehouseManager:
                     "city": cl["city"],
                     "lat": cl["lat"],
                     "lon": cl["lon"],
+                    "is_dynamic_area": cl.get("is_dynamic_area", False),
                     "event_type": cl["event_type"],
                     "severity": severity,
                     "color": color,
@@ -293,6 +301,27 @@ class MedallionLakehouseManager:
         self._persist_snapshot_async(day, raw_items, silver_records, gold_alerts)
         d1, d2 = active_two_day_window(day)
 
+        city_counts: dict[str, dict[str, Any]] = {}
+        for g in gold_alerts:
+            c = str(g.get("city") or "Bangladesh").strip()
+            entry = city_counts.setdefault(
+                c,
+                {
+                    "city": c,
+                    "alert_count": 0,
+                    "lat": AREA_METADATA.get(c, {}).get("lat", g.get("lat", 23.8103)),
+                    "lon": AREA_METADATA.get(c, {}).get("lon", g.get("lon", 90.4125)),
+                },
+            )
+            entry["alert_count"] += 1
+        available_cities = sorted(city_counts.values(), key=lambda x: (-x["alert_count"], x["city"]))
+
+        combined_area_meta = {
+            k: {"lat": v["lat"], "lon": v["lon"], "city": v["city"]} for k, v in AREA_METADATA.items()
+        }
+        for k, v in get_dynamic_cache_snapshot().items():
+            combined_area_meta.setdefault(k, {"lat": v["lat"], "lon": v["lon"], "city": v["city"]})
+
         return {
             "date": day,
             "window": f"2d_cycle ({d1} to {d2})",
@@ -318,10 +347,9 @@ class MedallionLakehouseManager:
                     "confirmed_multi_source": sum(1 for g in gold_alerts if g["source_count"] >= 2),
                 },
             },
+            "available_cities": available_cities,
             "gold_alerts": gold_alerts,
-            "area_metadata": {
-                k: {"lat": v["lat"], "lon": v["lon"], "city": v["city"]} for k, v in AREA_METADATA.items()
-            },
+            "area_metadata": combined_area_meta,
         }
 
     def _format_txt_report(

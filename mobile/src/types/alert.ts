@@ -74,8 +74,17 @@ export interface LakehouseLayerStats {
   };
 }
 
+export interface CitySummary {
+  city: string;
+  alert_count: number;
+  lat: number;
+  lon: number;
+}
+
 export interface RouteAlertResponse {
   date: string;
+  city_filter?: string;
+  available_cities?: CitySummary[];
   layers: LakehouseLayerStats;
   route: {
     cur_lat: number;
@@ -103,6 +112,8 @@ export interface RouteAlertResponse {
 
 export interface MapAlertResponse {
   date: string;
+  city_filter?: string;
+  available_cities?: CitySummary[];
   layers: LakehouseLayerStats;
   total_alerts: number;
   alerts: GoldAlert[];

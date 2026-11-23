@@ -79,6 +79,7 @@ news-live-POC/logs/*.jsonl
 # 3. Node.js & Next.js 14 (Frontend / PWA)
 # ------------------------------------------------------------------------------
 node_modules/
+.npm-cache/
 frontend/node_modules/
 .pnp
 .pnp.js

@@ -23,6 +23,7 @@ import {
   LOCAL_API_BASE_URL,
 } from "./src/config/api";
 import {
+  CitySummary,
   Coordinates,
   GoldAlert,
   LakehouseLayerStats,
@@ -94,6 +95,8 @@ export default function App() {
   );
   const [suppressedCount, setSuppressedCount] = useState<number>(0);
   const [layers, setLayers] = useState<LakehouseLayerStats | null>(null);
+  const [selectedCity, setSelectedCity] = useState<string>("ALL");
+  const [availableCities, setAvailableCities] = useState<CitySummary[]>([]);
   const [streamStatus, setStreamStatus] = useState<string>("CONNECTING");
   const [lastError, setLastError] = useState<string | null>(null);
 
@@ -169,6 +172,7 @@ export default function App() {
         todo: todoText,
         radius_km: "2.5",
         include_map: "1",
+        city: selectedCity,
       });
 
       const headers: Record<string, string> = {};
@@ -203,6 +207,7 @@ export default function App() {
 
       const nextRouteAlerts = routeData.route_alerts || [];
       const pollSig = [
+        selectedCity,
         currentLocation.lat.toFixed(4),
         currentLocation.lon.toFixed(4),
         destination.lat.toFixed(4),
@@ -234,6 +239,9 @@ export default function App() {
         setSuppressedCount(routeData.suppressed_count || 0);
         setAllMapAlerts(mapAlerts || []);
         setLayers(routeData.layers);
+        if (routeData.available_cities) {
+          setAvailableCities(routeData.available_cities);
+        }
       }
     } catch (err: any) {
       setStreamStatus("OFFLINE");
@@ -242,7 +250,7 @@ export default function App() {
     } finally {
       clearTimeout(timeoutId);
     }
-  }, [apiUrl, currentLocation, destination, todoText]);
+  }, [apiUrl, currentLocation, destination, todoText, selectedCity]);
 
   useEffect(() => {
     fetchAlerts();
@@ -291,6 +299,20 @@ export default function App() {
     const preset = DHAKA_PRESETS[name];
     if (!preset) return;
     setFocusCoords({ lat: preset.lat, lon: preset.lon, zoom: 14, nonce: Date.now() });
+  };
+
+  const handleSelectCity = (city: string, lat?: number, lon?: number) => {
+    setSelectedCity(city);
+    if (city === "ALL") {
+      setFocusCoords({ lat: 23.78, lon: 90.38, zoom: 7, nonce: Date.now() });
+    } else if (lat && lon) {
+      setFocusCoords({
+        lat,
+        lon,
+        zoom: city.toLowerCase() === "dhaka" ? 12 : 11,
+        nonce: Date.now(),
+      });
+    }
   };
 
   const sortedRouteAlerts = useMemo(() => {
@@ -468,6 +490,52 @@ export default function App() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Dynamic Region / District Selector (All BD, Dhaka, Cumilla, etc.) */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.presetRow}
+          >
+            <TouchableOpacity
+              onPress={() => handleSelectCity("ALL")}
+              style={[
+                styles.presetChip,
+                selectedCity === "ALL" && styles.cityChipActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.presetChipText,
+                  selectedCity === "ALL" && styles.cityChipTextActive,
+                ]}
+              >
+                All BD ({availableCities.reduce((acc, c) => acc + c.alert_count, 0) || allMapAlerts.length})
+              </Text>
+            </TouchableOpacity>
+            {availableCities.map((c) => {
+              const active = selectedCity === c.city;
+              return (
+                <TouchableOpacity
+                  key={c.city}
+                  onPress={() => handleSelectCity(c.city, c.lat, c.lon)}
+                  style={[
+                    styles.presetChip,
+                    active && styles.cityChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      active && styles.cityChipTextActive,
+                    ]}
+                  >
+                    {c.city} ({c.alert_count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           {/* Quick Destinations */}
           <ScrollView
@@ -778,6 +846,11 @@ const styles = StyleSheet.create({
   },
   presetChipText: { color: "#94A3B8", fontSize: 11, fontWeight: "600" },
   presetChipTextActive: { color: "#34D399", fontWeight: "800" },
+  cityChipActive: {
+    backgroundColor: "rgba(56, 189, 248, 0.18)",
+    borderColor: "#38BDF8",
+  },
+  cityChipTextActive: { color: "#7DD3FC", fontWeight: "800" },
   anomalyBanner: {
     marginTop: 7,
     borderRadius: 12,

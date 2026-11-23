@@ -1,6 +1,6 @@
 """
 Core configuration & constants for the BigWarn Backend.
-Centralizes paths, timezone settings, Kafka topics, Cloudflare R2 archive,
+Centralizes paths, timezone settings, Kafka topics, Cloudflare R2 / Azure ADLS archive,
 and Lakehouse directories.
 """
 from __future__ import annotations
@@ -52,6 +52,19 @@ def now_dhaka() -> datetime:
     return datetime.now(DHAKA)
 
 
+def active_two_day_window(ref_day: str | None = None) -> tuple[str, str]:
+    """Returns the rolling 2-day (48h) window (yesterday, today) in YYYY-MM-DD."""
+    if ref_day:
+        try:
+            end_dt = datetime.strptime(ref_day, "%Y-%m-%d").replace(tzinfo=DHAKA)
+        except ValueError:
+            end_dt = now_dhaka()
+    else:
+        end_dt = now_dhaka()
+    start_dt = end_dt - timedelta(days=1)
+    return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "BigWarn Real-Time Disruption Alert Backend"
@@ -65,14 +78,31 @@ class Settings:
     logs_dir: Path = field(default_factory=lambda: LOGS_DIR)
     seen_urls_path: Path = field(default_factory=lambda: DATA_DIR / "seen_urls.json")
 
-    # 48-hour rolling server retention & Cloudflare R2 archival
+    # 48-hour rolling server retention & Cloudflare R2 / Cloud Lakehouse config
     log_retention_hours: int = int(os.getenv("BIGWARN_LOG_RETENTION_HOURS", "48"))
     cloud_provider: str = os.getenv("BIGWARN_CLOUD_PROVIDER", "s3_r2")
+    cloud_lakehouse_provider: str = os.getenv("BIGWARN_CLOUD_PROVIDER", "s3_r2")
+
+    # S3 / Cloudflare R2 settings
+    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    s3_region: str = os.getenv("AWS_DEFAULT_REGION", "auto")
+    s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
+    s3_bucket: str = os.getenv("S3_LAKEHOUSE_BUCKET", "bigwarn")
+
+    # Aliases used by R2ArchiveService
     r2_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", "")
     r2_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     r2_region: str = os.getenv("AWS_DEFAULT_REGION", "auto")
     r2_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
     r2_bucket: str = os.getenv("S3_LAKEHOUSE_BUCKET", "bigwarn")
+
+    # Optional Azure ADLS Gen2 / Blob settings
+    azure_storage_sas_url: str = os.getenv("AZURE_STORAGE_SAS_URL", "")
+    azure_storage_connection_string: str = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
+    azure_storage_account: str = os.getenv("AZURE_STORAGE_ACCOUNT", "")
+    azure_storage_key: str = os.getenv("AZURE_STORAGE_KEY", "")
+    azure_container: str = os.getenv("AZURE_CONTAINER", "bigwarn-lakehouse")
 
     # Kafka configuration (Stage 2 Buffering)
     kafka_enabled: bool = os.getenv("BIGWARN_KAFKA_ENABLED", "false").lower() == "true"

@@ -98,11 +98,17 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                 if day not in ("latest", "48h") and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
                 self._json(service.get_lakehouse_elt(day))
+            elif path in ("/api/cities", "/api/v1/cities"):
+                day = (q.get("date") or ["latest"])[0]
+                if day not in ("latest", "48h") and not DAY_RE.match(day):
+                    return self._send(400, b"bad date", "text/plain")
+                self._json(service.get_available_cities(day))
             elif path in ("/api/alerts/map", "/api/v1/alerts/map"):
                 day = (q.get("date") or ["latest"])[0]
                 if day not in ("latest", "48h") and not DAY_RE.match(day):
                     return self._send(400, b"bad date", "text/plain")
-                self._json(service.get_map_alerts(day))
+                city = (q.get("city") or [None])[0]
+                self._json(service.get_map_alerts(day, city=city))
             elif path in ("/api/alerts/route", "/api/v1/alerts/route"):
                 day = (q.get("date") or ["latest"])[0]
                 if day not in ("latest", "48h") and not DAY_RE.match(day):
@@ -117,6 +123,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                     return self._send(400, b"bad coordinates", "text/plain")
                 todo = (q.get("todo") or [""])[0]
                 include_map = (q.get("include_map") or ["0"])[0] in ("1", "true", "yes")
+                city = (q.get("city") or [None])[0]
                 self._json(
                     service.get_route_alerts(
                         day=day,
@@ -127,6 +134,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         todo=todo,
                         radius_km=radius_km,
                         include_map=include_map,
+                        city=city,
                     )
                 )
             elif path in ("/api/archive/48h", "/api/v1/archive/48h"):
@@ -165,6 +173,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
             layer = (q.get("layer") or [default_layer])[0]
             fmt = (q.get("format") or [default_format])[0].lower().strip()
             area = (q.get("area") or [None])[0]
+            city = (q.get("city") or [None])[0]
             event_type = (q.get("event_type") or [None])[0]
             lang = (q.get("lang") or [None])[0]
             try:
@@ -189,6 +198,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                             day=day,
                             layer=layer,
                             area=area,
+                            city=city,
                             event_type=event_type,
                             lang=lang,
                             recent_hours=recent_hours,
@@ -215,6 +225,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                 day=day,
                 layer=layer,
                 area=area,
+                city=city,
                 event_type=event_type,
                 lang=lang,
                 recent_hours=recent_hours,
@@ -233,6 +244,7 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
 
         def _handle_sse_alerts(self, q: dict[str, list[str]]) -> None:
             day = (q.get("date") or ["latest"])[0]
+            city = (q.get("city") or [None])[0]
             has_route = "cur_lat" in q and "cur_lon" in q and "dest_lat" in q and "dest_lon" in q
             try:
                 cur_lat = float((q.get("cur_lat") or ["23.7461"])[0])
@@ -255,12 +267,10 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
             try:
                 for _ in range(120):
                     if has_route:
-                        payload = service.get_route_alerts(day, cur_lat, cur_lon, dest_lat, dest_lon, todo, radius_km)
-                        map_data = service.get_map_alerts(day)
-                        payload["map_alerts"] = map_data["alerts"]
+                        payload = service.get_route_alerts(day, cur_lat, cur_lon, dest_lat, dest_lon, todo, radius_km, include_map=True, city=city)
                         event_name = "route_alerts"
                     else:
-                        payload = service.get_map_alerts(day)
+                        payload = service.get_map_alerts(day, city=city)
                         event_name = "map_alerts"
 
                     sig = (payload.get("date"), payload.get("layers", {}).get("bronze", {}).get("record_count"))
