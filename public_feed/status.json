@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-11-18T14:51:51.185945+06:00",
-  "date": "2026-11-18",
-  "active_3h_gold_clusters": 38,
-  "recent_6h_silver_articles": 272,
+  "generated_at": "2026-11-24T01:29:20.451901+06:00",
+  "date": "2026-11-20",
+  "active_3h_gold_clusters": 0,
+  "recent_6h_silver_articles": 0,
   "cloud_lakehouse": {
-    "provider": "local_medallion",
-    "cloud_enabled": false,
-    "bronze_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\bronze",
-    "silver_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\silver",
-    "gold_uri": "F:\\real-time-alert\\backend\\lakehouse\\storage\\gold",
+    "provider": "s3_r2",
+    "cloud_enabled": true,
+    "bronze_uri": "s3a://bigwarn/bronze",
+    "silver_uri": "s3a://bigwarn/silver",
+    "gold_uri": "s3a://bigwarn/gold",
     "last_sync_at": null,
-    "sync_status": "LOCAL_CACHE_ACTIVE",
-    "last_error": null
+    "sync_status": "CLOUD_SYNC_ERROR",
+    "last_error": "No module named 'boto3'"
   },
   "endpoints": {
     "gold_json": "gold_alerts_latest.json",

@@ -79,11 +79,11 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    backgroundColor: "#F8FAFC",
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.14)",
+    borderColor: "#E2E8F0",
     marginTop: 8,
   },
   compactContainer: {
@@ -102,20 +102,21 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   label: {
-    color: "#94A3B8",
+    color: "#64748B",
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.8,
+    fontWeight: "800",
+    letterSpacing: 0.7,
   },
   badge: {
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    backgroundColor: "#FFFFFF",
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   scoreRow: {
     flexDirection: "row",
@@ -124,11 +125,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   percentText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
   },
   summaryText: {
-    color: "#E2E8F0",
+    color: "#334155",
     fontSize: 12,
     fontWeight: "600",
     flex: 1,
@@ -138,8 +139,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   track: {
-    height: 7,
-    backgroundColor: "#1E293B",
+    height: 6,
+    backgroundColor: "#E2E8F0",
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -154,14 +155,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sourceChip: {
-    backgroundColor: "#1E293B",
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+    borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   sourceChipText: {
-    color: "#CBD5E1",
+    color: "#1D4ED8",
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "600",
   },
 });

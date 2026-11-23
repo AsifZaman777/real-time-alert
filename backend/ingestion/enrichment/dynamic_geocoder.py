@@ -130,45 +130,29 @@ def resolve_area_metadata(
     fallback_city: str | None = None,
 ) -> dict[str, Any]:
     """
-    Resolves coordinates and district/city for ANY Bangladesh location:
-    1. Seed gazetteer (Dhaka neighborhoods + 64 districts + major upazilas)
-    2. Persistent dynamic OSM Nominatim cache
-    3. Immediate parent-city fallback + non-blocking Nominatim lookup for next refresh
+    Resolves coordinates and district/city for verified Bangladesh locations in the seed gazetteer.
+    Rejects non-gazetteer random words so only actual verified places appear on the map.
     """
     if area_name in seed_metadata:
         m = seed_metadata[area_name]
         return {"lat": m["lat"], "lon": m["lon"], "city": m["city"], "dynamic": False}
 
-    _ensure_loaded()
-    cached = _dynamic_cache.get(area_name)
-    if cached:
-        return cached
-
-    # Queue background OSM Nominatim lookup so exact village/area coords are cached cleanly
-    if area_name and area_name not in _queued_keys and len(_queued_keys) < 5000:
-        _queued_keys.add(area_name)
-        _start_worker_if_needed()
-        _pending_queue.put((area_name, fallback_city))
-
-    # Immediate deterministic fallback (inherit parent district/city centroid if known)
     if fallback_city and fallback_city in seed_metadata:
         base = seed_metadata[fallback_city]
         return {
             "lat": base["lat"],
             "lon": base["lon"],
             "city": base["city"],
-            "dynamic": True,
+            "dynamic": False,
         }
 
     return {
         "lat": 23.8103,
         "lon": 90.4125,
         "city": fallback_city or "Bangladesh",
-        "dynamic": True,
+        "dynamic": False,
     }
 
 
 def get_dynamic_cache_snapshot() -> dict[str, dict[str, Any]]:
-    _ensure_loaded()
-    with _lock:
-        return dict(_dynamic_cache)
+    return {}

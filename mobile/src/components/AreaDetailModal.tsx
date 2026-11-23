@@ -1,7 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
+  Animated,
   Linking,
   Modal,
+  PanResponder,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,6 +29,52 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
   alerts,
   onClose,
 }) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(0);
+    }
+  }, [visible, areaName, translateY]);
+
+  const dismissWithAnimation = () => {
+    Animated.timing(translateY, {
+      toValue: 520,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose();
+    });
+  };
+
+  // Drag handle gesture: drag downwards to close ("drag to off")
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5,
+        onPanResponderMove: (_, g) => {
+          if (g.dy > 0) {
+            translateY.setValue(g.dy);
+          } else {
+            translateY.setValue(g.dy * 0.18);
+          }
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dy > 85 || g.vy > 0.55) {
+            dismissWithAnimation();
+          } else {
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 5,
+            }).start();
+          }
+        },
+      }),
+    [onClose]
+  );
+
   // Sort clusters and their articles so the most recent news is always at the top
   const sortedAlerts = useMemo(() => {
     return [...alerts]
@@ -52,16 +101,33 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
   if (!areaName) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismissWithAnimation} />
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              transform: [{ translateY }],
+            },
+          ]}
+        >
+          {/* Draggable Top Handle Area (Drag down to close) */}
+          <View {...panResponder.panHandlers} style={styles.dragHandleArea}>
+            <View style={styles.dragHandlePill} />
+            <Text style={styles.dragHint}>Drag down to close</Text>
+          </View>
+
           <View style={styles.header}>
-            <View>
+            <View style={styles.headerTextCol}>
               <Text style={styles.kicker}>AREA THREAT & DISRUPTION INTEL</Text>
-              <Text style={styles.title}>{areaName}</Text>
+              <View style={styles.titleRow}>
+                <Ionicons name="location" size={20} color="#EA4335" />
+                <Text style={styles.title}>{areaName}</Text>
+              </View>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={18} color="#E2E8F0" />
+            <TouchableOpacity onPress={dismissWithAnimation} style={styles.closeBtn}>
+              <Ionicons name="close" size={18} color="#475569" />
             </TouchableOpacity>
           </View>
 
@@ -86,13 +152,16 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                         style={[
                           styles.eventPill,
                           {
-                            backgroundColor: isRed
-                              ? "rgba(239,68,68,0.18)"
-                              : "rgba(245,158,11,0.18)",
+                            backgroundColor: isRed ? "#FEE2E2" : "#FEF3C7",
                           },
                         ]}
                       >
-                        <Text style={[styles.eventPillText, { color: cluster.color }]}>
+                        <Text
+                          style={[
+                            styles.eventPillText,
+                            { color: isRed ? "#DC2626" : "#D97706" },
+                          ]}
+                        >
                           {formatEventLabel(cluster.event_type).toUpperCase()} •{" "}
                           {cluster.severity}
                         </Text>
@@ -106,7 +175,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
 
                     {cluster._newestTs ? (
                       <View style={styles.clusterTimeRow}>
-                        <Ionicons name="time-outline" size={12} color="#38BDF8" />
+                        <Ionicons name="time-outline" size={12} color="#1A73E8" />
                         <Text style={styles.clusterTimeText}>
                           Latest report: {formatNewsTimestamp(cluster._newestTs)}
                         </Text>
@@ -153,7 +222,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                           <Ionicons
                             name="calendar-outline"
                             size={11}
-                            color="#94A3B8"
+                            color="#64748B"
                           />
                           <Text style={styles.publishTimeText}>
                             {formatNewsTimestamp(art.published, art.ingested_at)}
@@ -166,7 +235,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
               })
             )}
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -175,19 +244,39 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(5, 8, 18, 0.78)",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#0E1525",
+    backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "84%",
     paddingHorizontal: 16,
-    paddingTop: 18,
+    paddingTop: 6,
     paddingBottom: 24,
     borderTopWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.2)",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  dragHandleArea: {
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  dragHandlePill: {
+    width: 42,
+    height: 4.5,
+    borderRadius: 999,
+    backgroundColor: "#CBD5E1",
+    marginBottom: 4,
+  },
+  dragHint: {
+    color: "#94A3B8",
+    fontSize: 10,
+    fontWeight: "600",
   },
   header: {
     flexDirection: "row",
@@ -195,38 +284,53 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
+  headerTextCol: {
+    flex: 1,
+  },
   kicker: {
-    color: "#38BDF8",
+    color: "#1A73E8",
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 2,
   },
   title: {
-    color: "#F8FAFC",
-    fontSize: 22,
+    color: "#0F172A",
+    fontSize: 21,
     fontWeight: "800",
   },
   closeBtn: {
-    backgroundColor: "#1E293B",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
   },
   scroll: {
     flexGrow: 0,
   },
   empty: {
-    color: "#94A3B8",
+    color: "#64748B",
     textAlign: "center",
     paddingVertical: 24,
   },
   clusterCard: {
-    backgroundColor: "#111827",
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#1F2937",
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   clusterHeader: {
     flexDirection: "row",
@@ -241,7 +345,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   clusterTimeText: {
-    color: "#7DD3FC",
+    color: "#1A73E8",
     fontSize: 11,
     fontWeight: "600",
   },
@@ -255,7 +359,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   routeBadge: {
-    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    backgroundColor: "#FEE2E2",
     borderColor: "#EF4444",
     borderWidth: 1,
     borderRadius: 6,
@@ -263,12 +367,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   routeBadgeText: {
-    color: "#FCA5A5",
+    color: "#DC2626",
     fontSize: 10,
     fontWeight: "800",
   },
   headlinesTitle: {
-    color: "#94A3B8",
+    color: "#64748B",
     fontSize: 11,
     fontWeight: "700",
     marginTop: 10,
@@ -276,12 +380,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   articleRow: {
-    backgroundColor: "#0F172A",
-    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
     padding: 10,
     marginBottom: 6,
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "#E2E8F0",
   },
   articleMeta: {
     flexDirection: "row",
@@ -295,21 +399,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   articleSource: {
-    color: "#38BDF8",
+    color: "#1A73E8",
     fontSize: 11,
     fontWeight: "700",
   },
   articleLang: {
-    color: "#64748B",
+    color: "#475569",
     fontSize: 10,
     fontWeight: "700",
-    backgroundColor: "#1E293B",
+    backgroundColor: "#E2E8F0",
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
   },
   latestBadge: {
-    backgroundColor: "rgba(16, 185, 129, 0.18)",
+    backgroundColor: "#DCFCE7",
     borderColor: "#10B981",
     borderWidth: 0.8,
     borderRadius: 4,
@@ -317,12 +421,12 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   latestBadgeText: {
-    color: "#34D399",
+    color: "#15803D",
     fontSize: 9,
     fontWeight: "800",
   },
   articleHeadline: {
-    color: "#F1F5F9",
+    color: "#0F172A",
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
@@ -334,7 +438,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   publishTimeText: {
-    color: "#94A3B8",
+    color: "#64748B",
     fontSize: 11,
     fontWeight: "500",
   },

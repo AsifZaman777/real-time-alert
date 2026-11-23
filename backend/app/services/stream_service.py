@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 from backend.app.core.config import BACKEND_ROOT, PROJECT_ROOT, active_two_day_window, now_dhaka, settings
 from backend.app.services.route_service import filter_alerts_for_route
-from backend.ingestion.enrichment.taxonomy import extract_disruption_tags
+from backend.ingestion.enrichment.taxonomy import AREA_METADATA, TAG_VERSION, extract_disruption_tags
 from backend.ingestion.sources.registry import get_all_sources_metadata
 from backend.lakehouse.elt.cloud_lakehouse import cloud_connector
 from backend.lakehouse.elt.medallion_manager import MedallionLakehouseManager
@@ -148,15 +148,26 @@ class StreamService:
                         continue
                     try:
                         obj = json.loads(line)
-                        if enrich_legacy and obj and ("event_types" not in obj or "locations" not in obj):
-                            tags = extract_disruption_tags(
-                                obj.get("headline", ""),
-                                obj.get("description", ""),
-                                obj.get("body", ""),
+                        if obj:
+                            raw_locs = obj.get("locations") or []
+                            has_invalid_loc = any(loc not in AREA_METADATA for loc in raw_locs)
+                            needs_retag = (
+                                "event_types" not in obj
+                                or "locations" not in obj
+                                or obj.get("tag_version", 1) < TAG_VERSION
+                                or has_invalid_loc
                             )
-                            obj.update(tags)
-                            obj.setdefault("lang", "en")
-                            obj.setdefault("word_count", len((obj.get("body") or obj.get("description") or "").split()))
+                            if (enrich_legacy or has_invalid_loc) and needs_retag:
+                                tags = extract_disruption_tags(
+                                    obj.get("headline", ""),
+                                    obj.get("description", ""),
+                                    obj.get("body", ""),
+                                )
+                                obj.update(tags)
+                                obj.setdefault("lang", "en")
+                                obj.setdefault("word_count", len((obj.get("body") or obj.get("description") or "").split()))
+                            elif raw_locs:
+                                obj["locations"] = [loc for loc in raw_locs if loc in AREA_METADATA]
                         items.append(obj)
                     except ValueError:
                         items.append(None)

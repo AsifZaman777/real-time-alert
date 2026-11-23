@@ -1,0 +1,8 @@
+=== BigWarn 48-Hour Medallion Archive (2026-11-24) | Generated: 2026-11-24T01:29:16.867517+06:00 ===
+Summary -> GOLD Clusters: 0 | SILVER Disruptions: 0 | BRONZE Raw Articles: 0
+
+================ [1/3] GOLD: CORROBORATED AREA ALERTS ================
+
+================ [2/3] SILVER: ENRICHED DISRUPTIONS ================
+
+================ [3/3] BRONZE: RAW STREAM ARTICLES ================

@@ -91,7 +91,9 @@ function enrichArticle(art: NewsArticle): NewsArticle {
   }
 
   const locations: string[] =
-    art.locations && art.locations.length > 0 ? [...art.locations] : [];
+    art.locations && art.locations.length > 0
+      ? art.locations.filter((loc) => /^[A-Za-z0-9\s.'-]+$/.test(loc) && loc !== "Dhaka (General)")
+      : [];
   if (locations.length === 0) {
     Object.keys(AREA_COORDS).forEach((area) => {
       if (AREA_COORDS[area].pattern.test(text)) locations.push(area);

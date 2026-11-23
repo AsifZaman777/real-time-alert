@@ -19,7 +19,7 @@ import html
 import re
 import unicodedata
 
-TAG_VERSION = 2
+TAG_VERSION = 3
 
 # High-Threat & Public Safety Event Taxonomy
 EVENT_TAXONOMY: dict[str, re.Pattern] = {
@@ -132,7 +132,7 @@ AREA_METADATA: dict[str, dict] = {
     "Taltola (Mirpur)": {"lat": 23.7848, "lon": 90.3768, "city": "Dhaka", "pattern": r"\bMirpur\s+Taltola\b|মিরপুর\s+তালতলা"},
     "Ibrahimpur": {"lat": 23.7944, "lon": 90.3862, "city": "Dhaka", "pattern": r"\bIbrahimpur\b|ইব্রাহিমপুর"},
     "Kachukhet": {"lat": 23.7988, "lon": 90.3886, "city": "Dhaka", "pattern": r"\bKachukhet\b|কচুক্ষেত"},
-    "Kalshi": {"lat": 23.8221, "lon": 90.3774, "city": "Dhaka", "pattern": r"\bKalshi\b|কালশী"},
+    "Kalshi": {"lat": 23.8221, "lon": 90.3774, "city": "Dhaka", "pattern": r"\b(?:Kalshi|ECB\s+Chattar|Matikata)\b|কালশী|ইসিবি\s*চত্বর|মাটিকাটা"},
     "Mirpur DOHS": {"lat": 23.8358, "lon": 90.3694, "city": "Dhaka", "pattern": r"\bMirpur\s+DOHS\b|মিরপুর\s*ডিওএইচএস"},
     "Shah Ali": {"lat": 23.8002, "lon": 90.3485, "city": "Dhaka", "pattern": r"\bShah\s*Ali\b|শাহ\s*আলী|শাহআলী"},
     "Darus Salam": {"lat": 23.7865, "lon": 90.3522, "city": "Dhaka", "pattern": r"\bDarus\s*Salam\b|দারুস\s*সালাম"},
@@ -158,7 +158,7 @@ AREA_METADATA: dict[str, dict] = {
     "Nilkhet": {"lat": 23.7319, "lon": 90.3869, "city": "Dhaka", "pattern": r"\bNilkhet\b|নীলক্ষেত"},
     "Azimpur": {"lat": 23.7275, "lon": 90.3856, "city": "Dhaka", "pattern": r"\b(?:Azimpur|Palashi)\b|আজিমপুর|পলাশী"},
     "Chankharpul": {"lat": 23.7248, "lon": 90.3992, "city": "Dhaka", "pattern": r"\b(?:Chankharpul|Bakshibazar)\b|চানখাঁরপুল|বকশীবাজার"},
-    "Shahbagh": {"lat": 23.7389, "lon": 90.3948, "city": "Dhaka", "pattern": r"\b(?:Shahbagh?|TSC|Dhaka\s+University|DU\s+campus|Matsya\s+Bhaban)\b|শাহবাগ|টিএসসি|ঢাবি|ঢাকা\s*বিশ্ববিদ্যালয়|মৎস্য\s*ভবন"},
+    "Shahbagh": {"lat": 23.7389, "lon": 90.3948, "city": "Dhaka", "pattern": r"\b(?:Shahbagh?|TSC|Dhaka\s+University|DU\s+campus|Matsya\s+Bhaban|Doyel\s+Chattar|Raju\s+Sculpture)\b|শাহবাগ|টিএসসি|ঢাবি|ঢাকা\s*বিশ্ববিদ্যালয়|মৎস্য\s*ভবন|দোয়েল\s*চত্বর|রাজু\s*ভাস্কর্য"},
     "Press Club": {"lat": 23.7294, "lon": 90.4084, "city": "Dhaka", "pattern": r"\b(?:National\s+Press\s+Club|Topkhana|Secretariat|High\s+Court)\b|প্রেস\s*ক্লাব|তোপখানা|সচিবালয়|হাইকোর্ট"},
     "Paltan": {"lat": 23.7336, "lon": 90.4119, "city": "Dhaka", "pattern": r"\b(?:Paltan|Naya\s*Paltan|Purana\s*Paltan|Bijoynagar)\b|পল্টন|নয়াপল্টন|নয়াপল্টন|পুরানা\s*পল্টন|বিজয়নগর"},
     "Kakrail": {"lat": 23.7376, "lon": 90.4068, "city": "Dhaka", "pattern": r"\b(?:Kakrail|Ramna)\b|কাকরাইল|রমনা"},
@@ -182,13 +182,13 @@ AREA_METADATA: dict[str, dict] = {
     "Karwan Bazar": {"lat": 23.7516, "lon": 90.3929, "city": "Dhaka", "pattern": r"\b(?:Karwan\s*Bazar|Kawran\s*Bazar)\b|কারওয়ান\s*বাজার|কারওয়ান\s*বাজার"},
     "Farmgate": {"lat": 23.7561, "lon": 90.3872, "city": "Dhaka", "pattern": r"\b(?:Farmgate|Khamarbari|Bijoy\s+Sarani|Manik\s+Mia)\b|ফার্মগেট|খামারবাড়ি|বিজয়\s*সরণি|মানিক\s*মিয়া"},
     "Khilkhet": {"lat": 23.8305, "lon": 90.4192, "city": "Dhaka", "pattern": r"\b(?:Khilkhet|Nikunja)\b|খিলক্ষেত|নিকুঞ্জ"},
-    "Kuril": {"lat": 23.8213, "lon": 90.4178, "city": "Dhaka", "pattern": r"\b(?:Kuril|Kuratoli|Joar\s+Sahara)\b|কুড়িল|কুড়িল|কুড়াতলী|জোয়ারসাহারা"},
+    "Kuril": {"lat": 23.8213, "lon": 90.4178, "city": "Dhaka", "pattern": r"\b(?:Kuril|Kuratoli|Joar\s+Sahara|300\s+Feet|Purbachal)\b|কুড়িল|কুড়িল|কুড়াতলী|জোয়ারসাহারা|৩০০\s*ফিট|পূর্বাচল"},
     "Airport": {"lat": 23.8513, "lon": 90.4089, "city": "Dhaka", "pattern": r"\b(?:Shahjalal\s+International\s+Airport|Airport\s+Road|Bimanbandar|Kawla)\b|বিমানবন্দর|কাওলা"},
     "Uttara": {"lat": 23.8759, "lon": 90.3795, "city": "Dhaka", "pattern": r"\b(?:Uttara|Diabari|Azampur|House\s+Building|Jasimuddin|Kamarpara)\b|উত্তরা|দিয়াবাড়ী|দিয়াবাড়ি|আজমপুর|হাউজ\s*বিল্ডিং|জসীমউদ্দীন|কামারপাড়া"},
     "Abdullahpur": {"lat": 23.8805, "lon": 90.4002, "city": "Dhaka", "pattern": r"\bAbdullahpur\b|আব্দুল্লাহপুর"},
     "Dakshinkhan": {"lat": 23.8592, "lon": 90.4178, "city": "Dhaka", "pattern": r"\b(?:Dakshinkhan|Ashkona|Uttarkhan|Turag)\b|দক্ষিণখান|আশকোনা|উত্তরখান|তুরাগ"},
     "Khilgaon": {"lat": 23.7508, "lon": 90.4275, "city": "Dhaka", "pattern": r"\b(?:Khilgaon|Bashabo|Sabujbagh|Goran)\b|খিলগাঁও|বাসাবো|সবুজবাগ|গোড়ান"},
-    "Motijheel": {"lat": 23.7330, "lon": 90.4172, "city": "Dhaka", "pattern": r"\b(?:Motijheel|Dilkusha|Arambagh|Fakirapool|Kamalapur|Rajarbagh|Shahjahanpur)\b|মতিঝিল|দিলকুশা|আরামবাগ|ফকিরাপুল|কমলাপুর|রাজারবাগ|শাহজাহানপুর"},
+    "Motijheel": {"lat": 23.7330, "lon": 90.4172, "city": "Dhaka", "pattern": r"\b(?:Motijheel|Shapla\s+Chattar|Dilkusha|Arambagh|Fakirapool|Kamalapur|Rajarbagh|Shahjahanpur)\b|মতিঝিল|শাপলা\s*চত্বর|শাপলা\s*চত্বরে|দিলকুশা|আরামবাগ|ফকিরাপুল|কমলাপুর|রাজারবাগ|শাহজাহানপুর"},
     "Mugda": {"lat": 23.7308, "lon": 90.4321, "city": "Dhaka", "pattern": r"\b(?:Mugda|Maniknagar|Gopibagh)\b|মুগদা|মানিকনগর|গোপীবাগ"},
     "Gulistan": {"lat": 23.7248, "lon": 90.4126, "city": "Dhaka", "pattern": r"\b(?:Gulistan|Zero\s+Point|Bangabandhu\s+Avenue)\b|গুলিস্তান|জিরো\s*পয়েন্ট"},
     "Sayedabad": {"lat": 23.7145, "lon": 90.4281, "city": "Dhaka", "pattern": r"\bSayedabad\b|সায়েদাবাদ|সায়েদাবাদ"},
@@ -209,16 +209,16 @@ AREA_METADATA: dict[str, dict] = {
     "Narayanganj": {"lat": 23.6238, "lon": 90.5000, "city": "Narayanganj", "pattern": r"\b(?:Narayanganj|N'ganj|N’ganj|Fatullah|Siddhirganj|Rupganj|Sonargaon|Kanchpur|Araihazar)\b|নারায়ণগঞ্জ|নারায়ণগঞ্জ|ফতুল্লা|সিদ্ধিরগঞ্জ|রূপগঞ্জ|সোনারগাঁও|কাঁচপুর|আড়াইহাজার"},
 
     # --- All 64 Bangladesh Districts & Key Towns ---
-    "Chattogram": {"lat": 22.3569, "lon": 91.7832, "city": "Chattogram", "pattern": r"\b(?:Chattogram|Chittagong|Patiya|Mirsarai|Hathazari|Raozan|Rangunia|Anwara|Banshkhali)\b|চট্টগ্রাম|পটিয়া|মীরসরাই|হাটহাজারী|রাউজান|রাঙ্গুনিয়া|আনোয়ারা|বাঁশখালী"},
+    "Chattogram": {"lat": 22.3569, "lon": 91.7832, "city": "Chattogram", "pattern": r"\b(?:Chattogram|Chittagong|Patiya|Mirsarai|Hathazari|Raozan|Rangunia|Anwara|Banshkhali|Agrabad|Halishahar|Patenga|Pahartali|Chandgaon|Boalkhali|Sandwip|Fatikchhari|Satkania|Karnaphuli)\b|চট্টগ্রাম|পটিয়া|মীরসরাই|হাটহাজারী|রাউজান|রাঙ্গুনিয়া|আনোয়ারা|বাঁশখালী|আগ্রাবাদ|হালিশহর|পতেঙ্গা|পাহাড়তলী|চান্দগাঁও|বোয়ালখালী|সন্দ্বীপ|ফটিকছড়ি|সাতকানিয়া|কর্ণফুলী"},
     "Sitakunda": {"lat": 22.6200, "lon": 91.6600, "city": "Chattogram", "pattern": r"\bSitakunda\b|সীতাকুণ্ড"},
     "Cox's Bazar": {"lat": 21.4272, "lon": 92.0058, "city": "Cox's Bazar", "pattern": r"\b(?:Cox['’]?s\s+Bazar|Teknaf|Ukhia|Ukhiya|Chakaria|Maheshkhali|Ramu)\b|কক্সবাজার|টেকনাফ|উখিয়া|চকরিয়া|মহেশখালী|রামু"},
     "Cumilla": {"lat": 23.4607, "lon": 91.1809, "city": "Cumilla", "pattern": r"\b(?:Cumilla|Comilla|Daudkandi|Chandina|Chauddagram|Laksam|Debidwar|Muradnagar|Burichang|Barura|Nangalkot|Homna)\b|কুমিল্লা|দাউদকান্দি|চান্দিনা|চৌদ্দগ্রাম|লাকসাম|দেবিদ্বার|মুরাদনগর|বুড়িচং|বরুড়া|নাঙ্গলকোট|হোমনা"},
     "Brahmanbaria": {"lat": 23.9571, "lon": 91.1119, "city": "Brahmanbaria", "pattern": r"\b(?:Brahmanbaria|B\.?\s*Baria|Ashuganj|Kasba|Nabinagar|Sarail|Akhaura)\b|ব্রাহ্মণবাড়িয়া|ব্রাহ্মণবাড়িয়া|আশুগঞ্জ|কসবা|নবীনগর|সরাইল|আখাউড়া"},
-    "Chandpur": {"lat": 23.2333, "lon": 90.6713, "city": "Chandpur", "pattern": r"\b(?:Chandpur|Matlab|Hajiganj|Shahrasti)\b|চাঁদপুর|মতলব|হাজীগঞ্জ|শাহরাস্তি"},
+    "Chandpur": {"lat": 23.2333, "lon": 90.6713, "city": "Chandpur", "pattern": r"\b(?:Chandpur|Matlab|Hajiganj|Shahrasti|Kachua|Faridganj|Haimchar)\b|চাঁদপুর|মতলব|হাজীগঞ্জ|শাহরাস্তি|কচুয়া|সাচার|ফরিদগঞ্জ|হাইমচর"},
     "Feni": {"lat": 23.0159, "lon": 91.3976, "city": "Feni", "pattern": r"\b(?:Feni|Chhagalnaiya|Daganbhuiyan|Sonagazi|Parshuram)\b|ফেনী|ছাগলনাইয়া|দাগনভূঞা|সোনাগাজী|পরশুরাম"},
     "Noakhali": {"lat": 22.8696, "lon": 91.0994, "city": "Noakhali", "pattern": r"\b(?:Noakhali|Begumganj|Maijdee|Companiganj|Hatiya|Senbagh|Chatkhil)\b|নোয়াখালী|নোয়াখালী|বেগমগঞ্জ|মাইজদী|হাতিয়া|সেনবাগ|চাটখিল"},
     "Lakshmipur": {"lat": 22.9447, "lon": 90.8282, "city": "Lakshmipur", "pattern": r"\b(?:Lakshmipur|Laxmipur|Ramganj|Raipur|Ramgati)\b|লক্ষ্মীপুর|রামগঞ্জ|রায়পুর|রামগতি"},
-    "Rangamati": {"lat": 22.7324, "lon": 92.2985, "city": "Rangamati", "pattern": r"\b(?:Rangamati|Kaptai|Baghaichhari)\b|রাঙামাটি|রাঙ্গামাটি|কাপ্তাই|বাঘাইছড়ি"},
+    "Rangamati": {"lat": 22.7324, "lon": 92.2985, "city": "Rangamati", "pattern": r"\b(?:Rangamati|Kaptai|Baghaichhari|Langadu)\b|রাঙামাটি|রাঙ্গামাটি|কাপ্তাই|বাঘাইছড়ি|লংগদু"},
     "Bandarban": {"lat": 22.1953, "lon": 92.2184, "city": "Bandarban", "pattern": r"\b(?:Bandarban|Lama|Thanchi|Ruma)\b|বান্দরবান|লামা|থানচি|রুমা"},
     "Khagrachhari": {"lat": 23.1193, "lon": 91.9847, "city": "Khagrachhari", "pattern": r"\b(?:Khagrachhari|Khagrachari|Ramgarh|Dighinala|Guimara)\b|খাগড়াছড়ি|খাগড়াছড়ি|রামগড়|দীঘিনালা"},
 
@@ -383,35 +383,17 @@ def _clean_bn_inflection(word: str) -> str:
     return w.strip()
 
 
+def is_valid_place(name: str) -> bool:
+    """Returns True only if `name` is an actual verified place in the canonical AREA_METADATA gazetteer."""
+    return bool(name and name in AREA_METADATA)
+
+
 def _find_dynamic_locations(text: str, known_locs: list[str]) -> list[str]:
-    """Extracts unlisted villages, unions, upazilas, markets & roads dynamically."""
-    dynamic: list[str] = []
-    known_lower = {k.lower() for k in known_locs}
-
-    for pat in (EN_DYNAMIC_PLACE_RE, BN_DYNAMIC_PLACE_RE):
-        for m in pat.finditer(text):
-            raw = m.group(1).strip()
-            if not raw or raw in DYNAMIC_STOPWORDS:
-                continue
-            parts = raw.split()
-            if any(p in DYNAMIC_STOPWORDS for p in parts):
-                continue
-            cand = _clean_bn_inflection(raw) if pat is BN_DYNAMIC_PLACE_RE else raw
-            if len(cand) < 3 or re.search(r"[0-9০-৯]", cand) or cand in DYNAMIC_STOPWORDS:
-                continue
-            if cand.lower() in known_lower:
-                continue
-            # Skip if this token already matches an entry in AREA_GAZETTEER (avoids BN/EN duplicates)
-            if any(g_pat.search(cand) for _, g_pat in AREA_GAZETTEER):
-                continue
-            if cand not in dynamic:
-                dynamic.append(cand)
-            if len(dynamic) >= 4:
-                break
-    return dynamic
+    """Disabled open-vocabulary random Bangla word guessing so only actual verified places are used."""
+    return []
 
 
-def _find_locations(text: str, allow_dynamic: bool = True) -> list[str]:
+def _find_locations(text: str, allow_dynamic: bool = False) -> list[str]:
     found: list[str] = []
     for canonical, pat in AREA_GAZETTEER:
         if pat.search(text):
@@ -420,15 +402,6 @@ def _find_locations(text: str, allow_dynamic: bool = True) -> list[str]:
     if any(k.startswith("Mirpur-") for k in found) and "Mirpur" in found:
         found.remove("Mirpur")
 
-    if allow_dynamic:
-        dyn = _find_dynamic_locations(text, found)
-        for d in dyn:
-            if d not in found:
-                found.append(d)
-
-    # Fallback: if generic Dhaka is explicitly mentioned in text with no ward matched
-    if not found and GENERIC_DHAKA_HEADLINE_RE.search(text):
-        found.append("Dhaka (General)")
     return found
 
 

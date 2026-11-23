@@ -127,13 +127,19 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <style>
     html, body, #map {
       margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #0A0F1C;
+      background: #F8F9FA;
       -webkit-user-select: none; user-select: none;
       -webkit-touch-callout: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .leaflet-tile-pane {
-      filter: invert(100%) hue-rotate(180deg) brightness(92%) contrast(92%) saturate(85%);
+      filter: brightness(1.02) contrast(0.98) saturate(1.04);
+    }
+    .leaflet-control-attribution {
+      background: rgba(255, 255, 255, 0.85) !important;
+      color: #64748B !important;
+      font-size: 9px !important;
+      border-radius: 6px 0 0 0;
     }
     .custom-pin-wrapper {
       background: transparent !important;
@@ -142,19 +148,19 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     .user-wrap {
       position: relative;
       display: flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px;
+      width: 26px; height: 26px;
       transform: translate(-50%, -50%);
     }
     .user-pulse {
       position: absolute;
-      width: 36px; height: 36px; border-radius: 50%;
-      background: rgba(56, 189, 248, 0.35);
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(66, 133, 244, 0.28);
       animation: pulseRing 2s ease-out infinite;
     }
     .user-dot {
-      width: 15px; height: 15px; border-radius: 50%;
-      background: #2563EB; border: 2.5px solid #FFFFFF;
-      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.9);
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #1A73E8; border: 3px solid #FFFFFF;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.65);
       z-index: 2;
     }
     @keyframes pulseRing {
@@ -175,19 +181,19 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     }
     .road-hazard-pulse {
       position: absolute;
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
-      background: rgba(239, 68, 68, 0.45);
+      background: rgba(239, 68, 68, 0.35);
       animation: pulseRing 1.5s ease-out infinite;
     }
     .road-hazard-core {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: #EF4444;
+      background: #DC2626;
       border: 2.5px solid #FFFFFF;
-      box-shadow: 0 0 10px rgba(239, 68, 68, 0.95), 0 2px 6px rgba(0,0,0,0.65);
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.65);
       z-index: 3;
       display: flex;
       align-items: center;
@@ -197,7 +203,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: #FEF2F2;
+      background: #FFFFFF;
     }
 
     /* Google Maps-style Teardrop Pin with Drop Bounce */
@@ -216,144 +222,142 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       100% { transform: translate(-50%, -100%) scale(1); }
     }
     .gmap-pin-label {
-      background: rgba(15, 23, 42, 0.72);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      color: #F8FAFC;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      color: #0F172A;
       font-weight: 800;
-      font-size: 10.5px;
-      padding: 3px 9px;
+      font-size: 11px;
+      padding: 3.5px 10px;
       border-radius: 999px;
-      border: 1.2px solid rgba(248, 113, 113, 0.85);
+      border: 1.5px solid #EA4335;
       white-space: nowrap;
-      max-width: 185px;
+      max-width: 190px;
       overflow: hidden;
       text-overflow: ellipsis;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.45);
-      margin-bottom: 2px;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.18);
+      margin-bottom: 3px;
     }
     .gmap-pin-svg {
       width: 32px;
       height: 40px;
-      filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.5));
+      filter: drop-shadow(0 4px 6px rgba(15, 23, 42, 0.3));
     }
     .gmap-pin-shadow {
       width: 12px;
       height: 4px;
       border-radius: 50%;
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(15, 23, 42, 0.25);
       margin-top: -2px;
     }
 
-    /* Compact Semi-Transparent Route ETA Badge */
+    /* Google Maps-Style White Route ETA Callout Pill */
     .leaflet-tooltip.leaflet-route-eta {
-      background: rgba(29, 78, 216, 0.65) !important;
-      backdrop-filter: blur(3px) !important;
-      -webkit-backdrop-filter: blur(3px) !important;
-      color: #FFFFFF !important;
-      border: 1.2px solid rgba(255, 255, 255, 0.85) !important;
+      background: #FFFFFF !important;
+      color: #1967D2 !important;
+      border: 1.5px solid #AECBFA !important;
       border-radius: 999px !important;
       font-weight: 800 !important;
-      font-size: 10px !important;
-      padding: 2px 8px !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+      font-size: 10.5px !important;
+      padding: 3px 9px !important;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18) !important;
       pointer-events: none !important;
     }
     .leaflet-tooltip.leaflet-route-eta::before {
       display: none !important;
     }
 
-    /* Translucent Glassmorphism Popup when clicking a Red Hazard Dot (so route stays visible underneath!) */
+    /* Clean Google Maps White Card Popup when clicking a Red Hazard Dot */
     .leaflet-popup.leaflet-avoid-popup .leaflet-popup-content-wrapper {
-      background: rgba(15, 23, 42, 0.62) !important;
-      backdrop-filter: blur(6px) !important;
-      -webkit-backdrop-filter: blur(6px) !important;
-      color: #F8FAFC !important;
-      border: 1.5px solid rgba(239, 68, 68, 0.88) !important;
-      border-radius: 12px !important;
+      background: rgba(255, 255, 255, 0.98) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      color: #0F172A !important;
+      border: 1.5px solid #EF4444 !important;
+      border-radius: 14px !important;
       padding: 0 !important;
-      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.32), 0 3px 10px rgba(0,0,0,0.5) !important;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(239, 68, 68, 0.2) !important;
     }
     .leaflet-popup.leaflet-avoid-popup .leaflet-popup-content {
-      margin: 8px 10px !important;
-      width: 215px !important;
+      margin: 10px 12px !important;
+      width: 220px !important;
     }
     .leaflet-popup.leaflet-avoid-popup .leaflet-popup-tip {
-      background: rgba(239, 68, 68, 0.85) !important;
+      background: #FFFFFF !important;
+      border: 1px solid #EF4444 !important;
     }
     .leaflet-popup.leaflet-avoid-popup a.leaflet-popup-close-button {
-      color: #FCA5A5 !important;
+      color: #64748B !important;
       font-size: 16px !important;
-      top: 5px !important;
-      right: 6px !important;
+      top: 6px !important;
+      right: 7px !important;
     }
 
     .avoid-header {
       display: inline-flex;
       align-items: center;
-      background: rgba(239, 68, 68, 0.32);
-      border-radius: 5px;
-      padding: 2px 6px;
-      margin-bottom: 4px;
+      background: #FEE2E2;
+      border: 1px solid #FECACA;
+      border-radius: 6px;
+      padding: 2px 7px;
+      margin-bottom: 5px;
     }
     .avoid-badge-text {
-      color: #FECACA;
+      color: #DC2626;
       font-size: 9.5px;
       font-weight: 900;
       letter-spacing: 0.3px;
       text-transform: uppercase;
     }
     .avoid-road-name {
-      color: #FFFFFF;
-      font-size: 11px;
+      color: #0F172A;
+      font-size: 11.5px;
       font-weight: 800;
       margin-bottom: 3px;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.85);
     }
     .avoid-headline {
-      color: #F1F5F9;
+      color: #334155;
       font-size: 10.5px;
-      line-height: 13.5px;
+      line-height: 14px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      margin-bottom: 5px;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+      margin-bottom: 7px;
     }
     .avoid-footer {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      color: #7DD3FC;
+      color: #0284C7;
       font-size: 9.5px;
       font-weight: 700;
-      border-top: 1px solid rgba(255,255,255,0.16);
-      padding-top: 4px;
+      border-top: 1px solid #E2E8F0;
+      padding-top: 5px;
       cursor: pointer;
     }
     .avoid-open-btn {
-      background: rgba(239, 68, 68, 0.75);
+      background: #EF4444;
       color: #FFFFFF;
-      padding: 2px 7px;
+      padding: 2.5px 8px;
       border-radius: 999px;
       font-size: 9.5px;
       font-weight: 800;
     }
 
-    /* Compact Semi-Transparent Area Badges for off-route alerts */
+    /* Crisp Area Badges for off-route alerts on White Map */
     .area-badge {
       display: inline-flex; align-items: center; gap: 4px;
       width: max-content;
       color: #FFFFFF;
-      font-size: 10px; font-weight: 700; padding: 2px 7px;
-      border-radius: 999px; border: 1.2px solid rgba(255,255,255,0.85);
-      white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+      font-size: 10.5px; font-weight: 800; padding: 3px 8px;
+      border-radius: 999px; border: 1.8px solid #FFFFFF;
+      white-space: nowrap; box-shadow: 0 2px 7px rgba(15, 23, 42, 0.25);
       transform: translate(-50%, -50%);
-      opacity: 0.84;
+      opacity: 0.95;
     }
     .area-count {
-      background: rgba(0,0,0,0.35); border-radius: 999px;
+      background: rgba(0, 0, 0, 0.28); border-radius: 999px;
       padding: 0px 5px; font-size: 9.5px; font-weight: 800;
     }
 
@@ -377,10 +381,23 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       closePopupOnClick: true
     }).setView([23.7600, 90.3950], 12);
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Google Maps-like Clean White / Daylight Vector-Raster Basemap with OSM fallback
+    const voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap'
+      subdomains: 'abcd',
+      attribution: '© OpenStreetMap • CARTO'
     }).addTo(map);
+
+    let fallbackLoaded = false;
+    voyagerLayer.on('tileerror', function() {
+      if (!fallbackLoaded) {
+        fallbackLoaded = true;
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
+      }
+    });
 
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
 
@@ -497,17 +514,17 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       // B. Primary Minimum Road Route (Google Maps Navigation Blue)
       if (primaryPoly && primaryPoly.length >= 2) {
         L.polyline(primaryPoly, {
-          color: '#1E3A8A',
-          weight: 8,
-          opacity: 0.82,
+          color: '#185ABC',
+          weight: 8.5,
+          opacity: 0.9,
           lineCap: 'round',
           lineJoin: 'round'
         }).addTo(routeLayerGroup);
 
         L.polyline(primaryPoly, {
-          color: '#3B82F6',
-          weight: 5,
-          opacity: 0.96,
+          color: '#4285F4',
+          weight: 5.5,
+          opacity: 1.0,
           lineCap: 'round',
           lineJoin: 'round'
         }).addTo(routeLayerGroup);
@@ -905,7 +922,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           ref={iframeRef}
           srcDoc={html}
           onLoad={pushStateToWebView}
-          style={{ width: "100%", height: "100%", border: "none", background: "#0B1120" }}
+          style={{ width: "100%", height: "100%", border: "none", background: "#F8F9FA" }}
           title="BigWarn Leaflet Map"
         />
       </View>
@@ -929,6 +946,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0B1120" },
-  webview: { flex: 1, backgroundColor: "#0B1120" },
+  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  webview: { flex: 1, backgroundColor: "#F8F9FA" },
 });

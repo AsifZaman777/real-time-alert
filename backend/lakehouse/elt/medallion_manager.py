@@ -109,19 +109,25 @@ class MedallionLakehouseManager:
             cache_k = item.get("url") or item.get("headline") or ""
             tags = self._tag_cache.get(cache_k) if cache_k else None
             if tags is None:
+                raw_locs = item.get("locations") or []
+                has_only_valid_locs = bool(raw_locs) and all(loc in AREA_METADATA for loc in raw_locs)
                 if (
                     item.get("tag_version", 1) >= TAG_VERSION
+                    and has_only_valid_locs
                     and "location_events" in item
                     and isinstance(item.get("location_events"), dict)
                 ):
+                    valid_loc_events = {
+                        k: v for k, v in item.get("location_events", {}).items() if k in AREA_METADATA
+                    }
                     tags = {
                         "tag_version": item.get("tag_version", TAG_VERSION),
                         "event_types": item.get("event_types", []),
-                        "locations": item.get("locations", []),
-                        "location_events": item.get("location_events", {}),
+                        "locations": [loc for loc in raw_locs if loc in AREA_METADATA],
+                        "location_events": valid_loc_events,
                         "parent_city": item.get("parent_city"),
                         "time_windows": item.get("time_windows", []),
-                        "is_disruption": item.get("is_disruption", False),
+                        "is_disruption": bool(item.get("is_disruption", False) and valid_loc_events),
                     }
                 else:
                     tags = extract_disruption_tags(
@@ -137,11 +143,16 @@ class MedallionLakehouseManager:
             if not item.get("is_disruption") or not item.get("event_types") or not item.get("locations"):
                 continue
 
-            locs = item.get("locations") or []
+            locs = [loc for loc in (item.get("locations") or []) if loc in AREA_METADATA]
+            if not locs:
+                continue
             ev_types = item.get("event_types") or []
             parent_city = item.get("parent_city")
-            location_events: dict[str, list[str]] = item.get("location_events") or {
-                loc: ev_types for loc in locs
+            raw_loc_events = item.get("location_events") or {}
+            location_events: dict[str, list[str]] = {
+                loc: (raw_loc_events.get(loc) or ev_types)
+                for loc in locs
+                if loc in AREA_METADATA
             }
 
             primary_loc = locs[0]
