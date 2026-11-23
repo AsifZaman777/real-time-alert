@@ -17,6 +17,8 @@ rsync -avz --delete \
   --exclude='__pycache__' \
   --exclude='*.pyc' \
   --exclude='data/logs/*' \
+  --exclude='data/seen_urls.json' \
+  --exclude='data/dynamic_locations_cache.json' \
   --exclude='lakehouse/storage/*' \
   -e "ssh -i $AZURE_KEY" \
   "$BACKEND_DIR" "${AZURE_TARGET}:~/real-time-alert/"
