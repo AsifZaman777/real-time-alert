@@ -61,7 +61,7 @@ export default function DownloadAppPage() {
                 </h2>
               </div>
               <p className="text-xs text-muted-foreground">
-                Pre-configured with live Render Cloud Stream &amp; OpenStreetMap Leaflet Navigation.
+                Connected to Live Cloud HTTPS Stream &amp; OpenStreetMap Leaflet Navigation.
               </p>
             </div>
 
@@ -124,7 +124,7 @@ export default function DownloadAppPage() {
             </ol>
             <div className="flex items-center gap-1.5 pt-1 text-[11px] text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>Tip: You can also switch between Cloud &amp; Local server URLs inside the app&apos;s ⚙️ Settings bar.</span>
+              <span>Tip: Tap the Sync button in the top-right header anytime to reconnect after a network drop.</span>
             </div>
           </div>
         </CardContent>

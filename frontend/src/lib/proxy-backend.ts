@@ -12,7 +12,6 @@ export function getRemoteBackendUrl(): string | null {
   const envUrl = (
     process.env.BIGWARN_FEED_URL ||
     process.env.BIGWARN_API_URL ||
-    process.env.NEXT_PUBLIC_BIGWARN_API_URL ||
     ""
   )
     .trim()

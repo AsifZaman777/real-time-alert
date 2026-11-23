@@ -100,6 +100,7 @@ lerna-debug.log*
 # Next.js telemetry / bundle analysis
 .next-analytics
 *.tsbuildinfo
+frontend/.npm-cache/
 
 # ------------------------------------------------------------------------------
 # 3b. React Native / Expo Mobile App
