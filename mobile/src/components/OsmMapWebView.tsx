@@ -67,6 +67,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         veracitySummary: string;
         affectedRoad?: string;
         isRecent3h: boolean;
+        onlineDevices: number;
+        stuckPercent: number;
+        avgSpeedKmh: number;
+        mobilityState: string;
+        deviceDots: Array<{ lat: number; lon: number; stuck: boolean }>;
       }
     >();
 
@@ -83,6 +88,12 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         latestArt?.published || a.last_updated,
         latestArt?.ingested_at
       );
+      const cm = a.crowd_metrics;
+      const onlineDevs = cm?.online_devices ?? cm?.gathering_size ?? 320;
+      const stuckPct = cm?.stuck_percent ?? 88;
+      const spdKmh = cm?.avg_speed_kmh ?? 1.2;
+      const mobState = cm?.mobility_state ?? (stuckPct >= 70 ? "STUCK / GRIDLOCKED" : "MOVING");
+      const devDots = cm?.device_dots ?? [];
 
       if (!existing) {
         grouped.set(a.area, {
@@ -101,6 +112,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           veracitySummary: a.veracity_summary || "",
           affectedRoad: a.affected_road,
           isRecent3h: isRecent,
+          onlineDevices: onlineDevs,
+          stuckPercent: stuckPct,
+          avgSpeedKmh: spdKmh,
+          mobilityState: mobState,
+          deviceDots: devDots,
         });
       } else {
         existing.clusterCount += 1;
@@ -109,6 +125,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         existing.onRoute = existing.onRoute || isRoute;
         existing.isRecent3h = existing.isRecent3h || isRecent;
         existing.maxSources = Math.max(existing.maxSources, a.source_count);
+        existing.onlineDevices = Math.max(existing.onlineDevices, onlineDevs);
+        existing.stuckPercent = Math.max(existing.stuckPercent, stuckPct);
+        if (!existing.deviceDots.length && devDots.length) {
+          existing.deviceDots = devDots;
+        }
         if (!existing.affectedRoad && a.affected_road) {
           existing.affectedRoad = a.affected_road;
         }
@@ -977,6 +998,20 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
             fillOpacity: isIntercepted ? 0.22 : 0.10,
             interactive: false
           }).addTo(alertMarkerLayerGroup);
+
+          // Render passive Mobile Network Device Cluster nodes (Red = Stuck device, Green = Moving device)
+          if (m.isRecent3h && m.deviceDots && m.deviceDots.length > 0) {
+            m.deviceDots.forEach(function(d) {
+              L.circleMarker([d.lat, d.lon], {
+                radius: d.stuck ? 3.2 : 2.6,
+                color: '#FFFFFF',
+                weight: 1,
+                fillColor: d.stuck ? '#DC2626' : '#10B981',
+                fillOpacity: 0.88,
+                interactive: false
+              }).addTo(alertMarkerLayerGroup);
+            });
+          }
 
           const badgeClass = isIntercepted ? 'area-badge area-badge-onroute' : 'area-badge';
           const dotPrefix = isIntercepted ? '<span class="onroute-dot-indicator"></span>' : '';

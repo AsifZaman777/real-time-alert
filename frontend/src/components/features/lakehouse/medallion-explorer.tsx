@@ -151,7 +151,7 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
                       {Math.round(cl.credibility_score * 100)}% score
                     </Badge>
                     <Badge variant="outline">
-                      👥 {cl.crowd_metrics?.gathering_size ?? 240}+ gathered ({cl.crowd_metrics?.surge_ratio ?? 2.4}x • +{cl.crowd_metrics?.crowd_weight_percent ?? 12}% crowd)
+                      📡 {cl.crowd_metrics?.online_devices ?? cl.crowd_metrics?.gathering_size ?? 340} devices ({cl.crowd_metrics?.surge_ratio ?? 3.1}x) • 🛑 {cl.crowd_metrics?.stuck_percent ?? 89}% STUCK ({cl.crowd_metrics?.avg_speed_kmh ?? 1.1} km/h • +{cl.crowd_metrics?.crowd_weight_percent ?? 14}% net)
                     </Badge>
                     {cl.is_pre_news_crowd && (
                       <Badge variant="default">⚡ Pre-News Crowd Alert</Badge>
@@ -221,7 +221,7 @@ export function MedallionExplorer({ snapshot, onSelectArea }: Props) {
                           {Math.round(cl.credibility_score * 100)}% score
                         </Badge>
                         <Badge variant="outline">
-                          👥 {cl.crowd_metrics?.gathering_size ?? 240}+ ({cl.crowd_metrics?.surge_ratio ?? 2.4}x • +{cl.crowd_metrics?.crowd_weight_percent ?? 12}% crowd)
+                          📡 {cl.crowd_metrics?.online_devices ?? cl.crowd_metrics?.gathering_size ?? 340} dev ({cl.crowd_metrics?.stuck_percent ?? 89}% STUCK • {cl.crowd_metrics?.avg_speed_kmh ?? 1.1} km/h • +{cl.crowd_metrics?.crowd_weight_percent ?? 14}% net)
                         </Badge>
                         {cl.is_pre_news_crowd && (
                           <Badge variant="default">⚡ Pre-News</Badge>

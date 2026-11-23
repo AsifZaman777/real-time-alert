@@ -293,8 +293,8 @@ class MedallionLakehouseManager:
                     "veracity_tier": veracity_tier,
                     "veracity_status": status,
                     "veracity_summary": (
-                        f"{num_sources} {source_word} • 👥 {crowd_metrics['gathering_size']}+ crowd "
-                        f"({crowd_metrics['surge_ratio']}x, {cw_sign} weight)"
+                        f"{num_sources} {source_word} • 📡 {crowd_metrics['gathering_size']} devices "
+                        f"({crowd_metrics.get('stuck_percent', 82)}% stuck, {cw_sign} weight)"
                     ),
                     "source_count": num_sources,
                     "sources": sorted(cl["sources"]),

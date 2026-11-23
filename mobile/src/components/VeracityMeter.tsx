@@ -33,12 +33,18 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
       ? "#F59E0B"
       : "#F43F5E";
 
-  const cwPct = crowdMetrics?.crowd_weight_percent ?? 12;
+  const cwPct = crowdMetrics?.crowd_weight_percent ?? 14;
   const cwSign = cwPct >= 0 ? `+${cwPct}%` : `${cwPct}%`;
-  const gatheringSize = crowdMetrics?.gathering_size ?? 240;
-  const surgeRatio = crowdMetrics?.surge_ratio ?? 2.6;
-  const citizenReports = crowdMetrics?.citizen_reports ?? 9;
-  const leadMin = crowdMetrics?.pre_news_lead_minutes ?? 16;
+  const onlineDevices =
+    crowdMetrics?.online_devices ?? crowdMetrics?.gathering_size ?? 340;
+  const surgeRatio = crowdMetrics?.surge_ratio ?? 3.1;
+  const stuckPct = crowdMetrics?.stuck_percent ?? 88;
+  const movingPct = crowdMetrics?.moving_percent ?? 100 - stuckPct;
+  const avgSpeedKmh = crowdMetrics?.avg_speed_kmh ?? 1.1;
+  const dwellMin = crowdMetrics?.dwell_minutes ?? 18;
+  const radiusM = crowdMetrics?.gathering_radius_m ?? 150;
+  const leadMin = crowdMetrics?.pre_news_lead_minutes ?? 19;
+  const isStuck = stuckPct >= 55;
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
@@ -47,7 +53,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           <Ionicons
             name={
               isPreNewsCrowd
-                ? "people"
+                ? "cellular"
                 : veracityPercent >= 60
                 ? "shield-checkmark"
                 : "alert-circle"
@@ -57,8 +63,8 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           />
           <Text style={styles.label}>
             {isPreNewsCrowd
-              ? "PRE-NEWS CROWD GATHERING INTEL"
-              : "NEWS + CROWD VERACITY METER"}
+              ? "MOBILE NETWORK DENSITY & MOBILITY ALERT"
+              : "NEWS + MOBILE NETWORK VERACITY"}
           </Text>
         </View>
         <View
@@ -86,8 +92,8 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
           {veracitySummary}
         </Text>
         <View style={styles.crowdWeightBadge}>
-          <Ionicons name="people" size={10} color="#6D28D9" />
-          <Text style={styles.crowdWeightText}>{cwSign} Crowd</Text>
+          <Ionicons name="cellular" size={10} color="#6D28D9" />
+          <Text style={styles.crowdWeightText}>{cwSign} Net</Text>
         </View>
       </View>
 
@@ -103,50 +109,88 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
         />
       </View>
 
-      {/* Public Gathering Telemetry Row */}
+      {/* Mobile Network Device Density & Stuck-vs-Moving Telemetry */}
       <View style={styles.crowdRow}>
         <View style={styles.crowdPill}>
-          <Ionicons name="radio-outline" size={11} color="#7C3AED" />
+          <Ionicons name="phone-portrait-outline" size={11} color="#7C3AED" />
           <Text style={styles.crowdPillText}>
-            👥 {gatheringSize}+ gathered ({surgeRatio}x density)
+            📡 {onlineDevices} online devices / {radiusM}m ({surgeRatio}x)
           </Text>
         </View>
-        <View style={styles.crowdPill}>
-          <Ionicons name="flash-outline" size={11} color="#D97706" />
-          <Text style={styles.crowdPillText}>
-            {isPreNewsCrowd
-              ? `Alerted ${leadMin}m ahead of news`
-              : `Crowd formed ${leadMin}m before news`}
+        <View
+          style={[
+            styles.crowdPill,
+            isStuck ? styles.stuckPill : styles.movingPill,
+          ]}
+        >
+          <Ionicons
+            name={isStuck ? "hand-left" : "navigate"}
+            size={11}
+            color={isStuck ? "#DC2626" : "#15803D"}
+          />
+          <Text
+            style={[
+              styles.crowdPillText,
+              { color: isStuck ? "#DC2626" : "#15803D" },
+            ]}
+          >
+            {isStuck
+              ? `${stuckPct}% STUCK • ${avgSpeedKmh} km/h (${dwellMin}m dwell)`
+              : `${movingPct}% MOVING • ${avgSpeedKmh} km/h`}
           </Text>
         </View>
         {!compact && (
           <View style={styles.crowdPill}>
-            <Ionicons name="megaphone-outline" size={11} color="#0284C7" />
+            <Ionicons name="flash-outline" size={11} color="#D97706" />
             <Text style={styles.crowdPillText}>
-              {citizenReports} citizen reports
+              {isPreNewsCrowd
+                ? `Detected ${leadMin}m ahead of news`
+                : `Devices clustered ${leadMin}m before news`}
             </Text>
           </View>
         )}
       </View>
 
-      {/* Interactive Citizen Crowdsource Voting (when in modal or expanded) */}
+      {/* Visual Stuck vs. Moving Mobile Devices Ratio Bar */}
+      {!compact && (
+        <View style={styles.mobilityBarWrap}>
+          <View style={styles.mobilityLabelRow}>
+            <Text style={styles.stuckLabel}>
+              🛑 Stuck / Stationary ({stuckPct}%)
+            </Text>
+            <Text style={styles.movingLabel}>
+              🟢 Moving ({movingPct}%)
+            </Text>
+          </View>
+          <View style={styles.mobilityTrack}>
+            <View
+              style={[
+                styles.mobilityStuckFill,
+                { width: `${Math.min(100, Math.max(5, stuckPct))}%` },
+              ]}
+            />
+          </View>
+        </View>
+      )}
+
+      {/* Interactive Mobile Network Telemetry Signal Controls */}
       {onCrowdVote && (
         <View style={styles.voteRow}>
           <TouchableOpacity
             onPress={() => onCrowdVote("confirm")}
             style={styles.confirmVoteBtn}
           >
-            <Ionicons name="people" size={12} color="#15803D" />
+            <Ionicons name="cellular" size={12} color="#B91C1C" />
             <Text style={styles.confirmVoteText}>
-              I See Crowd / Confirm (+1)
+              🛑 Devices Stuck Here (+Density)
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => onCrowdVote("clear")}
             style={styles.clearVoteBtn}
           >
-            <Ionicons name="checkmark-done" size={12} color="#475569" />
-            <Text style={styles.clearVoteText}>Area Clear</Text>
+            <Ionicons name="speedometer-outline" size={12} color="#15803D" />
+            <Text style={styles.clearVoteText}>🟢 Traffic Moving</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -192,7 +236,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontSize: 9.5,
     fontWeight: "800",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   badge: {
     borderWidth: 1,
@@ -264,10 +308,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2.5,
   },
+  stuckPill: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  movingPill: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
   crowdPillText: {
     color: "#475569",
     fontSize: 10,
     fontWeight: "700",
+  },
+  mobilityBarWrap: {
+    marginTop: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  mobilityLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  stuckLabel: {
+    color: "#DC2626",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  movingLabel: {
+    color: "#15803D",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  mobilityTrack: {
+    height: 6,
+    backgroundColor: "#22C55E",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  mobilityStuckFill: {
+    height: "100%",
+    backgroundColor: "#EF4444",
   },
   voteRow: {
     flexDirection: "row",
@@ -280,15 +365,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    backgroundColor: "#DCFCE7",
-    borderColor: "#86EFAC",
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
     borderWidth: 1,
     borderRadius: 8,
     paddingVertical: 6,
   },
   confirmVoteText: {
-    color: "#15803D",
-    fontSize: 11,
+    color: "#B91C1C",
+    fontSize: 10.5,
     fontWeight: "800",
   },
   clearVoteBtn: {
@@ -296,17 +381,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    backgroundColor: "#F1F5F9",
-    borderColor: "#CBD5E1",
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   clearVoteText: {
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: "700",
+    color: "#15803D",
+    fontSize: 10.5,
+    fontWeight: "800",
   },
   sourcesWrap: {
     flexDirection: "row",

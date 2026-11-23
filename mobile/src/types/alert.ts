@@ -9,9 +9,15 @@ export interface AlertArticle {
 
 export interface CrowdMetrics {
   gathering_size: number;
+  online_devices?: number;
+  devices_per_100m?: number;
   baseline_size: number;
   surge_ratio: number;
   avg_speed_kmh: number;
+  stuck_percent?: number;
+  moving_percent?: number;
+  mobility_state?: string;
+  dwell_minutes?: number;
   gathering_radius_m: number;
   citizen_reports: number;
   confirm_votes: number;
@@ -21,6 +27,7 @@ export interface CrowdMetrics {
   pre_news_lead_minutes: number;
   crowd_status: string;
   is_pre_news_crowd: boolean;
+  device_dots?: Array<{ lat: number; lon: number; stuck: boolean }>;
 }
 
 export interface GoldAlert {
