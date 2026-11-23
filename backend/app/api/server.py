@@ -160,12 +160,35 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
             elif path in ("/api/stream/live", "/api/v1/stream/live"):
                 self._handle_public_feed(q, default_format="sse", default_layer="silver")
             elif path in ("/api/crowd/heatmap", "/api/v1/crowd/heatmap"):
+                snap = service.get_lakehouse_elt("latest")
+                gold_alerts = snap.get("gold_alerts", [])
+                heatmaps = crowd_service.get_all_bangladesh_heatmaps(gold_alerts=gold_alerts)
                 self._json({
                     "status": "ok",
-                    "heatmaps": crowd_service.get_all_bangladesh_heatmaps(),
+                    "verified_only": True,
+                    "total_verified_zones": len(heatmaps),
+                    "heatmaps": heatmaps,
                 })
             elif path in ("/api/crowd/ping", "/api/v1/crowd/ping"):
-                self._json({"status": "ok"})
+                try:
+                    device_id = (q.get("device_id") or [""])[0]
+                    lat = float((q.get("lat") or ["0"])[0])
+                    lon = float((q.get("lon") or ["0"])[0])
+                    speed_kmh = float((q.get("speed_kmh") or ["0"])[0])
+                    accuracy_m = float((q.get("accuracy_m") or ["25"])[0])
+                    network_type = (q.get("network_type") or ["4G_LTE"])[0]
+                except ValueError:
+                    return self._json({"status": "rejected", "verified": False, "reason": "invalid_params"}, code=400)
+                self._json(
+                    crowd_service.record_verified_ping(
+                        device_id=device_id,
+                        lat=lat,
+                        lon=lon,
+                        speed_kmh=speed_kmh,
+                        accuracy_m=accuracy_m,
+                        network_type=network_type,
+                    )
+                )
             elif path in ("/api/crowd/report", "/api/v1/crowd/report"):
                 self._json({"status": "ok"})
             elif path in ("/api/crowd/vote", "/api/v1/crowd/vote"):
@@ -176,6 +199,23 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
+            u = urlparse(self.path)
+            path = u.path.rstrip("/") or "/"
+            if path in ("/api/crowd/ping", "/api/v1/crowd/ping"):
+                try:
+                    length = int(self.headers.get("Content-Length") or "0")
+                    body = json.loads(self.rfile.read(length).decode("utf-8")) if length > 0 else {}
+                    res = crowd_service.record_verified_ping(
+                        device_id=str(body.get("device_id") or ""),
+                        lat=float(body.get("lat") or 0.0),
+                        lon=float(body.get("lon") or 0.0),
+                        speed_kmh=float(body.get("speed_kmh") or 0.0),
+                        accuracy_m=float(body.get("accuracy_m") or 25.0),
+                        network_type=str(body.get("network_type") or "4G_LTE"),
+                    )
+                    return self._json(res)
+                except (ValueError, KeyError):
+                    return self._json({"status": "rejected", "verified": False}, code=400)
             self._json({"status": "ok"})
 
         def _handle_public_feed(

@@ -272,6 +272,8 @@ class MedallionLakehouseManager:
                 event_type=cl["event_type"],
                 source_count=num_sources,
                 is_recent_3h=cluster_is_recent,
+                article_count=len(sorted_articles),
+                veracity_percent=veracity_percent,
             )
 
             gold_alerts.append(

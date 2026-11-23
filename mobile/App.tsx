@@ -32,6 +32,7 @@ import {
   LakehouseLayerStats,
   MapAlertResponse,
   RouteAlertResponse,
+  VerifiedHeatmapZone,
 } from "./src/types/alert";
 import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
 import { VeracityMeter } from "./src/components/VeracityMeter";
@@ -210,8 +211,15 @@ export default function App() {
     nonce: number;
   } | null>(null);
   const [fitRouteNonce, setFitRouteNonce] = useState<number>(0);
+  const [verifiedHeatmaps, setVerifiedHeatmaps] = useState<VerifiedHeatmapZone[]>([]);
 
   const lastPollSigRef = useRef<string>("");
+  const deviceIdRef = useRef<string>(
+    `bw-${Platform.OS}-${Math.random().toString(36).slice(2, 10)}`
+  );
+  const hasVerifiedGpsFixRef = useRef<boolean>(false);
+  const gpsSpeedKmhRef = useRef<number>(0);
+  const gpsAccuracyMRef = useRef<number>(25);
 
   // Draggable Bottom Drawer Geometry & Gesture Physics
   const safeHeight = Math.max(windowHeight || 760, 560);
@@ -347,6 +355,17 @@ export default function App() {
           return;
         }
         const pos = await Location.getCurrentPositionAsync({});
+        const rawSpeedMs = pos.coords.speed;
+        const speedKmh =
+          typeof rawSpeedMs === "number" && rawSpeedMs >= 0
+            ? Math.round(rawSpeedMs * 3.6 * 10) / 10
+            : 0;
+        hasVerifiedGpsFixRef.current = true;
+        gpsSpeedKmhRef.current = speedKmh;
+        gpsAccuracyMRef.current =
+          typeof pos.coords.accuracy === "number" && pos.coords.accuracy > 0
+            ? Math.round(pos.coords.accuracy * 10) / 10
+            : 20;
         const next = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
@@ -404,11 +423,27 @@ export default function App() {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
 
-        // Automatically transmit passive Mobile Network & GPS Mobility heartbeat ping
-        fetch(
-          `${API_BASE_URL}/api/v1/crowd/ping?device_id=mobile-edge&lat=${currentLocation.lat}&lon=${currentLocation.lon}&speed_kmh=1.2&network_type=4G_LTE`,
-          { headers }
-        ).catch(() => {});
+        // Only transmit a crowd telemetry ping when backed by a real hardware GPS fix from expo-location
+        if (hasVerifiedGpsFixRef.current) {
+          fetch(
+            `${API_BASE_URL}/api/v1/crowd/ping?device_id=${encodeURIComponent(
+              deviceIdRef.current
+            )}&lat=${currentLocation.lat}&lon=${currentLocation.lon}&speed_kmh=${
+              gpsSpeedKmhRef.current
+            }&accuracy_m=${gpsAccuracyMRef.current}&network_type=4G_LTE`,
+            { headers }
+          ).catch(() => {});
+        }
+
+        // Fetch verified crowd & multi-source heatmaps from the backend
+        fetch(`${API_BASE_URL}/api/v1/crowd/heatmap`, { headers })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((hData) => {
+            if (hData && Array.isArray(hData.heatmaps)) {
+              setVerifiedHeatmaps(hData.heatmaps);
+            }
+          })
+          .catch(() => {});
 
         const routeRes = await fetch(
           `${API_BASE_URL}/api/v1/alerts/route?${routeParams.toString()}`,
@@ -727,6 +762,7 @@ export default function App() {
           destination={destination}
           todoText={todoText}
           alerts={visibleMapAlerts}
+          verifiedHeatmaps={verifiedHeatmaps}
           routeAlertIds={routeAlertIds}
           routeGeometry={routeGeometry}
           focusCoords={focusCoords}

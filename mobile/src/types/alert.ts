@@ -8,6 +8,11 @@ export interface AlertArticle {
 }
 
 export interface CrowdMetrics {
+  is_verified?: boolean;
+  verification_basis?: string;
+  verified_gps_devices?: number;
+  verified_news_sources?: number;
+  verified_articles?: number;
   total_mobiles?: number;
   peak_threshold?: number;
   exceeds_peak?: boolean;
@@ -19,6 +24,15 @@ export interface CrowdMetrics {
   heat_intensity?: number;
   intensity_label?: string;
   heat_points?: number[][];
+}
+
+export interface VerifiedHeatmapZone extends CrowdMetrics {
+  area: string;
+  lat: number;
+  lon: number;
+  cluster_count?: number;
+  sources?: string[];
+  has_news?: boolean;
 }
 
 export interface GoldAlert {
