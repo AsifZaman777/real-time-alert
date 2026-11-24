@@ -632,9 +632,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       const filtAudio = z.filtered_audio_count || 0;
       const filtOther = z.filtered_other_count || 0;
       const filtTotal = filtRouters + filtAudio + filtOther;
-      const samplePhones = Array.isArray(z.detected_models)
-        ? z.detected_models.filter(function(x) { return String(x).indexOf('Filtered') === -1; }).slice(0, 3)
-        : [];
       const filtLine = filtTotal > 0
         ? ('Filtered noise: ' + filtRouters + ' Router, ' + filtAudio + ' Audio/Watch' + (filtOther > 0 ? ', ' + filtOther + ' TV/PC' : ''))
         : '';
@@ -648,7 +645,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         +   '<div style="font-size:9.5px;color:#475569;margin-top:2px;">'
         +     scannerCount + ' ' + currentHudStrs.appsLbl + ' • +' + blePeers + ' BLE • +' + wifiPeers + ' Wi-Fi (P2P:' + wifiP2p + ' LAN:' + wifiLan + ') • ' + escapeHtml(cellNet) + ' ' + cellLoad + '%'
         +   '</div>'
-        +   (samplePhones.length > 0 ? ('<div style="font-size:9.5px;color:#0F172A;margin-top:3px;">' + escapeHtml(samplePhones.join(', ')) + '</div>') : '')
         +   (filtLine ? ('<div style="font-size:9px;color:#64748B;margin-top:2px;">' + escapeHtml(filtLine) + '</div>') : '')
         + '</div>'
         + '<div class="hud-grid">'

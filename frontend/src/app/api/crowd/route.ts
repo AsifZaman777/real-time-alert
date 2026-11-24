@@ -17,11 +17,21 @@ interface LocalBleScannerRecord {
   accuracy_m: number;
   network_type: string;
   ble_count: number;
+  bt_classic_count?: number;
   wifi_mobile_count: number;
+  wifi_hotspot_count?: number;
+  wifi_p2p_count?: number;
+  wifi_lan_count?: number;
   wifi_ap_count: number;
+  filtered_routers_count?: number;
+  filtered_audio_count?: number;
+  filtered_other_count?: number;
+  detected_models?: string[];
   cell_rsrp_dbm: number;
   cell_rsrq_db: number;
   cell_load_percent: number;
+  cell_tower_count?: number;
+  cell_network_type?: string;
   total_crowd_around_me: number;
   static_devices: number;
   moving_devices: number;
@@ -157,15 +167,25 @@ function recordLocalPing(params: {
   speed_kmh: number;
   accuracy_m?: number;
   ble_count: number;
+  bt_classic_count?: number;
   ble_static_count?: number;
   ble_moving_count?: number;
   wifi_mobile_count?: number;
+  wifi_hotspot_count?: number;
+  wifi_p2p_count?: number;
+  wifi_lan_count?: number;
   wifi_ap_count?: number;
+  filtered_routers_count?: number;
+  filtered_audio_count?: number;
+  filtered_other_count?: number;
+  detected_models?: string[];
   wifi_static_count?: number;
   wifi_moving_count?: number;
   cell_rsrp_dbm?: number;
   cell_rsrq_db?: number;
   cell_load_percent?: number;
+  cell_tower_count?: number;
+  cell_network_type?: string;
   avg_rssi_dbm?: number;
   scan_radius_m?: number;
   network_type?: string;
@@ -242,11 +262,26 @@ function recordLocalPing(params: {
     accuracy_m: params.accuracy_m || 18,
     network_type: params.network_type || "NATIVE_MULTI_RADIO",
     ble_count: bleCount,
+    bt_classic_count: Math.max(0, Math.round(params.bt_classic_count || 0)),
     wifi_mobile_count: wifiMobileCount,
+    wifi_hotspot_count: Math.max(0, Math.round(params.wifi_hotspot_count || 0)),
+    wifi_p2p_count: Math.max(0, Math.round(params.wifi_p2p_count || 0)),
+    wifi_lan_count: Math.max(0, Math.round(params.wifi_lan_count || 0)),
     wifi_ap_count: wifiApCount,
+    filtered_routers_count:
+      typeof params.filtered_routers_count === "number"
+        ? Math.max(0, Math.round(params.filtered_routers_count))
+        : wifiApCount,
+    filtered_audio_count: Math.max(0, Math.round(params.filtered_audio_count || 0)),
+    filtered_other_count: Math.max(0, Math.round(params.filtered_other_count || 0)),
+    detected_models: Array.isArray(params.detected_models)
+      ? params.detected_models.map((x) => String(x).slice(0, 64)).slice(0, 24)
+      : [],
     cell_rsrp_dbm: cellRsrpDbm,
     cell_rsrq_db: cellRsrqDb,
     cell_load_percent: cellLoadPercent,
+    cell_tower_count: Math.max(0, Math.round(params.cell_tower_count || 0)),
+    cell_network_type: params.cell_network_type || "4G_LTE",
     total_crowd_around_me: totalAroundMe,
     static_devices: staticDevices,
     moving_devices: movingDevices,
@@ -346,6 +381,27 @@ function buildLocalSnapshot() {
         ? 0.4
         : 0.2;
 
+    const maxFiltRouters = Math.max(
+      ...nodes.map((n) => n.filtered_routers_count ?? n.wifi_ap_count ?? 0),
+      0
+    );
+    const maxFiltAudio = Math.max(
+      ...nodes.map((n) => n.filtered_audio_count || 0),
+      0
+    );
+    const maxFiltOther = Math.max(
+      ...nodes.map((n) => n.filtered_other_count || 0),
+      0
+    );
+    const mergedModels: string[] = [];
+    nodes.forEach((n) => {
+      (n.detected_models || []).forEach((m) => {
+        if (!mergedModels.includes(m) && mergedModels.length < 24) {
+          mergedModels.push(m);
+        }
+      });
+    });
+
     return {
       area,
       city: nodes[0].city,
@@ -359,6 +415,10 @@ function buildLocalSnapshot() {
       ble_peers_count: maxBle,
       wifi_mobile_peers_count: maxWifiMobile,
       wifi_fixed_ap_count: maxWifiAp,
+      filtered_routers_count: maxFiltRouters,
+      filtered_audio_count: maxFiltAudio,
+      filtered_other_count: maxFiltOther,
+      detected_models: mergedModels,
       cell_load_percent: avgCellLoad,
       cell_rsrq_db: avgRsrq,
       cell_rsrp_dbm: avgRsrp,
@@ -426,6 +486,20 @@ export async function GET(req: NextRequest) {
     );
     const device_id = searchParams.get("device_id") || undefined;
     const device_label = searchParams.get("device_label") || undefined;
+    const filtered_routers_count = searchParams.get("filtered_routers_count")
+      ? Number(searchParams.get("filtered_routers_count"))
+      : undefined;
+    const filtered_audio_count = searchParams.get("filtered_audio_count")
+      ? Number(searchParams.get("filtered_audio_count"))
+      : 0;
+    const filtered_other_count = searchParams.get("filtered_other_count")
+      ? Number(searchParams.get("filtered_other_count"))
+      : 0;
+    const detected_models = (searchParams.get("detected_models") || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 24);
     recordLocalPing({
       device_id,
       device_label,
@@ -435,6 +509,10 @@ export async function GET(req: NextRequest) {
       ble_count,
       wifi_mobile_count,
       wifi_ap_count,
+      filtered_routers_count,
+      filtered_audio_count,
+      filtered_other_count,
+      detected_models,
       cell_load_percent,
     });
     await fetchFromRemoteBackend(
@@ -707,6 +785,7 @@ export async function POST(req: NextRequest) {
       speed_kmh: Number(body.speed_kmh ?? 0.0),
       accuracy_m: Number(body.accuracy_m || 18),
       ble_count: Number(body.ble_count ?? 0),
+      bt_classic_count: Number(body.bt_classic_count ?? 0),
       ble_static_count:
         typeof body.ble_static_count === "number"
           ? body.ble_static_count
@@ -716,7 +795,19 @@ export async function POST(req: NextRequest) {
           ? body.ble_moving_count
           : undefined,
       wifi_mobile_count: Number(body.wifi_mobile_count ?? 0),
+      wifi_hotspot_count: Number(body.wifi_hotspot_count ?? 0),
+      wifi_p2p_count: Number(body.wifi_p2p_count ?? 0),
+      wifi_lan_count: Number(body.wifi_lan_count ?? 0),
       wifi_ap_count: Number(body.wifi_ap_count ?? 0),
+      filtered_routers_count:
+        typeof body.filtered_routers_count === "number"
+          ? body.filtered_routers_count
+          : undefined,
+      filtered_audio_count: Number(body.filtered_audio_count ?? 0),
+      filtered_other_count: Number(body.filtered_other_count ?? 0),
+      detected_models: Array.isArray(body.detected_models)
+        ? body.detected_models.map((x: unknown) => String(x))
+        : [],
       wifi_static_count:
         typeof body.wifi_static_count === "number"
           ? body.wifi_static_count
@@ -728,6 +819,11 @@ export async function POST(req: NextRequest) {
       cell_rsrp_dbm: Number(body.cell_rsrp_dbm ?? -85),
       cell_rsrq_db: Number(body.cell_rsrq_db ?? -9),
       cell_load_percent: Number(body.cell_load_percent ?? 0),
+      cell_tower_count: Number(body.cell_tower_count ?? 0),
+      cell_network_type:
+        typeof body.cell_network_type === "string"
+          ? body.cell_network_type
+          : "4G_LTE",
       avg_rssi_dbm: Number(body.avg_rssi_dbm || -64),
       scan_radius_m: Number(body.scan_radius_m || 50),
       network_type: body.network_type || "NATIVE_MULTI_RADIO",

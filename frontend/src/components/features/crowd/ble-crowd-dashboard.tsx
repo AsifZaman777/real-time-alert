@@ -100,9 +100,158 @@ export interface BleCrowdSnapshot {
   heatmaps: BleHeatmapZone[];
 }
 
+type DeviceKind = "phone" | "router" | "audio" | "tv_pc";
+
+function parseDetectedModelEntry(raw: string): {
+  kind: DeviceKind;
+  label: string;
+  title: string;
+} {
+  const clean = String(raw || "").trim();
+  let kind: DeviceKind = "phone";
+  if (clean.includes("[Filtered Router]")) kind = "router";
+  else if (clean.includes("[Filtered Earbud/Watch]") || clean.includes("[Filtered Audio]")) kind = "audio";
+  else if (clean.includes("[Filtered TV/PC]") || clean.includes("Filtered")) kind = "tv_pc";
+
+  const label = clean
+    .replace(/\[Filtered\s+(?:Router|Earbud\/Watch|Audio|TV\/PC)\]\s*/gi, "")
+    .trim();
+
+  return { kind, label: label || clean, title: clean };
+}
+
+function DeviceModelsBreakdown({
+  scanner,
+  expanded,
+  onToggleExpand,
+  maxPreview = 8,
+  compact = false,
+}: {
+  scanner: BleScannerRow;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  maxPreview?: number;
+  compact?: boolean;
+}) {
+  const models = Array.isArray(scanner.detected_models)
+    ? scanner.detected_models.filter(Boolean)
+    : [];
+  const parsed = models.map(parseDetectedModelEntry);
+  const phones = parsed.filter((m) => m.kind === "phone");
+  const filtered = parsed.filter((m) => m.kind !== "phone");
+
+  const filtRouters = scanner.filtered_routers_count || 0;
+  const filtAudio = scanner.filtered_audio_count || 0;
+  const filtOther = scanner.filtered_other_count || 0;
+  const filtTotal = filtRouters + filtAudio + filtOther;
+
+  const shownPhones = expanded ? phones : phones.slice(0, maxPreview);
+  const remainingSlots = Math.max(0, maxPreview - shownPhones.length);
+  const shownFiltered = expanded
+    ? filtered
+    : filtered.slice(0, Math.max(2, remainingSlots));
+  const hiddenCount =
+    phones.length - shownPhones.length + (filtered.length - shownFiltered.length);
+
+  if (parsed.length === 0 && filtTotal === 0) {
+    const peerCount =
+      (scanner.ble_count || 0) + (scanner.wifi_mobile_count || 0);
+    return (
+      <span className="text-[11px] font-mono text-[#9a988f]">
+        {peerCount > 0
+          ? `${peerCount} unnamed peer(s) detected`
+          : "No nearby devices advertised"}
+      </span>
+    );
+  }
+
+  const badgeTone = (kind: DeviceKind) => {
+    switch (kind) {
+      case "phone":
+        return "bg-sky-950/75 text-sky-200 border border-sky-700/60";
+      case "router":
+        return "bg-[#242724] text-[#c2c0b6] border border-[#3a3e3a]";
+      case "audio":
+        return "bg-amber-950/40 text-amber-200/90 border border-amber-800/40";
+      case "tv_pc":
+        return "bg-purple-950/40 text-purple-200/90 border border-purple-800/40";
+    }
+  };
+
+  return (
+    <div className={compact ? "space-y-1.5" : "space-y-1.5 min-w-[260px]"}>
+      {shownPhones.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-sky-400">
+            Counted Phones ({phones.length})
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {shownPhones.map((item, idx) => (
+              <span
+                key={`ph-${idx}`}
+                title={item.title}
+                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10.5px] font-mono leading-tight whitespace-nowrap ${badgeTone(
+                  item.kind
+                )}`}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(filtTotal > 0 || shownFiltered.length > 0) && (
+        <div className="space-y-1">
+          <div className="text-[10px] font-mono text-[#9a988f]">
+            Filtered Out: {filtRouters} Router • {filtAudio} Earbud/Watch •{" "}
+            {filtOther} TV/PC
+          </div>
+          {shownFiltered.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {shownFiltered.map((item, idx) => (
+                <span
+                  key={`fl-${idx}`}
+                  title={item.title}
+                  className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono leading-tight whitespace-nowrap ${badgeTone(
+                    item.kind
+                  )}`}
+                >
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {(hiddenCount > 0 || expanded) && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand();
+          }}
+          className="text-[10.5px] font-mono text-sky-400 hover:text-sky-300 underline underline-offset-2"
+        >
+          {expanded ? "Show fewer devices" : `+${hiddenCount} more device(s)`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function BleCrowdDashboard() {
   const [snapshot, setSnapshot] = useState<BleCrowdSnapshot | null>(null);
+  const [expandedDevices, setExpandedDevices] = useState<Record<string, boolean>>({});
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const toggleExpandedDevice = useCallback((deviceId: string) => {
+    setExpandedDevices((prev) => ({
+      ...prev,
+      [deviceId]: !prev[deviceId],
+    }));
+  }, []);
 
   const fetchCrowdSnapshot = useCallback(async () => {
     try {
@@ -584,32 +733,15 @@ export function BleCrowdDashboard() {
                     <span>4G Load: {sc.cell_load_percent || 0}%</span>
                     <span>Speed: {sc.speed_kmh} km/h</span>
                   </div>
-                  {((sc.filtered_routers_count || sc.filtered_audio_count || sc.filtered_other_count) ||
-                    (sc.detected_models && sc.detected_models.length > 0)) && (
-                    <div className="pt-1 border-t border-[#2e312e]/70 space-y-1">
-                      <div className="text-[10px] font-mono text-[#9a988f]">
-                        Filtered Out: {sc.filtered_routers_count || 0} Router(s) •{" "}
-                        {sc.filtered_audio_count || 0} Earbud/Watch •{" "}
-                        {sc.filtered_other_count || 0} TV/PC
-                      </div>
-                      {sc.detected_models && sc.detected_models.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {sc.detected_models.slice(0, 6).map((m, i) => (
-                            <span
-                              key={i}
-                              className={`rounded px-1.5 py-0.5 text-[9.5px] font-mono ${
-                                m.includes("Filtered")
-                                  ? "bg-[#262926] text-[#9a988f]"
-                                  : "bg-sky-950/60 text-sky-300 border border-sky-800/50"
-                              }`}
-                            >
-                              {m}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="pt-1.5 border-t border-[#2e312e]/70">
+                    <DeviceModelsBreakdown
+                      scanner={sc}
+                      expanded={Boolean(expandedDevices[sc.device_id])}
+                      onToggleExpand={() => toggleExpandedDevice(sc.device_id)}
+                      maxPreview={6}
+                      compact
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -626,14 +758,12 @@ export function BleCrowdDashboard() {
               <thead>
                 <tr className="border-b border-[#2e312e] bg-[#121312] text-[#9a988f]">
                   <th className="p-2.5">Opened App User</th>
-                  <th className="p-2.5">Location (Area &amp; GPS)</th>
-                  <th className="p-2.5 text-right">Crowd Around Opened App User</th>
-                  <th className="p-2.5 text-right">Radio Peers (BLE + Wi-Fi BT-Off)</th>
-                  <th className="p-2.5">Static vs. Moving Split</th>
-                  <th className="p-2.5">Mobility State</th>
-                  <th className="p-2.5">Detected Crowd Pattern</th>
-                  <th className="p-2.5 text-right">GPS Speed</th>
-                  <th className="p-2.5 text-right">4G Cell Load / Signal</th>
+                  <th className="p-2.5">Location</th>
+                  <th className="p-2.5 text-right">Crowd</th>
+                  <th className="p-2.5 text-right">Radio &amp; 4G Load</th>
+                  <th className="p-2.5 min-w-[270px]">Detected Devices &amp; Filtered Noise</th>
+                  <th className="p-2.5">Static vs. Moving</th>
+                  <th className="p-2.5">Mobility &amp; Pattern</th>
                   <th className="p-2.5 text-right">Last Ping</th>
                 </tr>
               </thead>
@@ -645,9 +775,9 @@ export function BleCrowdDashboard() {
                     <tr
                       key={sc.device_id}
                       onClick={() => handleFocusZone(sc.lat, sc.lon, sc.area)}
-                      className="cursor-pointer border-b border-[#2e312e]/70 hover:bg-[#222522]"
+                      className="cursor-pointer border-b border-[#2e312e]/70 hover:bg-[#222522] align-top"
                     >
-                      <td className="p-2.5">
+                      <td className="p-2.5 whitespace-nowrap">
                         <div className="font-semibold text-[#ecebe6] flex items-center gap-1.5">
                           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                           {sc.device_label}
@@ -657,7 +787,7 @@ export function BleCrowdDashboard() {
                         </div>
                       </td>
 
-                      <td className="p-2.5">
+                      <td className="p-2.5 whitespace-nowrap">
                         <div className="font-bold text-sky-400">
                           📍 {sc.area}{" "}
                           <span className="text-[11px] font-normal text-[#9a988f]">
@@ -669,7 +799,7 @@ export function BleCrowdDashboard() {
                         </div>
                       </td>
 
-                      <td className="p-2.5 text-right font-mono">
+                      <td className="p-2.5 text-right font-mono whitespace-nowrap">
                         <span className="text-sm font-extrabold text-amber-400">
                           {sc.total_crowd_around_me}
                         </span>
@@ -678,7 +808,7 @@ export function BleCrowdDashboard() {
                         </div>
                       </td>
 
-                      <td className="p-2.5 text-right font-mono">
+                      <td className="p-2.5 text-right font-mono whitespace-nowrap">
                         <div className="font-bold text-sky-300">
                           +{sc.ble_count} BLE (Phones)
                         </div>
@@ -688,35 +818,24 @@ export function BleCrowdDashboard() {
                             ? ` (P2P:${sc.wifi_p2p_count || 0} LAN:${sc.wifi_lan_count || 0} HS:${sc.wifi_hotspot_count || 0})`
                             : ""}
                         </div>
-                        {Boolean(
-                          (sc.filtered_routers_count || 0) +
-                            (sc.filtered_audio_count || 0) +
-                            (sc.filtered_other_count || 0)
-                        ) && (
-                          <div className="text-[9.5px] text-[#9a988f] mt-0.5">
-                            Filtered: {sc.filtered_routers_count || 0}R • {sc.filtered_audio_count || 0}A • {sc.filtered_other_count || 0}T
-                          </div>
-                        )}
-                        {sc.detected_models && sc.detected_models.length > 0 && (
-                          <div className="flex flex-wrap justify-end gap-1 mt-1 max-w-[230px] ml-auto">
-                            {sc.detected_models.slice(0, 4).map((m, idx) => (
-                              <span
-                                key={idx}
-                                className={`rounded px-1 py-0.5 text-[9px] truncate max-w-[110px] ${
-                                  m.includes("Filtered")
-                                    ? "bg-[#262926] text-[#9a988f]"
-                                    : "bg-sky-950/60 text-sky-300"
-                                }`}
-                                title={m}
-                              >
-                                {m}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <div className="text-[10px] text-[#9a988f] mt-0.5">
+                          {sc.cell_network_type || "4G"}: {sc.cell_load_percent || 0}% ({sc.cell_rsrp_dbm ?? -85} dBm)
+                        </div>
+                        <div className="text-[10px] text-[#9a988f]">
+                          {sc.avg_rssi_dbm} dBm • {sc.density_per_100m2}/100m²
+                        </div>
                       </td>
 
-                      <td className="p-2.5 min-w-[170px]">
+                      <td className="p-2.5 max-w-[380px]">
+                        <DeviceModelsBreakdown
+                          scanner={sc}
+                          expanded={Boolean(expandedDevices[sc.device_id])}
+                          onToggleExpand={() => toggleExpandedDevice(sc.device_id)}
+                          maxPreview={8}
+                        />
+                      </td>
+
+                      <td className="p-2.5 min-w-[165px]">
                         <div className="flex justify-between font-mono text-[11px] mb-1">
                           <span className="text-red-400 font-semibold">
                             Static: {sc.static_devices} ({sc.static_percent}%)
@@ -733,42 +852,33 @@ export function BleCrowdDashboard() {
                         </div>
                       </td>
 
-                      <td className="p-2.5">
-                        <Badge
-                          variant={
-                            isStatic
-                              ? "destructive"
+                      <td className="p-2.5 min-w-[180px] space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge
+                            variant={
+                              isStatic
+                                ? "destructive"
+                                : isSlow
+                                ? "warning"
+                                : "success"
+                            }
+                          >
+                            {isStatic
+                              ? "🔴 STATIC / STUCK"
                               : isSlow
-                              ? "warning"
-                              : "success"
-                          }
-                        >
-                          {isStatic
-                            ? "🔴 STATIC / STUCK"
-                            : isSlow
-                            ? "🟡 SLOW CRAWL"
-                            : "🟢 MOVING"}
-                        </Badge>
-                      </td>
-
-                      <td className="p-2.5 font-medium text-[#ecebe6]">
-                        {sc.crowd_pattern}
-                      </td>
-
-                      <td className="p-2.5 text-right font-mono font-semibold text-[#ecebe6]">
-                        {sc.speed_kmh} km/h
-                      </td>
-
-                      <td className="p-2.5 text-right font-mono text-[11px] text-[#9a988f]">
-                        <div className="text-sky-300 font-semibold">
-                          {sc.cell_network_type || "4G"}: {sc.cell_load_percent || 0}% ({sc.cell_rsrp_dbm ?? -85} dBm)
+                              ? "🟡 SLOW CRAWL"
+                              : "🟢 MOVING"}
+                          </Badge>
+                          <span className="font-mono text-[11px] font-semibold text-[#ecebe6]">
+                            {sc.speed_kmh} km/h
+                          </span>
                         </div>
-                        <div>
-                          {sc.avg_rssi_dbm} dBm • {sc.density_per_100m2}/100m²
+                        <div className="font-medium text-[11.5px] text-[#ecebe6]">
+                          {sc.crowd_pattern}
                         </div>
                       </td>
 
-                      <td className="p-2.5 text-right font-mono text-[11px] text-emerald-400">
+                      <td className="p-2.5 text-right font-mono text-[11px] text-emerald-400 whitespace-nowrap">
                         {sc.age_seconds !== undefined && sc.age_seconds <= 5
                           ? "LIVE now"
                           : `${sc.age_seconds || 0}s ago`}
@@ -779,7 +889,7 @@ export function BleCrowdDashboard() {
                 {(!snapshot?.scanners || snapshot.scanners.length === 0) && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={8}
                       className="p-8 text-center text-xs text-[#9a988f]"
                     >
                       No opened mobile app users are currently transmitting BLE scans. Open the BigWarn app on an Android phone with Bluetooth &amp; GPS enabled to stream the live BLE crowd around that opened app user.
