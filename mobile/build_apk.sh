@@ -31,8 +31,8 @@ cd "$MOBILE_DIR"
 echo "==> Running TypeScript check..."
 npx tsc --noEmit
 
-echo "==> Generating native Android project (baking mobile/.env)..."
-npx expo prebuild --platform android --clean
+echo "==> Syncing native Android project (preserving native BigWarnBleScannerModule.kt)..."
+npx expo prebuild --platform android
 
 echo "==> Building Release APK (arm64-v8a)..."
 cd "$MOBILE_DIR/android"

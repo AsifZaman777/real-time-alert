@@ -41,24 +41,26 @@ flowchart LR
 
 ## 3. Step-by-Step Technical Breakdown
 
-### 3.1 Mobile BLE Proximity Scanner ([mobile/src/services/bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))
+### 3.1 Native Android Hardware BLE Scanner & JS Bridge ([BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt) & [bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))
 
-When the user opens the mobile app ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx#L417-L458)):
-1. **`scanNearbyBleCrowd(lat, lon, speedKmh)`** runs automatically on startup and on every 6-second refresh cycle.
-2. **Peer Tracking & RSSI Stability**:
-   - Discovered BLE peers are tracked in a sliding 45-second window (`peerCache`) storing `{ id, firstRssi, lastRssi, seenCount, lastSeenMs }`.
-   - **Static vs. Moving Peer Split**:
-     - A nearby BLE peer is classified as **Static (`bleStaticCount`)** when the scanner's GPS velocity is `< 3.5 km/h` and the peer's signal delta $|\text{lastRssi} - \text{firstRssi}| \le 5\text{ dBm}$.
-     - Otherwise, the peer is classified as **Moving (`bleMovingCount`)**.
-3. **Automatic Telemetry Transmission**:
-   - The app sends the accumulated packet to `/api/v1/crowd/ping`:
+1. **Native Kotlin Hardware Bluetooth Scanner (`android.bluetooth.le.BluetoothLeScanner`)**:
+   - Implemented in [BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt) and registered in [BigWarnBleScannerPackage.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerPackage.kt) / [MainApplication.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/MainApplication.kt).
+   - Uses Android's hardware `BluetoothManager.adapter.bluetoothLeScanner` with `ScanSettings.SCAN_MODE_BALANCED` and `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` runtime permissions ([AndroidManifest.xml](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/AndroidManifest.xml)).
+   - Records every real hardware BLE packet (`onScanResult`) in a thread-safe `ConcurrentHashMap<String, PeerReading>` keyed by device MAC/advertising address with real RSSI (`-95 dBm <= rssi < 0 dBm`), pruning peers not heard in the last `45 seconds`.
+   - Classifies each real BLE peer as **Static (`bleStaticCount`)** when `speedKmh < 3.5` and $|\text{lastRssi} - \text{firstRssi}| \le 6\text{ dBm}$, or **Moving (`bleMovingCount`)** otherwise.
+2. **Zero Synthetic or Fallback BLE Numbers ([bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))**:
+   - **`scanNearbyBleCrowdAsync(speedKmh)`** requests Android runtime `BLUETOOTH_SCAN` & `BLUETOOTH_CONNECT` permissions and queries `NativeModules.BigWarnBleScanner.getScanSnapshot(speedKmh)`.
+   - Strictly returns **only** the real hardware BLE devices physically detected by the phone's Bluetooth radio (`0` if Bluetooth is off or no devices are nearby—never synthetic or coordinate-hashed numbers).
+3. **Automatic Telemetry Transmission ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx#L424-L455))**:
+   - Only transmits `/api/v1/crowd/ping` when a real hardware GPS fix (`hasRealGpsFixRef.current === true`) is active on a mobile device:
      - `device_id`: Unique app instance ID (e.g., `bw-android-a8f39c`)
      - `device_label`: Human-readable scanner label (e.g., `BigWarn ANDROID (f39c)`)
      - `lat`, `lon`, `speed_kmh`, `accuracy_m`
-     - `ble_count`: Total nearby BLE devices detected within `40m`
+     - `ble_count`: Exact count of real nearby BLE devices detected within `40m`
      - `ble_static_count` & `ble_moving_count`
-     - `avg_rssi_dbm`: Average BLE signal strength in `dBm`
+     - `avg_rssi_dbm`: Real average BLE signal strength in `dBm`
      - `scan_radius_m`: `40` meters
+     - `network_type`: `"NATIVE_BLE_HARDWARE"` or `"BLE_PERMISSION_OR_ADAPTER_OFF"`
 
 ---
 

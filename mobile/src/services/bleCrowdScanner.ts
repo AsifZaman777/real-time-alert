@@ -1,5 +1,4 @@
-import { Platform } from "react-native";
-import { requireOptionalNativeModule } from "expo-modules-core";
+import { NativeModules, PermissionsAndroid, Platform } from "react-native";
 
 export interface BleScanTelemetry {
   bleCount: number;
@@ -7,136 +6,94 @@ export interface BleScanTelemetry {
   bleMovingCount: number;
   avgRssiDbm: number;
   scanRadiusM: number;
-  scannerMode: "NATIVE_BLE" | "AMBIENT_BLE_MESH";
+  isScanning: boolean;
+  scannerMode: "NATIVE_BLE_HARDWARE" | "BLE_PERMISSION_OR_ADAPTER_OFF";
 }
 
-interface TrackedBlePeer {
-  id: string;
-  firstRssi: number;
-  lastRssi: number;
-  seenCount: number;
-  lastSeenMs: number;
-}
+let scanStartAttempted = false;
+let lastKnownSnapshot: BleScanTelemetry = {
+  bleCount: 0,
+  bleStaticCount: 0,
+  bleMovingCount: 0,
+  avgRssiDbm: -70,
+  scanRadiusM: 40,
+  isScanning: false,
+  scannerMode: "BLE_PERMISSION_OR_ADAPTER_OFF",
+};
 
-const peerCache = new Map<string, TrackedBlePeer>();
-let nativeBleInitialized = false;
-let nativeBleAvailable = false;
-
-function tryInitNativeBleScanner(): void {
-  if (nativeBleInitialized || Platform.OS === "web") return;
-  nativeBleInitialized = true;
-  try {
-    const bleMod: any = requireOptionalNativeModule("BlePlx");
-    if (bleMod && typeof bleMod.startDeviceScan === "function") {
-      nativeBleAvailable = true;
-    }
-  } catch {
-    nativeBleAvailable = false;
+async function ensureNativeBleHardwareStarted(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const nativeBle = NativeModules?.BigWarnBleScanner;
+  if (!nativeBle || typeof nativeBle.startBleScan !== "function") {
+    return false;
   }
-}
 
-export function recordDiscoveredBlePeer(peerId: string, rssi: number): void {
-  const now = Date.now();
-  const cleanRssi = typeof rssi === "number" && rssi < 0 ? rssi : -68;
-  const existing = peerCache.get(peerId);
-  if (!existing) {
-    peerCache.set(peerId, {
-      id: peerId,
-      firstRssi: cleanRssi,
-      lastRssi: cleanRssi,
-      seenCount: 1,
-      lastSeenMs: now,
-    });
-  } else {
-    existing.lastRssi = cleanRssi;
-    existing.seenCount += 1;
-    existing.lastSeenMs = now;
+  try {
+    if (!scanStartAttempted) {
+      scanStartAttempted = true;
+      const sdkInt =
+        typeof Platform.Version === "number"
+          ? Platform.Version
+          : parseInt(String(Platform.Version), 10) || 33;
+
+      if (sdkInt >= 31) {
+        const perms = [
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        ].filter(Boolean) as any[];
+        await PermissionsAndroid.requestMultiple(perms);
+      } else {
+        await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+      }
+    }
+
+    const started = await nativeBle.startBleScan();
+    return Boolean(started);
+  } catch {
+    return false;
   }
 }
 
 /**
- * Automatically scans and accumulates nearby BLE advertisements around the open app user,
- * classifying nearby BLE peers into STATIC vs. MOVING based on RSSI stability and the
- * scanner phone's measured GPS velocity.
+ * Queries real hardware Bluetooth Low Energy (`android.bluetooth.le.BluetoothLeScanner`)
+ * packets captured by `BigWarnBleScannerModule.kt`.
+ *
+ * Strictly returns ONLY real BLE devices physically heard by the phone's Bluetooth radio.
+ * Zero synthetic coordinate-hash or simulated fallback numbers are ever returned!
  */
-export function scanNearbyBleCrowd(
-  lat: number,
-  lon: number,
+export async function scanNearbyBleCrowdAsync(
   speedKmh: number
-): BleScanTelemetry {
-  tryInitNativeBleScanner();
-  const now = Date.now();
-
-  // Prune BLE peers not seen in the last 45 seconds
-  peerCache.forEach((peer, k) => {
-    if (now - peer.lastSeenMs > 45000) {
-      peerCache.delete(k);
-    }
-  });
-
-  if (nativeBleAvailable && peerCache.size > 0) {
-    let staticPeers = 0;
-    let movingPeers = 0;
-    let rssiSum = 0;
-
-    peerCache.forEach((p) => {
-      rssiSum += p.lastRssi;
-      const rssiDelta = Math.abs(p.lastRssi - p.firstRssi);
-      const isStaticPeer = speedKmh < 3.5 && rssiDelta <= 5;
-      if (isStaticPeer) {
-        staticPeers += 1;
-      } else {
-        movingPeers += 1;
+): Promise<BleScanTelemetry> {
+  if (Platform.OS === "android") {
+    const nativeBle = NativeModules?.BigWarnBleScanner;
+    if (nativeBle && typeof nativeBle.getScanSnapshot === "function") {
+      await ensureNativeBleHardwareStarted();
+      try {
+        const snap = await nativeBle.getScanSnapshot(speedKmh);
+        if (snap && typeof snap.bleCount === "number") {
+          lastKnownSnapshot = {
+            bleCount: Math.max(0, snap.bleCount),
+            bleStaticCount: Math.max(0, snap.bleStaticCount || 0),
+            bleMovingCount: Math.max(0, snap.bleMovingCount || 0),
+            avgRssiDbm: typeof snap.avgRssiDbm === "number" ? snap.avgRssiDbm : -70,
+            scanRadiusM: 40,
+            isScanning: Boolean(snap.isScanning),
+            scannerMode: snap.isScanning
+              ? "NATIVE_BLE_HARDWARE"
+              : "BLE_PERMISSION_OR_ADAPTER_OFF",
+          };
+          return lastKnownSnapshot;
+        }
+      } catch {
+        // fall through to zero snapshot
       }
-    });
-
-    const total = peerCache.size;
-    return {
-      bleCount: total,
-      bleStaticCount: staticPeers,
-      bleMovingCount: movingPeers,
-      avgRssiDbm: Math.round(rssiSum / Math.max(1, total)),
-      scanRadiusM: 40,
-      scannerMode: "NATIVE_BLE",
-    };
+    }
   }
 
-  // Ambient BLE Proximity Discovery around the active app user's coordinates
-  // (Used when running inside Expo Go / Web where raw native BLE HCI packets are sandboxed)
-  const coordHash =
-    Math.abs(Math.round(lat * 10000) * 31 + Math.round(lon * 10000) * 17) % 100;
-  const timeSlot = Math.floor(now / 12000);
-  const microJitter = ((timeSlot + coordHash) % 7) - 3;
-
-  // Base local BLE density within 40m radius of the open app user
-  const isUrbanCore =
-    lat >= 23.70 && lat <= 23.89 && lon >= 90.34 && lon <= 90.45;
-  const baseNearbyBle = isUrbanCore ? 34 + (coordHash % 24) : 18 + (coordHash % 16);
-  const bleCount = Math.max(6, baseNearbyBle + microJitter);
-
-  // Classify nearby BLE devices as static vs moving based on user's measured GPS velocity
-  let staticRatio: number;
-  if (speedKmh < 3.5) {
-    staticRatio = 0.78 + ((coordHash % 10) / 100);
-  } else if (speedKmh < 10.0) {
-    staticRatio = 0.52 + ((coordHash % 10) / 100);
-  } else {
-    staticRatio = 0.22 + ((coordHash % 8) / 100);
-  }
-
-  const bleStaticCount = Math.min(
-    bleCount,
-    Math.max(1, Math.round(bleCount * staticRatio))
-  );
-  const bleMovingCount = Math.max(0, bleCount - bleStaticCount);
-  const avgRssiDbm = -(58 + (coordHash % 16));
-
-  return {
-    bleCount,
-    bleStaticCount,
-    bleMovingCount,
-    avgRssiDbm,
-    scanRadiusM: 40,
-    scannerMode: "AMBIENT_BLE_MESH",
-  };
+  // When running on Web or if Bluetooth adapter is off, return 0 nearby BLE peers
+  // (never fabricate fake BLE device counts!)
+  return lastKnownSnapshot;
 }

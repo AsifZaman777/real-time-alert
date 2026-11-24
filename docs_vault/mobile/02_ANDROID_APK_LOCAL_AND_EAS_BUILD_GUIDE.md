@@ -55,7 +55,7 @@ Whenever you edit `real-time-alert/mobile/` code or update `EXPO_PUBLIC_BIGWARN_
    ```
    This automatically:
    - Switches to Node 22 and runs `npx tsc --noEmit`.
-   - Loads `mobile/.env` and runs `npx expo prebuild --platform android --clean`.
+   - Loads `mobile/.env` and runs `npx expo prebuild --platform android` (preserving the native hardware BLE scanner module [BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt) and [BigWarnBleScannerPackage.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerPackage.kt)).
    - Compiles `android/app/build/outputs/apk/release/app-release.apk` with Gradle (`arm64-v8a`).
    - Copies the updated APK to `frontend/public/downloads/bigwarn-edge.apk` so your web `/download` page immediately serves the new build.
 

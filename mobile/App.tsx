@@ -35,7 +35,7 @@ import {
   VerifiedHeatmapZone,
 } from "./src/types/alert";
 import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
-import { scanNearbyBleCrowd } from "./src/services/bleCrowdScanner";
+import { scanNearbyBleCrowdAsync } from "./src/services/bleCrowdScanner";
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
 import {
@@ -218,7 +218,8 @@ export default function App() {
   const deviceIdRef = useRef<string>(
     `bw-${Platform.OS}-${Math.random().toString(36).slice(2, 8)}`
   );
-  const gpsSpeedKmhRef = useRef<number>(0.8);
+  const hasRealGpsFixRef = useRef<boolean>(false);
+  const gpsSpeedKmhRef = useRef<number>(0);
   const gpsAccuracyMRef = useRef<number>(18);
 
   // Draggable Bottom Drawer Geometry & Gesture Physics
@@ -355,6 +356,7 @@ export default function App() {
           return;
         }
         const pos = await Location.getCurrentPositionAsync({});
+        hasRealGpsFixRef.current = true;
         const rawSpeedMs = pos.coords.speed;
         if (typeof rawSpeedMs === "number" && rawSpeedMs >= 0) {
           gpsSpeedKmhRef.current = Math.round(rawSpeedMs * 3.6 * 10) / 10;
@@ -419,33 +421,29 @@ export default function App() {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
 
-        // Automatically scan nearby BLE devices around this open app user & transmit accumulated BLE telemetry
-        const bleScan = scanNearbyBleCrowd(
-          currentLocation.lat,
-          currentLocation.lon,
-          gpsSpeedKmhRef.current
-        );
-        const pingParams = new URLSearchParams({
-          device_id: deviceIdRef.current,
-          device_label: `BigWarn ${Platform.OS.toUpperCase()} (${deviceIdRef.current.slice(-4)})`,
-          lat: String(currentLocation.lat),
-          lon: String(currentLocation.lon),
-          speed_kmh: String(gpsSpeedKmhRef.current),
-          accuracy_m: String(gpsAccuracyMRef.current),
-          ble_count: String(bleScan.bleCount),
-          ble_static_count: String(bleScan.bleStaticCount),
-          ble_moving_count: String(bleScan.bleMovingCount),
-          avg_rssi_dbm: String(bleScan.avgRssiDbm),
-          scan_radius_m: String(bleScan.scanRadiusM),
-          network_type: "BLE_5.0 + 4G",
-        });
+        // Query real hardware BLE scanner (`BigWarnBleScannerModule.kt`) and only transmit ping when real GPS is active
+        const bleScan = await scanNearbyBleCrowdAsync(gpsSpeedKmhRef.current);
+        if (hasRealGpsFixRef.current && Platform.OS !== "web") {
+          const pingParams = new URLSearchParams({
+            device_id: deviceIdRef.current,
+            device_label: `BigWarn ${Platform.OS.toUpperCase()} (${deviceIdRef.current.slice(-4)})`,
+            lat: String(currentLocation.lat),
+            lon: String(currentLocation.lon),
+            speed_kmh: String(gpsSpeedKmhRef.current),
+            accuracy_m: String(gpsAccuracyMRef.current),
+            ble_count: String(bleScan.bleCount),
+            ble_static_count: String(bleScan.bleStaticCount),
+            ble_moving_count: String(bleScan.bleMovingCount),
+            avg_rssi_dbm: String(bleScan.avgRssiDbm),
+            scan_radius_m: String(bleScan.scanRadiusM),
+            network_type: bleScan.scannerMode,
+          });
+          fetch(`${API_BASE_URL}/api/v1/crowd/ping?${pingParams.toString()}`, {
+            headers,
+          }).catch(() => {});
+        }
 
-        fetch(`${API_BASE_URL}/api/v1/crowd/ping?${pingParams.toString()}`, {
-          headers,
-        })
-          .then(() =>
-            fetch(`${API_BASE_URL}/api/v1/crowd/heatmap`, { headers })
-          )
+        fetch(`${API_BASE_URL}/api/v1/crowd/heatmap`, { headers })
           .then((r) => (r && r.ok ? r.json() : null))
           .then((hData) => {
             if (hData && Array.isArray(hData.heatmaps)) {
