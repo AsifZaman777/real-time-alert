@@ -22,18 +22,34 @@ interface LiveHistoryPoint {
 export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props) {
   const [liveHistory, setLiveHistory] = useState<LiveHistoryPoint[]>([]);
   const [lastUpdatedClock, setLastUpdatedClock] = useState<string>("");
+  const [scopeMode, setScopeMode] = useState<"all_48h" | "selected_day">("all_48h");
+
+  const activeLayers = useMemo(() => {
+    if (!snapshot) return null;
+    if (scopeMode === "all_48h" && snapshot.rolling_48h_layers) {
+      return snapshot.rolling_48h_layers;
+    }
+    return snapshot.layers;
+  }, [snapshot, scopeMode]);
+
+  const activeGoldAlerts = useMemo(() => {
+    if (!snapshot) return [];
+    if (scopeMode === "all_48h" && snapshot.rolling_48h_gold_alerts) {
+      return snapshot.rolling_48h_gold_alerts;
+    }
+    return snapshot.gold_alerts || [];
+  }, [snapshot, scopeMode]);
 
   const goldArticleCount = useMemo(() => {
-    if (!snapshot) return 0;
-    return snapshot.gold_alerts.reduce(
+    return activeGoldAlerts.reduce(
       (sum, cl) => sum + (cl.articles?.length || cl.source_count || 1),
       0
     );
-  }, [snapshot]);
+  }, [activeGoldAlerts]);
 
   // Append a live data point every time the snapshot updates
   useEffect(() => {
-    if (!snapshot) return;
+    if (!snapshot || !activeLayers) return;
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
@@ -41,9 +57,9 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
     const label = `${hh}:${mm}:${ss}`;
     setLastUpdatedClock(label);
 
-    const bCount = snapshot.layers.bronze.record_count;
-    const sCount = snapshot.layers.silver.record_count;
-    const gClusters = snapshot.layers.gold.alert_clusters;
+    const bCount = activeLayers.bronze.record_count;
+    const sCount = activeLayers.silver.record_count;
+    const gClusters = activeLayers.gold.alert_clusters;
 
     setLiveHistory((prev) => {
       const nextPt: LiveHistoryPoint = {
@@ -56,7 +72,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
       const next = [...prev, nextPt];
       return next.slice(-14);
     });
-  }, [snapshot, goldArticleCount]);
+  }, [snapshot, activeLayers, goldArticleCount]);
 
   // Compute time-of-day (hourly) distribution across Bronze, Silver, and Gold from actual timestamps
   const hourlyTimeline = useMemo(() => {
@@ -87,7 +103,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
       buckets.set(hk, entry);
     });
 
-    (snapshot?.gold_alerts || []).forEach((cl) => {
+    (activeGoldAlerts || []).forEach((cl) => {
       (cl.articles || []).forEach((a) => {
         const hk = extractHourKey(a.published || a.ingested_at || cl.last_updated);
         if (!hk) return;
@@ -109,7 +125,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
       silver: h.silver,
       gold: h.goldArticles,
     }));
-  }, [items, snapshot, liveHistory]);
+  }, [items, activeGoldAlerts, liveHistory]);
 
   // Event-type distribution across Gold & Silver
   const eventBreakdown = useMemo(() => {
@@ -117,7 +133,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
       string,
       { event: string; goldClusters: number; goldArticles: number }
     >();
-    (snapshot?.gold_alerts || []).forEach((cl) => {
+    (activeGoldAlerts || []).forEach((cl) => {
       const ev = cl.event_type || "disruption";
       const cur = map.get(ev) || { event: ev, goldClusters: 0, goldArticles: 0 };
       cur.goldClusters += 1;
@@ -127,18 +143,18 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
     return Array.from(map.values()).sort(
       (a, b) => b.goldArticles - a.goldArticles || b.goldClusters - a.goldClusters
     );
-  }, [snapshot]);
+  }, [activeGoldAlerts]);
 
   // Veracity tier breakdown in Gold
   const veracityBreakdown = useMemo(() => {
-    const alerts = snapshot?.gold_alerts || [];
+    const alerts = activeGoldAlerts || [];
     const verified3Plus = alerts.filter((a) => a.source_count >= 3).length;
     const confirmed2 = alerts.filter((a) => a.source_count === 2).length;
     const single1 = alerts.filter((a) => a.source_count <= 1).length;
     return { verified3Plus, confirmed2, single1, total: alerts.length };
-  }, [snapshot]);
+  }, [activeGoldAlerts]);
 
-  if (!snapshot) {
+  if (!snapshot || !activeLayers) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
         Loading Medallion Lakehouse ELT state…
@@ -146,7 +162,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
     );
   }
 
-  const { bronze, silver, gold } = snapshot.layers;
+  const { bronze, silver, gold } = activeLayers;
 
   const bronzeCount = bronze.record_count;
   const silverCount = silver.record_count;
@@ -301,14 +317,38 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-          <span className="rounded-md bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-amber-300 font-semibold">
-            🥉 Bronze: {bronzeCount.toLocaleString()}
+          {snapshot.rolling_48h_layers && (
+            <div className="inline-flex rounded-lg bg-[#121312] p-0.5 border border-[#2e312e] mr-1">
+              <button
+                onClick={() => setScopeMode("all_48h")}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer ${
+                  scopeMode === "all_48h"
+                    ? "bg-[#262926] text-emerald-300"
+                    : "text-[#9a988f] hover:text-[#ecebe6]"
+                }`}
+              >
+                All Collected (48h)
+              </button>
+              <button
+                onClick={() => setScopeMode("selected_day")}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer ${
+                  scopeMode === "selected_day"
+                    ? "bg-[#262926] text-[#ecebe6]"
+                    : "text-[#9a988f] hover:text-[#ecebe6]"
+                }`}
+              >
+                Day: {snapshot.date}
+              </button>
+            </div>
+          )}
+          <span className="rounded-md bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-amber-300 font-bold">
+            🥉 B-{bronzeCount.toLocaleString()}
           </span>
-          <span className="rounded-md bg-sky-500/15 border border-sky-500/30 px-2.5 py-1 text-sky-300 font-semibold">
-            🥈 Silver: {silverCount.toLocaleString()}
+          <span className="rounded-md bg-sky-500/15 border border-sky-500/30 px-2.5 py-1 text-sky-300 font-bold">
+            🥈 S-{silverCount.toLocaleString()}
           </span>
-          <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-semibold">
-            🥇 Gold: {goldArticleCount.toLocaleString()} arts ({goldClusterCount} clusters)
+          <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-emerald-300 font-bold">
+            🥇 G-{goldClusterCount.toLocaleString()} ({goldArticleCount.toLocaleString()} arts)
           </span>
           {lastUpdatedClock && (
             <span className="text-[11px] text-[#9a988f]">
@@ -336,7 +376,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
             <div className="flex items-baseline justify-between pt-1">
               <div>
                 <div className="text-2xl font-extrabold font-mono text-amber-400">
-                  {bronzeCount.toLocaleString()}
+                  B-{bronzeCount.toLocaleString()}
                 </div>
                 <div className="text-[11px] text-[#9a988f]">
                   Raw Ingested Articles
@@ -375,7 +415,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
             <div className="flex items-baseline justify-between pt-1">
               <div>
                 <div className="text-2xl font-extrabold font-mono text-sky-400">
-                  {silverCount.toLocaleString()}
+                  S-{silverCount.toLocaleString()}
                 </div>
                 <div className="text-[11px] text-[#9a988f]">
                   Filtered Disruption Articles
@@ -417,15 +457,14 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
             <div className="flex items-baseline justify-between pt-1">
               <div>
                 <div className="text-2xl font-extrabold font-mono text-emerald-400">
-                  {goldArticleCount.toLocaleString()}{" "}
+                  G-{goldClusterCount.toLocaleString()}{" "}
                   <span className="text-sm font-normal text-[#9a988f]">
-                    articles
+                    clusters
                   </span>
                 </div>
                 <div className="text-[11px] text-[#9a988f]">
-                  Grouped into{" "}
-                  <b className="text-[#ecebe6]">{goldClusterCount}</b> Area Alert
-                  Clusters
+                  <b className="text-[#ecebe6]">{goldArticleCount.toLocaleString()}</b>{" "}
+                  Corroborated Gold Articles
                 </div>
               </div>
               <div className="text-right font-mono">
@@ -464,7 +503,9 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
                 </p>
               </div>
               <Badge variant="outline" className="font-mono text-[11px]">
-                Live Snapshot ({snapshot.date})
+                {scopeMode === "all_48h" && snapshot.rolling_48h_window
+                  ? `Active Window (${snapshot.rolling_48h_window})`
+                  : `Live Snapshot (${snapshot.date})`}
               </Badge>
             </div>
           </CardHeader>
@@ -916,6 +957,110 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
         </Card>
       </div>
 
+      {/* 3b. Cloud Lakehouse Sync (Cloudflare R2) & Collected Storage Summary */}
+      {(snapshot.cloud_lakehouse || snapshot.archive_status) && (
+        <div className="grid gap-4 lg:grid-cols-12">
+          <Card className="lg:col-span-6 bg-[#181a18] border-[#2e312e]">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm sm:text-base">
+                  ☁️ Cloud Medallion Storage (Cloudflare R2)
+                </CardTitle>
+                <Badge
+                  variant={
+                    snapshot.cloud_lakehouse?.sync_status === "SYNCED_TO_CLOUD"
+                      ? "success"
+                      : "secondary"
+                  }
+                  className="font-mono text-[10.5px]"
+                >
+                  {snapshot.cloud_lakehouse?.sync_status || "ACTIVE"}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Window:{" "}
+                <span className="font-mono text-[#ecebe6]">
+                  {scopeMode === "all_48h"
+                    ? snapshot.rolling_48h_window || snapshot.window || snapshot.date
+                    : snapshot.date}
+                </span>
+                {snapshot.archive_status?.bucket && (
+                  <>
+                    {" "}
+                    • Bucket:{" "}
+                    <span className="font-mono text-sky-300">
+                      {snapshot.archive_status.bucket}
+                    </span>
+                  </>
+                )}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs font-mono">
+              <div className="rounded-lg border border-[#2e312e] bg-[#121312] p-2.5 space-y-1.5">
+                <div className="flex justify-between gap-2">
+                  <span className="text-amber-300">🥉 Bronze URI:</span>
+                  <span className="text-[#ecebe6] truncate">
+                    {snapshot.cloud_lakehouse?.bronze_uri || "s3a://bigwarn/bronze"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-sky-300">🥈 Silver URI:</span>
+                  <span className="text-[#ecebe6] truncate">
+                    {snapshot.cloud_lakehouse?.silver_uri || "s3a://bigwarn/silver"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-emerald-300">🥇 Gold URI:</span>
+                  <span className="text-[#ecebe6] truncate">
+                    {snapshot.cloud_lakehouse?.gold_uri || "s3a://bigwarn/gold"}
+                  </span>
+                </div>
+                {snapshot.cloud_lakehouse?.last_sync_at && (
+                  <div className="flex justify-between gap-2 pt-1 border-t border-[#2e312e] text-[11px] text-[#9a988f]">
+                    <span>Last R2 Sync:</span>
+                    <span>{snapshot.cloud_lakehouse.last_sync_at}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-6 bg-[#181a18] border-[#2e312e]">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm sm:text-base">
+                  🗄️ Collected Raw Streams &amp; 48h Retention Archives
+                </CardTitle>
+                <Badge variant="outline" className="font-mono text-[10.5px]">
+                  {snapshot.archive_status?.local_log_files?.length || 0} Local •{" "}
+                  {snapshot.archive_status?.last_run?.uploaded?.length || 0} R2
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total data volume persisted on disk &amp; archived per date+timestamp in R2
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border border-[#2e312e] bg-[#121312] p-2.5 max-h-[140px] overflow-y-auto space-y-1 font-mono text-[11px]">
+                {(snapshot.archive_status?.local_log_files || []).map((f) => (
+                  <div key={f.name} className="flex justify-between text-[#ecebe6]">
+                    <span className="truncate">{f.name}</span>
+                    <span className="text-sky-300 shrink-0 ml-2">
+                      {(f.size_bytes / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  </div>
+                ))}
+                {(snapshot.archive_status?.last_run?.uploaded || []).slice(0, 6).map((k) => (
+                  <div key={k} className="text-[10.5px] text-emerald-300/90 truncate">
+                    ☁️ {k}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* 4. Gold Corroborated Area Alerts Table */}
       <Card>
         <CardHeader>
@@ -926,18 +1071,18 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
               </CardTitle>
               <p className="text-xs text-muted-foreground">
                 Each row represents an aggregated `(Area, Disruption Type)` topic
-                scored by Spark across English & Bangla newspapers.
+                scored by Spark across English &amp; Bangla newspapers.
               </p>
             </div>
             <Badge variant="outline" className="font-mono">
-              {snapshot.gold_alerts.length} Active Area Clusters ({goldArticleCount} Articles)
+              G-{activeGoldAlerts.length} Active Area Clusters ({goldArticleCount} Articles)
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
           {/* Mobile Phone Card View (< md) */}
           <div className="space-y-3 md:hidden">
-            {snapshot.gold_alerts.map((cl) => (
+            {activeGoldAlerts.map((cl) => (
               <div
                 key={cl.cluster_id}
                 className="rounded-xl border border-border bg-card/60 p-3 text-xs space-y-2"
@@ -988,7 +1133,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
                 </div>
               </div>
             ))}
-            {snapshot.gold_alerts.length === 0 && (
+            {activeGoldAlerts.length === 0 && (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 No disruption clusters detected for this date yet.
               </div>
@@ -1009,7 +1154,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
                 </tr>
               </thead>
               <tbody>
-                {snapshot.gold_alerts.map((cl) => (
+                {activeGoldAlerts.map((cl) => (
                   <tr
                     key={cl.cluster_id}
                     className="border-b border-border/70 hover:bg-accent/40"
@@ -1070,7 +1215,7 @@ export function MedallionExplorer({ snapshot, items = [], onSelectArea }: Props)
                     </td>
                   </tr>
                 ))}
-                {snapshot.gold_alerts.length === 0 && (
+                {activeGoldAlerts.length === 0 && (
                   <tr>
                     <td
                       colSpan={6}

@@ -116,8 +116,37 @@ export interface GoldAlertCluster {
   }>;
 }
 
+export interface CloudLakehouseMeta {
+  provider?: string;
+  cloud_enabled?: boolean;
+  bronze_uri?: string;
+  silver_uri?: string;
+  gold_uri?: string;
+  last_sync_at?: string;
+  sync_status?: string;
+  last_error?: string | null;
+}
+
+export interface LakehouseArchiveStatus {
+  r2_configured?: boolean;
+  bucket?: string;
+  retention_hours?: number;
+  r2_folder_schema?: string;
+  local_log_files?: Array<{ name: string; size_bytes: number }>;
+  last_run?: {
+    last_checked_at?: string;
+    archive_timestamp_folder?: string;
+    prune_cutoff_date?: string;
+    uploaded?: string[];
+    pruned?: string[];
+    errors?: string[];
+  };
+}
+
 export interface LakehouseSnapshot {
   date: string;
+  window?: string;
+  cloud_lakehouse?: CloudLakehouseMeta;
   layers: {
     bronze: {
       table: string;
@@ -141,6 +170,10 @@ export interface LakehouseSnapshot {
   };
   gold_alerts: GoldAlertCluster[];
   area_metadata: Record<string, { lat: number; lon: number; city: string }>;
+  rolling_48h_window?: string;
+  rolling_48h_layers?: LakehouseSnapshot["layers"];
+  rolling_48h_gold_alerts?: GoldAlertCluster[];
+  archive_status?: LakehouseArchiveStatus;
 }
 
 export interface EdgeTodoItem {
