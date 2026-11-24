@@ -8,38 +8,43 @@ This document details the architecture of the **BigWarn Mobile Edge App** (`real
 
 | File | Responsibility |
 | :--- | :--- |
-| [App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx) | Main navigation screen, floating top route/city filter card, hardware GPS telemetry (`expo-location`), route risk banner, and gesture-driven bottom drawer (with no cross `✕` button). |
-| [src/components/OsmMapWebView.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/OsmMapWebView.tsx) | Interactive Leaflet + OpenStreetMap WebView in clean daylight white mode, Google Maps blue route polylines, perpendicular blinking red hazard dots (`<= 3h`), verified heatmaps, and clickable `#crowd-hud`. |
+| [App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx) | Uncongested top navigation bar (`☰` Help Menu, `EN`/`বাং` switcher, `Places` toggle tray, Search, explicit `Pin` button, single-line route advisory) and gesture-driven bottom alerts drawer. |
+| [src/i18n/index.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/i18n/index.tsx) | Lightweight React Context i18n provider switching live across **English** ([en.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/i18n/locales/en.ts)) and **বাংলা** ([bn.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/i18n/locales/bn.ts)). |
+| [src/components/HelpMenuModal.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/HelpMenuModal.tsx) | Three-bar (`☰`) Help & Features guide explaining each feature, multi-radio crowd sensing, progressive `20/50/100/150` heatmap color scale, and sensor permissions. |
+| [src/components/OsmMapWebView.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/OsmMapWebView.tsx) | Interactive Leaflet + OpenStreetMap WebView in daylight white mode, Google Maps blue route polylines, blinking red hazard dots (`<= 3h`), explicit Pin-button-only map pinning, `20/50/100/150` progressive crowd heatmaps, and localized clickable `#crowd-hud`. |
 | [src/components/ui/MobileUI.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/ui/MobileUI.tsx) | Responsive mobile design system providing `useResponsiveLayout`, `SurfaceCard`, `PillChip`, `StatusBadge`, `SegmentedControl`, and `DraggableBottomDrawer`. |
-| [src/components/AreaDetailModal.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/AreaDetailModal.tsx) | Gesture-driven draggable bottom drawer (drag down or tap backdrop to close; no cross `✕` button) displaying newest-first news articles and veracity meters for a selected area. |
+| [src/components/AreaDetailModal.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/AreaDetailModal.tsx) | Gesture-driven draggable bottom drawer (drag down or tap backdrop to close) displaying newest-first news articles and credibility meters for a selected area. |
 | [src/components/VeracityMeter.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/VeracityMeter.tsx) | Newspaper/portal corroboration gauge displaying `veracity_percent%`, tier badge, and source portal chips. |
 | [src/config/api.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/config/api.ts) | Resolves `EXPO_PUBLIC_BIGWARN_FEED_URL` / LAN host and provides quick Dhaka destination presets. |
 
 ---
 
-## 2. Google Maps-Style White Map & Exact Road Hazard Snapping
+## 2. Google Maps-Style White Map & Explicit Pin Mode
 
 1. **Free OpenStreetMap Daylight White Tiles**:
    - Uses `https://tile.openstreetmap.org/{z}/{x}/{y}.png` (no API key required) with CSS `filter: brightness(1.04) contrast(0.95) saturate(0.85)` for a crisp Google Maps-like white theme.
-2. **Press-and-Hold (`~420ms`) or Drag Destination Pin**:
-   - Long-pressing anywhere on the map (or dragging the red teardrop pin) sets the destination and fetches the OSRM street route (`#4285F4` over `#185ABC` casing).
+2. **Explicit Pin-Button-Only Dropping**:
+   - Scrolling, panning, zooming, or resting a finger on the map **never** drops a pin accidentally.
+   - Tapping the **`📍 Pin`** button enters `pinMode` and displays a banner (`Tap anywhere on the map to set your destination`). Clicking the map sets the destination and immediately exits `pinMode`.
 3. **Strict 3-Hour Recency Filter (`<= 180 Minutes`) & Perpendicular Red Hazard Dots**:
    - Only active threats from the last **3 hours (`isRecent3h`)** are projected onto the navigated road polyline via `projectPointToPolyline()`.
    - Each intercepted road stretch is highlighted in pulsing red (`#EF4444`) with a **blinking Red Hazard Dot (`🔴`)** snapped to the exact perpendicular closest point on the road.
-   - Tapping a red dot opens a compact white card popup showing the affected road name, headline, veracity summary, and a `Details ›` link.
+   - Tapping a red dot opens a compact white card popup showing the affected road name, headline, veracity summary, and a `Details` link.
 
 ---
 
-## 3. Automatic BLE Proximity Crowd-Sourcing & Clickable Heatmap HUD
+## 3. Silent Background Sensing & Progressive Heatmap Colors (`20, 50, 100, 150`)
 
-1. **Automatic BLE Proximity Scanning When App Is Open ([src/services/bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))**:
-   - When a user opens the BigWarn app, their phone automatically scans nearby Bluetooth Low Energy (BLE) advertising packets within a `~40m` radius and reads the phone's hardware GPS velocity (`speed_kmh`).
-   - It transmits the accumulated BLE peer count (`ble_count`), static vs. moving BLE split (`ble_static_count`, `ble_moving_count`), average RSSI (`avg_rssi_dbm`), and GPS velocity to `/api/v1/crowd/ping`.
-2. **Server Aggregation & Static vs. Moving Classification ([backend/app/services/crowd_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/crowd_service.py))**:
-   - The server aggregates all active open-app BLE scanners, classifies whether the crowd around each user is **STATIC (`< 3.5 km/h` or `>= 68%` static BLE peers)**, **SLOW_MOVING**, or **MOVING**, and identifies the **Crowd Pattern** (e.g., `"Dense Static Gathering / Standstill Blockade"`, `"High-Density Static Crowd / Bottleneck"`, `"Normal Free-Flowing Movement"`).
-3. **Clickable BLE Heatmap HUD ([src/components/OsmMapWebView.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/OsmMapWebView.tsx))**:
-   - Renders multi-intensity heatmaps on the map (Dark Crimson / Maroon `#7F1D1D` $\rightarrow$ `#3B0707` for **STATIC** crowds; Amber `#F59E0B` for **MOVING** crowds).
-   - Clicking any heatmap opens `#crowd-hud` displaying the Location, Mobility State badge (`🔴 STATIC CROWD` / `🟢 MOVING FLOW`), Crowd Pattern, Open App Scanner count, Total BLE Crowd, Static vs. Moving counts (`%`), and Avg GPS Speed (`km/h`).
+1. **Silent Multi-Radio Crowd Sensing**:
+   - No sensor/peers status strip clutters the main map screen—hardware BLE, Wi-Fi (Hotspots, Direct P2P, Shared LAN), and 4G load scans run silently in the background every 6 seconds. Users inspect detailed crowd telemetry only when tapping a heatmap (`#crowd-hud`).
+2. **Threshold-Based Progressive Heatmap Density Colors**:
+   - **`< 20` devices**: Soft Warm Yellow (`#FDE68A` / `#F59E0B`) — light presence
+   - **`20–49` devices**: Warm Amber (`#F59E0B` / `#D97706`) — moderate gathering
+   - **`50–99` devices**: Deep Orange (`#EA580C` / `#C2410C`) — dense crowd / slow traffic
+   - **`100–149` devices**: Crimson Red (`#DC2626` / `#991B1B`) — heavy blockade / surge
+   - **`150+` devices**: Deep Dark Maroon (`#7F1D1D` / `#450A0A`) — extreme standstill crowd
+3. **Clickable Localized `#crowd-hud`**:
+   - Tapping any heatmap circle opens `#crowd-hud` (localized in English or বাংলা) displaying the Area, Mobility State badge, Crowd Pattern, Open App count, Multi-Radio breakdown (`+BLE`, `+Wi-Fi P2P/LAN`, `4G Load %`), Surrounding Crowd total, Static vs. Moving split, and Traffic Speed (`km/h`).
 
 ---
 

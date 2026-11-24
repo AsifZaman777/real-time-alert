@@ -335,21 +335,16 @@ function buildLocalSnapshot() {
     );
     const exceedsPeak =
       totalMobiles >= peakThreshold || avgCellLoad >= 65;
-    const excessRatio = Math.max(
-      0,
-      (totalMobiles - peakThreshold) / peakThreshold
-    );
-    const heatIntensity = Math.min(
-      1.0,
-      Math.round(
-        (0.42 +
-          Math.min(0.38, (totalMobiles / peakThreshold) * 0.28) +
-          (stuckPct / 100) * 0.24 +
-          (avgCellLoad / 100) * 0.14 +
-          excessRatio * 0.22) *
-          100
-      ) / 100
-    );
+    const heatIntensity =
+      totalMobiles >= 150
+        ? 1.0
+        : totalMobiles >= 100
+        ? 0.8
+        : totalMobiles >= 50
+        ? 0.6
+        : totalMobiles >= 20
+        ? 0.4
+        : 0.2;
 
     return {
       area,
@@ -625,7 +620,16 @@ export async function GET(req: NextRequest) {
         density_per_100m2: nodes[0].density_per_100m2 || 0.04,
         peak_threshold: peakThreshold,
         exceeds_peak: totalMobiles >= peakThreshold || avgCellLoad >= 65,
-        heat_intensity: mobility_state === "STATIC" ? 0.78 : 0.55,
+        heat_intensity:
+          totalMobiles >= 150
+            ? 1.0
+            : totalMobiles >= 100
+            ? 0.8
+            : totalMobiles >= 50
+            ? 0.6
+            : totalMobiles >= 20
+            ? 0.4
+            : 0.2,
         intensity_label: `${mobility_state} (${totalMobiles} Devices)`,
       };
     });

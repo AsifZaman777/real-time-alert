@@ -14,7 +14,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { GoldAlert } from "../types/alert";
 import { VeracityMeter } from "./VeracityMeter";
-import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
+import { formatNewsTimestamp } from "../services/notifications";
+import { useI18n } from "../i18n";
 
 interface AreaDetailModalProps {
   visible: boolean;
@@ -31,6 +32,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
   onCrowdVote,
   onClose,
 }) => {
+  const { t, tEvent, tSeverity } = useI18n();
   const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -117,12 +119,12 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
           {/* Draggable Top Handle Area (Drag down to close) */}
           <View {...panResponder.panHandlers} style={styles.dragHandleArea}>
             <View style={styles.dragHandlePill} />
-            <Text style={styles.dragHint}>Drag down to close</Text>
+            <Text style={styles.dragHint}>{t("dragDownClose")}</Text>
           </View>
 
           <View style={styles.header}>
             <View style={styles.headerTextCol}>
-              <Text style={styles.kicker}>AREA THREAT & DISRUPTION INTEL</Text>
+              <Text style={styles.kicker}>{t("areaIntel")}</Text>
               <View style={styles.titleRow}>
                 <Ionicons name="location" size={20} color="#EA4335" />
                 <Text style={styles.title}>{areaName}</Text>
@@ -133,7 +135,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             {sortedAlerts.length === 0 ? (
               <Text style={styles.empty}>
-                No active threat or disruption alerts recorded for {areaName}.
+                {t("noAreaAlerts", { area: areaName })}
               </Text>
             ) : (
               sortedAlerts.map((cluster) => {
@@ -161,13 +163,12 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                             { color: isRed ? "#DC2626" : "#D97706" },
                           ]}
                         >
-                          {formatEventLabel(cluster.event_type).toUpperCase()} •{" "}
-                          {cluster.severity}
+                          {tEvent(cluster.event_type)} • {tSeverity(cluster.severity)}
                         </Text>
                       </View>
                       {cluster.on_route && (
                         <View style={styles.routeBadge}>
-                          <Text style={styles.routeBadgeText}>ON YOUR ROUTE</Text>
+                          <Text style={styles.routeBadgeText}>{t("onRouteBadge")}</Text>
                         </View>
                       )}
                     </View>
@@ -176,7 +177,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                       <View style={styles.clusterTimeRow}>
                         <Ionicons name="time-outline" size={12} color="#1A73E8" />
                         <Text style={styles.clusterTimeText}>
-                          Latest report: {formatNewsTimestamp(cluster._newestTs)}
+                          {t("latestReport")}: {formatNewsTimestamp(cluster._newestTs)}
                         </Text>
                       </View>
                     ) : null}
@@ -190,7 +191,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                     />
 
                     <Text style={styles.headlinesTitle}>
-                      Recent Reports — Newest First ({cluster.articles.length})
+                      {t("recentReports", { count: cluster.articles.length })}
                     </Text>
 
                     {cluster.articles.map((art, idx) => (
@@ -210,7 +211,7 @@ export const AreaDetailModal: React.FC<AreaDetailModalProps> = ({
                           </View>
                           {idx === 0 && (
                             <View style={styles.latestBadge}>
-                              <Text style={styles.latestBadgeText}>LATEST</Text>
+                              <Text style={styles.latestBadgeText}>{t("latestTag")}</Text>
                             </View>
                           )}
                         </View>

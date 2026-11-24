@@ -35,13 +35,11 @@ import {
   VerifiedHeatmapZone,
 } from "./src/types/alert";
 import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
-import {
-  BleScanTelemetry,
-  requestMultiRadioPermissionsAsync,
-  scanNearbyBleCrowdAsync,
-} from "./src/services/bleCrowdScanner";
+import { scanNearbyBleCrowdAsync } from "./src/services/bleCrowdScanner";
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
+import { HelpMenuModal } from "./src/components/HelpMenuModal";
+import { I18nProvider, useI18n } from "./src/i18n";
 import {
   DraggableBottomDrawer,
   PillChip,
@@ -49,10 +47,7 @@ import {
   SurfaceCard,
   useResponsiveLayout,
 } from "./src/components/ui/MobileUI";
-import {
-  formatEventLabel,
-  formatNewsTimestamp,
-} from "./src/services/notifications";
+import { formatNewsTimestamp } from "./src/services/notifications";
 
 type DrawerSnap = "off" | "half" | "full";
 type DrawerTab = "route" | "all";
@@ -166,7 +161,8 @@ function minDistanceToPolylineKm(
   return best;
 }
 
-export default function App() {
+function BigWarnAppContent() {
+  const { lang, toggleLang, t, tEvent } = useI18n();
   const layout = useResponsiveLayout();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const isCompactPhone = layout.isSmallPhone || (windowWidth || 390) < 380;
@@ -177,7 +173,7 @@ export default function App() {
   const [destination, setDestination] = useState<Coordinates>(
     DHAKA_PRESETS.Motijheel
   );
-  const [todoText, setTodoText] = useState("Go to Motijheel");
+  const [todoText, setTodoText] = useState("Motijheel");
   const [pinMode, setPinMode] = useState(false);
 
   const [routeAlerts, setRouteAlerts] = useState<GoldAlert[]>([]);
@@ -188,7 +184,6 @@ export default function App() {
   const [routeGeometry, setRouteGeometry] = useState<RouteRoadGeometry | null>(
     null
   );
-  const [suppressedCount, setSuppressedCount] = useState<number>(0);
   const [layers, setLayers] = useState<LakehouseLayerStats | null>(null);
   const [selectedCity, setSelectedCity] = useState<string>("ALL");
   const [availableCities, setAvailableCities] = useState<CitySummary[]>([]);
@@ -196,19 +191,11 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   const [showAllOnMap, setShowAllOnMap] = useState<boolean>(true);
-  const [topFiltersCollapsed, setTopFiltersCollapsed] = useState<boolean>(false);
+  const [showPlacesTray, setShowPlacesTray] = useState<boolean>(false);
+  const [helpMenuOpen, setHelpOpen] = useState<boolean>(false);
   const [drawerSnap, setDrawerSnap] = useState<DrawerSnap>("off");
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("route");
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
-  const [crowdModalOpen, setCrowdModalOpen] = useState<boolean>(false);
-  const [crowdReportArea, setCrowdReportArea] = useState<string>("Mirpur-10");
-  const [crowdReportEvent, setCrowdReportEvent] = useState<string>("fire");
-  const [crowdReportSize, setCrowdReportSize] = useState<number>(300);
-  const [crowdReportNote, setCrowdReportNote] = useState<string>("");
-  const [localCrowdAlerts, setLocalCrowdAlerts] = useState<GoldAlert[]>([]);
-  const [localVoteBoosts, setLocalVoteBoosts] = useState<
-    Record<string, { confirm: number; clear: number }>
-  >({});
   const [focusCoords, setFocusCoords] = useState<{
     lat: number;
     lon: number;
@@ -217,7 +204,6 @@ export default function App() {
   } | null>(null);
   const [fitRouteNonce, setFitRouteNonce] = useState<number>(0);
   const [bleHeatmaps, setBleHeatmaps] = useState<VerifiedHeatmapZone[]>([]);
-  const [radioTelemetry, setRadioTelemetry] = useState<BleScanTelemetry | null>(null);
 
   const lastPollSigRef = useRef<string>("");
   const deviceIdRef = useRef<string>(
@@ -507,9 +493,8 @@ export default function App() {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
 
-        // Query real hardware Multi-Radio scanner (`BigWarnBleScannerModule.kt`: BLE + Wi-Fi Hotspots/P2P/LAN + 4G Cell Load)
+        // Silently query hardware Multi-Radio scanner (BLE + Wi-Fi + 4G) — only displayed when user taps a heatmap HUD
         const bleScan = await scanNearbyBleCrowdAsync(gpsSpeedKmhRef.current);
-        setRadioTelemetry(bleScan);
         if (hasRealGpsFixRef.current && Platform.OS !== "web") {
           const pingParams = new URLSearchParams({
             device_id: deviceIdRef.current,
@@ -616,9 +601,6 @@ export default function App() {
               isActualPlaceName(d.area)
             ),
           });
-          setSuppressedCount(
-            Math.max(0, cleanMapAlerts.length - nextRouteAlerts.length)
-          );
           setAllMapAlerts(cleanMapAlerts);
           setLayers(routeData.layers);
           if (routeData.available_cities) {
@@ -649,8 +631,9 @@ export default function App() {
     const preset = DHAKA_PRESETS[name];
     if (!preset) return;
     setDestination(preset);
-    setTodoText(`Go to ${name}`);
+    setTodoText(name);
     setPinMode(false);
+    setShowPlacesTray(false);
     setFitRouteNonce((n) => n + 1);
   };
 
@@ -823,14 +806,18 @@ export default function App() {
   }, [sortedRouteAlerts, riskLevel]);
 
   const riskMeta = RISK_META[effectiveRiskLevel] || RISK_META.CLEAR;
+  const riskShortLabel =
+    effectiveRiskLevel === "BLOCKED"
+      ? t("riskBlocked")
+      : effectiveRiskLevel === "HIGH_RISK"
+      ? t("riskHigh")
+      : effectiveRiskLevel === "CAUTION"
+      ? t("riskCaution")
+      : t("riskClear");
   const topRouteAlert = sortedRouteAlerts[0] || null;
-  const effectiveSuppressed = Math.max(
-    0,
-    allMapAlerts.length - sortedRouteAlerts.length
-  );
   const advisoryText = topRouteAlert
-    ? `Avoid ${topRouteAlert.affected_road || topRouteAlert.area}: ${formatEventLabel(topRouteAlert.event_type)} — ${topRouteAlert.sample_headline}`
-    : `Clear route • ${effectiveSuppressed} off-route threats filtered`;
+    ? `${t("avoidRoad")}: ${topRouteAlert.affected_road || topRouteAlert.area} (${tEvent(topRouteAlert.event_type)})`
+    : t("routeClearSummary");
 
   const statusColor =
     streamStatus === "LIVE"
@@ -838,18 +825,6 @@ export default function App() {
       : streamStatus === "SYNCING"
       ? "#0284C7"
       : "#E11D48";
-  const statusBorder =
-    streamStatus === "LIVE"
-      ? "#A7F3D0"
-      : streamStatus === "SYNCING"
-      ? "#BAE6FD"
-      : "#FECDD3";
-  const statusBg =
-    streamStatus === "LIVE"
-      ? "#ECFDF5"
-      : streamStatus === "SYNCING"
-      ? "#F0F9FF"
-      : "#FFF1F2";
 
   const listBottomPadding =
     drawerSnap === "half"
@@ -880,7 +855,7 @@ export default function App() {
         />
       </View>
 
-      {/* Top Floating Responsive Google Maps Style Navigation & Filter Card */}
+      {/* Clean, Uncongested Top Floating Navigation Card */}
       <SafeAreaView
         style={[
           styles.topOverlay,
@@ -895,74 +870,76 @@ export default function App() {
         ]}
         pointerEvents="box-none"
       >
-        <SurfaceCard compact={isCompactPhone}>
-          {/* Header: Brand + Live Pill + Route ETA + Collapse/Sync Buttons */}
+        <SurfaceCard compact>
+          {/* Compact Header: Hamburger Help Menu + Brand + Dot | Lang Switcher + Sync + Places */}
           <View style={styles.headerRow}>
             <View style={styles.brandRow}>
-              <View style={styles.brandIconBadge}>
-                <Ionicons name="shield-checkmark" size={15} color="#1A73E8" />
-              </View>
-              <Text style={styles.brand}>BigWarn</Text>
-              <View
-                style={[
-                  styles.statusPill,
-                  { borderColor: statusBorder, backgroundColor: statusBg },
-                ]}
+              <TouchableOpacity
+                onPress={() => setHelpOpen(true)}
+                style={styles.menuBtn}
+                accessibilityLabel="Open menu and help"
               >
-                <View style={[styles.liveDot, { backgroundColor: statusColor }]} />
-                <Text style={[styles.statusText, { color: statusColor }]}>
-                  {streamStatus}
-                </Text>
-              </View>
+                <Ionicons name="menu" size={20} color="#0F172A" />
+              </TouchableOpacity>
+              <Ionicons name="shield-checkmark" size={16} color="#1A73E8" />
+              <Text style={styles.brand}>{t("appName")}</Text>
+              <View style={[styles.liveDot, { backgroundColor: statusColor }]} />
             </View>
 
             <View style={styles.headerActions}>
-              {routeDistKm > 0 && (
-                <View style={styles.etaPill}>
-                  <Ionicons name="car-outline" size={12} color="#1A73E8" />
-                  <Text style={styles.etaText}>
-                    {routeDistKm} km{routeDurationMin > 0 ? ` • ${routeDurationMin}m` : ""}
-                  </Text>
-                </View>
-              )}
+              <TouchableOpacity
+                onPress={toggleLang}
+                style={styles.langSwitchPill}
+                accessibilityLabel="Switch language"
+              >
+                <Text style={[styles.langSwitchOpt, lang === "en" && styles.langSwitchOptActive]}>
+                  EN
+                </Text>
+                <Text style={styles.langSep}>/</Text>
+                <Text style={[styles.langSwitchOpt, lang === "bn" && styles.langSwitchOptActive]}>
+                  বাং
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={() => fetchAlerts(true)}
                 disabled={isSyncing}
-                style={styles.syncBtn}
-                accessibilityLabel="Sync live feed"
+                style={styles.iconActionBtn}
+                accessibilityLabel="Refresh"
               >
                 {isSyncing ? (
                   <ActivityIndicator size="small" color="#1A73E8" />
                 ) : (
-                  <>
-                    <Ionicons name="refresh" size={13} color="#1A73E8" />
-                    <Text style={styles.syncText}>Sync</Text>
-                  </>
+                  <Ionicons name="refresh" size={15} color="#1A73E8" />
                 )}
               </TouchableOpacity>
+
               <TouchableOpacity
-                onPress={() => setTopFiltersCollapsed((c) => !c)}
-                style={styles.collapseTopBtn}
-                accessibilityLabel="Toggle filter chips"
+                onPress={() => setShowPlacesTray((v) => !v)}
+                style={[styles.placesBtn, showPlacesTray && styles.placesBtnActive]}
+                accessibilityLabel="Toggle places"
               >
+                <Text style={[styles.placesBtnText, showPlacesTray && styles.placesBtnTextActive]}>
+                  {t("filters")}
+                </Text>
                 <Ionicons
-                  name={topFiltersCollapsed ? "options-outline" : "chevron-up"}
-                  size={15}
-                  color="#475569"
+                  name={showPlacesTray ? "chevron-up" : "chevron-down"}
+                  size={13}
+                  color={showPlacesTray ? "#1D4ED8" : "#475569"}
                 />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Todo Destination Search Input + Map Pin Toggle */}
+          {/* Search Input + Explicit Pin Toggle */}
           <View style={styles.todoRow}>
             <View style={styles.inputWrap}>
-              <Ionicons name="search-outline" size={16} color="#1A73E8" />
+              <Ionicons name="search-outline" size={15} color="#1A73E8" />
               <TextInput
                 style={styles.todoInput}
                 value={todoText}
                 onChangeText={setTodoText}
-                placeholder="Where are you heading? (e.g. Motijheel)"
+                placeholder={t("searchPlaceholder")}
                 placeholderTextColor="#94A3B8"
               />
               {todoText.length > 0 && (
@@ -970,7 +947,7 @@ export default function App() {
                   onPress={() => setTodoText("")}
                   style={styles.clearInputBtn}
                 >
-                  <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                  <Ionicons name="close-circle" size={15} color="#94A3B8" />
                 </TouchableOpacity>
               )}
             </View>
@@ -979,29 +956,26 @@ export default function App() {
               style={[styles.pinBtn, pinMode && styles.pinBtnActive]}
             >
               <Ionicons
-                name={pinMode ? "locate" : "location"}
+                name={pinMode ? "close" : "location"}
                 size={14}
                 color={pinMode ? "#FFFFFF" : "#EA4335"}
               />
               <Text style={[styles.pinBtnText, pinMode && styles.pinBtnTextActive]}>
-                {pinMode ? "Tap Map" : "Pin"}
+                {pinMode ? t("cancelPin") : t("pin")}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {!topFiltersCollapsed && (
+          {/* Expandable City & Quick Destination Tray (collapsed by default to avoid clutter) */}
+          {showPlacesTray && (
             <>
-              {/* Region / District Filter Chips (via MobileUI PillChip) */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.chipScroll}
               >
                 <PillChip
-                  label={`All BD (${
-                    availableCities.reduce((acc, c) => acc + c.alert_count, 0) ||
-                    allMapAlerts.length
-                  })`}
+                  label={`${t("allBangladesh")} (${allMapAlerts.length})`}
                   active={selectedCity === "ALL"}
                   activeTone="blue"
                   onPress={() => handleSelectCity("ALL")}
@@ -1017,7 +991,6 @@ export default function App() {
                 ))}
               </ScrollView>
 
-              {/* Quick Dhaka Route Destinations (via MobileUI PillChip) */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1046,68 +1019,48 @@ export default function App() {
           )}
         </SurfaceCard>
 
-        {/* Sleek Route Advisory Strip */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => {
-            if (topRouteAlert) {
-              setSelectedArea(topRouteAlert.area);
-            } else {
-              snapDrawerTo(drawerSnap === "off" ? "half" : "off");
-            }
-          }}
-          style={[
-            styles.advisoryPill,
-            { backgroundColor: riskMeta.bg, borderColor: riskMeta.border },
-          ]}
-        >
-          <View style={styles.advisoryHeader}>
-            <Ionicons name={riskMeta.icon} size={14} color={riskMeta.accent} />
-            <Text style={[styles.advisoryTitle, { color: riskMeta.color }]}>
-              {riskMeta.label}
+        {/* Active Pin-Mode Instruction Pill OR Concise Single-Line Advisory Strip */}
+        {pinMode ? (
+          <View style={styles.pinBanner}>
+            <Ionicons name="locate" size={15} color="#FFFFFF" />
+            <Text style={styles.pinBannerText} numberOfLines={1}>
+              {t("pinModeBanner")}
             </Text>
+            <TouchableOpacity onPress={() => setPinMode(false)} style={styles.pinBannerCancel}>
+              <Text style={styles.pinBannerCancelText}>{t("cancelPin")}</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.advisoryBody} numberOfLines={2}>
-            {advisoryText}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Live Multi-Radio Hardware Sensor Telemetry Bar (BLE + Wi-Fi P2P/LAN + 4G) */}
-        {radioTelemetry && (
+        ) : (
           <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={async () => {
-              await requestMultiRadioPermissionsAsync();
-              await handleLocateMe(false);
-              fetchAlerts(true);
+            activeOpacity={0.9}
+            onPress={() => {
+              if (topRouteAlert) {
+                setSelectedArea(topRouteAlert.area);
+              } else {
+                snapDrawerTo(drawerSnap === "off" ? "half" : "off");
+              }
             }}
-            style={styles.sensorHudStrip}
+            style={[
+              styles.advisoryPill,
+              { backgroundColor: riskMeta.bg, borderColor: riskMeta.border },
+            ]}
           >
-            <View style={styles.sensorHudLeft}>
-              <Ionicons
-                name="radio-outline"
-                size={13}
-                color={
-                  radioTelemetry.diagStatus === "ALL_RADIOS_ACTIVE"
-                    ? "#0284C7"
-                    : "#D97706"
-                }
-              />
-              <Text style={styles.sensorHudText} numberOfLines={1}>
-                {`Peers: +${radioTelemetry.bleCount} BLE • +${radioTelemetry.wifiMobileCount} Wi-Fi (P2P:${radioTelemetry.wifiP2pCount} LAN:${radioTelemetry.wifiLanPeerCount} HS:${radioTelemetry.wifiHotspotCount}) • ${radioTelemetry.cellNetworkType} ${radioTelemetry.cellLoadPercent}% (${radioTelemetry.cellRsrpDbm}dBm)`}
+            <View style={styles.advisorySingleRow}>
+              <Ionicons name={riskMeta.icon} size={14} color={riskMeta.accent} />
+              <Text style={[styles.advisoryTitle, { color: riskMeta.color }]}>
+                {riskShortLabel}
+                {routeDistKm > 0 ? ` • ${routeDistKm} km` : ""}
+              </Text>
+              <Text style={styles.advisorySep}>—</Text>
+              <Text style={styles.advisoryBodyCompact} numberOfLines={1}>
+                {advisoryText}
               </Text>
             </View>
-            {radioTelemetry.diagStatus !== "ALL_RADIOS_ACTIVE" &&
-              radioTelemetry.diagStatus !== "OK" && (
-                <Text style={styles.sensorWarnTag}>
-                  {radioTelemetry.diagStatus.replace("NO_BT_PERM", "Grant BT").replace("NO_WIFI_PERM", "Grant WiFi")}
-                </Text>
-              )}
           </TouchableOpacity>
         )}
       </SafeAreaView>
 
-      {/* Bottom-Right Google Maps Floating Action Stack */}
+      {/* Bottom-Right Map Floating Actions (Essential only) */}
       <View
         style={[
           styles.mapActionStack,
@@ -1129,7 +1082,7 @@ export default function App() {
           style={styles.mapPillBtn}
         >
           <MaterialIcons name="route" size={14} color="#1A73E8" />
-          <Text style={styles.mapPillText}>Fit Route</Text>
+          <Text style={styles.mapPillText}>{t("fitRoute")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1138,20 +1091,12 @@ export default function App() {
         >
           <Ionicons name="layers-outline" size={14} color="#475569" />
           <Text style={styles.mapPillText}>
-            {showAllOnMap ? "All Areas" : "Route Only"}
+            {showAllOnMap ? t("allAreas") : t("routeOnly")}
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => handleFocusArea("Mirpur-10")}
-          style={styles.mapPillBtn}
-        >
-          <Ionicons name="compass-outline" size={14} color="#EA4335" />
-          <Text style={styles.mapPillText}>Mirpur-10</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Gesture-Driven Draggable Bottom Drawer (NO cross button — pure drag-to-open & drag-to-off) */}
+      {/* Gesture-Driven Draggable Bottom Drawer */}
       <DraggableBottomDrawer
         snap={drawerSnap}
         onSnapChange={(next) => {
@@ -1162,36 +1107,29 @@ export default function App() {
         halfHeight={layout.drawerHalfHeight}
         collapsedHeight={layout.drawerCollapsedHeight}
         maxWidth={layout.isTablet ? layout.maxCardWidth : undefined}
-        title={`${sortedRouteAlerts.length} ROUTE ALERTS`}
-        badgeText={`${allMapAlerts.length} Across Map`}
+        title={`${sortedRouteAlerts.length} ${t("drawerRouteAlerts")}`}
+        badgeText={`${allMapAlerts.length} ${t("drawerAcrossMap")}`}
         subtitle={
           drawerSnap === "off"
-            ? "Drag up to open alerts drawer"
-            : "Drag up for full view • Drag down to collapse"
+            ? t("drawerHintClosed")
+            : t("drawerHintOpen")
         }
       >
-        {/* Drawer Segmented Tabs + Lakehouse Stats */}
         <View style={styles.drawerTabsRow}>
           <SegmentedControl
             options={[
               {
                 id: "route",
-                label: `🛣️ On Route (${sortedRouteAlerts.length})`,
+                label: `${t("tabOnRoute")} (${sortedRouteAlerts.length})`,
               },
               {
                 id: "all",
-                label: `🗺️ All Places (${sortedAllAlerts.length})`,
+                label: `${t("tabAllPlaces")} (${sortedAllAlerts.length})`,
               },
             ]}
             activeId={drawerTab}
             onSelect={(id) => setDrawerTab(id as DrawerTab)}
           />
-
-          <Text style={styles.suppressedLabel}>
-            {layers
-              ? `B ${layers.bronze.record_count} • S ${layers.silver.record_count} • G ${layers.gold.alert_clusters}`
-              : `${suppressedCount} filtered`}
-          </Text>
         </View>
 
         <FlatList
@@ -1207,14 +1145,10 @@ export default function App() {
                 color="#10B981"
               />
               <Text style={styles.emptyFeedTitle}>
-                {drawerTab === "route"
-                  ? "Your Navigated Route is Clear"
-                  : "No Active Disruption Alerts"}
+                {drawerTab === "route" ? t("emptyRouteTitle") : t("emptyAllTitle")}
               </Text>
               <Text style={styles.emptyFeed}>
-                {drawerTab === "route"
-                  ? "No strikes, gunfire, or road blockades detected along this route corridor."
-                  : "No verified threat clusters reported for the selected district filter."}
+                {drawerTab === "route" ? t("emptyRouteDesc") : t("emptyAllDesc")}
               </Text>
               {drawerTab === "route" && sortedAllAlerts.length > 0 && (
                 <TouchableOpacity
@@ -1222,7 +1156,7 @@ export default function App() {
                   style={styles.switchTabCta}
                 >
                   <Text style={styles.switchTabCtaText}>
-                    View {sortedAllAlerts.length} Alerts Across All Places ›
+                    {t("viewAllCount", { count: sortedAllAlerts.length })} ›
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1259,30 +1193,23 @@ export default function App() {
                       ]}
                     >
                       <Text style={[styles.eventTagText, { color: item.color }]}>
-                        {formatEventLabel(item.event_type)}
+                        {tEvent(item.event_type)}
                       </Text>
                     </View>
-                    {item.is_pre_news_crowd && (
-                      <View style={styles.preNewsTag}>
-                        <Text style={styles.preNewsTagText}>
-                          👥 PRE-NEWS CROWD
-                        </Text>
-                      </View>
-                    )}
                   </View>
                   {typeof item.distance_to_route_km === "number" ? (
                     <Text style={styles.alertDist}>
                       {item.distance_to_route_km} km
                     </Text>
                   ) : isOnRoute ? (
-                    <Text style={styles.onRoutePill}>ON ROUTE</Text>
+                    <Text style={styles.onRoutePill}>{t("onRouteBadge")}</Text>
                   ) : (
                     <Text style={styles.alertCityLabel}>{item.city}</Text>
                   )}
                 </View>
                 {item.affected_road ? (
                   <Text style={styles.avoidRoadText}>
-                    Avoid: {item.affected_road}
+                    {t("avoidRoad")}: {item.affected_road}
                   </Text>
                 ) : null}
                 <Text style={styles.alertHeadline} numberOfLines={2}>
@@ -1312,7 +1239,24 @@ export default function App() {
         alerts={selectedAreaAlerts}
         onClose={() => setSelectedArea(null)}
       />
+
+      <HelpMenuModal
+        visible={helpMenuOpen}
+        onClose={() => setHelpOpen(false)}
+        onRefreshAfterPermissions={() => {
+          handleLocateMe(false);
+          fetchAlerts(true);
+        }}
+      />
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <BigWarnAppContent />
+    </I18nProvider>
   );
 }
 
@@ -1351,64 +1295,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  brandIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
+  menuBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
   },
   brand: {
     color: "#0F172A",
-    fontSize: 17,
+    fontSize: 16.5,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
-  statusPill: {
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  langSwitchPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
+    borderColor: "#E2E8F0",
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 5 },
-  etaPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#EFF6FF",
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    borderRadius: 999,
-    paddingHorizontal: 9,
     paddingVertical: 4,
+    gap: 3,
   },
-  etaText: { color: "#1D4ED8", fontSize: 10.5, fontWeight: "800" },
-  syncBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
+  langSwitchOpt: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  langSwitchOptActive: {
+    color: "#1A73E8",
+    fontWeight: "800",
+  },
+  langSep: {
+    fontSize: 10,
+    color: "#CBD5E1",
+  },
+  iconActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 999,
-    minWidth: 58,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
     justifyContent: "center",
   },
-  syncText: { color: "#1A73E8", fontSize: 11, fontWeight: "700" },
+  placesBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  placesBtnActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+  },
+  placesBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  placesBtnTextActive: {
+    color: "#1D4ED8",
+  },
   crowdReportTopBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1599,56 +1562,58 @@ const styles = StyleSheet.create({
   },
   destChipTextActive: { color: "#15803D", fontWeight: "800" },
   advisoryPill: {
-    marginTop: 7,
-    borderRadius: 14,
+    marginTop: 6,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     shadowColor: "#0F172A",
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
   },
-  advisoryHeader: {
+  advisorySingleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginBottom: 2,
   },
-  advisoryTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 },
-  advisoryBody: { color: "#1E293B", fontSize: 11.5, lineHeight: 15.5, fontWeight: "600" },
-  sensorHudStrip: {
-    marginTop: 5,
+  advisoryTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.2 },
+  advisorySep: { color: "#94A3B8", fontSize: 11 },
+  advisoryBodyCompact: {
+    flex: 1,
+    color: "#1E293B",
+    fontSize: 11.5,
+    fontWeight: "600",
+  },
+  pinBanner: {
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(248, 250, 252, 0.96)",
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
+    backgroundColor: "#1A73E8",
     borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  sensorHudLeft: {
+  pinBannerText: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  sensorHudText: {
-    flex: 1,
-    color: "#0F172A",
-    fontSize: 10.5,
+    color: "#FFFFFF",
+    fontSize: 12,
     fontWeight: "700",
   },
-  sensorWarnTag: {
-    color: "#B45309",
-    backgroundColor: "#FEF3C7",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 9.5,
+  pinBannerCancel: {
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pinBannerCancelText: {
+    color: "#FFFFFF",
+    fontSize: 11,
     fontWeight: "800",
   },
   mapActionStack: {

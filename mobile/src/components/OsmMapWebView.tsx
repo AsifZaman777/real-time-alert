@@ -7,7 +7,8 @@ import {
   GoldAlert,
   VerifiedHeatmapZone,
 } from "../types/alert";
-import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
+import { formatNewsTimestamp } from "../services/notifications";
+import { useI18n } from "../i18n";
 
 const TypedWebView = WebView as unknown as React.ComponentType<
   WebViewProps & { ref?: React.Ref<{ injectJavaScript: (script: string) => void }> }
@@ -51,8 +52,27 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   onPinDestination,
   onSelectArea,
 }) => {
+  const { lang, t, tEvent } = useI18n();
   const webRef = useRef<{ injectJavaScript: (script: string) => void } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const hudStrings = useMemo(
+    () => ({
+      staticCrowd: t("hudStaticCrowd"),
+      slowCrowd: t("hudSlowCrowd"),
+      movingFlow: t("hudMovingFlow"),
+      surrounding: t("hudSurrounding"),
+      staticLbl: t("hudStatic"),
+      movingLbl: t("hudMoving"),
+      speedLbl: t("hudSpeed"),
+      radiusNote: t("hudRadiusNote"),
+      appsLbl: t("hudApps"),
+      altRoute: t("hudAltRoute"),
+      detailsLbl: t("hudDetails"),
+      avoidLbl: t("avoidRoad"),
+    }),
+    [t]
+  );
 
   // Group verified newspaper/portal alerts by area across Bangladesh
   const areaMarkers = useMemo(() => {
@@ -103,7 +123,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           clusterCount: 1,
           maxSources: srcCount,
           topEvent: a.event_type,
-          topEventLabel: formatEventLabel(a.event_type),
+          topEventLabel: tEvent(a.event_type),
           topHeadline: a.sample_headline || "",
           publishedTime: pubTime,
           veracitySummary: a.veracity_summary || "",
@@ -123,7 +143,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       }
     }
     return Array.from(grouped.values());
-  }, [alerts, routeAlertIds]);
+  }, [alerts, routeAlertIds, tEvent]);
 
   const html = useMemo(
     () => `<!DOCTYPE html>
@@ -534,6 +554,20 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     let userMarker = null;
     let destMarker = null;
     let currentPinMode = false;
+    let currentHudStrs = {
+      staticCrowd: 'STATIC / STUCK',
+      slowCrowd: 'SLOW TRAFFIC',
+      movingFlow: 'MOVING FLOW',
+      surrounding: 'Surrounding',
+      staticLbl: 'Static',
+      movingLbl: 'Moving',
+      speedLbl: 'Speed',
+      radiusNote: '50m scan',
+      appsLbl: 'open app(s)',
+      altRoute: 'Alternative Route',
+      detailsLbl: 'Details',
+      avoidLbl: 'Avoid'
+    };
     let lastRouteFetchId = 0;
     let lastUserSig = '';
     let lastDestSig = '';
@@ -558,48 +592,17 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       });
     }
 
-    // 1. Long-press (press and hold ~420ms) via Leaflet contextmenu
-    map.on('contextmenu', function(e) {
-      triggerDropPin(e.latlng.lat, e.latlng.lng);
-    });
+    // Progressive threshold color ramp (20, 50, 100, 150) — fewer people = lighter, more people = darker
+    function getCrowdTier(count) {
+      const n = Number(count || 0);
+      if (n >= 150) return { outer: '#7F1D1D', core: '#450A0A', outerOp: 0.40, coreOp: 0.65, weight: 1.0, rOuter: 640, rCore: 420 };
+      if (n >= 100) return { outer: '#DC2626', core: '#991B1B', outerOp: 0.34, coreOp: 0.54, weight: 0.80, rOuter: 580, rCore: 380 };
+      if (n >= 50)  return { outer: '#EA580C', core: '#C2410C', outerOp: 0.28, coreOp: 0.44, weight: 0.60, rOuter: 520, rCore: 340 };
+      if (n >= 20)  return { outer: '#F59E0B', core: '#D97706', outerOp: 0.22, coreOp: 0.34, weight: 0.40, rOuter: 460, rCore: 300 };
+      return         { outer: '#FDE68A', core: '#F59E0B', outerOp: 0.14, coreOp: 0.22, weight: 0.20, rOuter: 390, rCore: 250 };
+    }
 
-    // 2. Touch press-and-hold (~420ms) handler for Android WebViews
-    let holdTimer = null;
-    let startPt = null;
-    const mapContainer = map.getContainer();
-
-    mapContainer.addEventListener('touchstart', function(ev) {
-      if (!ev.touches || ev.touches.length !== 1) {
-        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-        return;
-      }
-      const t = ev.touches[0];
-      startPt = { x: t.clientX, y: t.clientY };
-      holdTimer = setTimeout(function() {
-        holdTimer = null;
-        const rect = mapContainer.getBoundingClientRect();
-        const containerPt = L.point(t.clientX - rect.left, t.clientY - rect.top);
-        const latlng = map.containerPointToLatLng(containerPt);
-        if (latlng) {
-          triggerDropPin(latlng.lat, latlng.lng);
-        }
-      }, 420);
-    }, { passive: true });
-
-    mapContainer.addEventListener('touchmove', function(ev) {
-      if (!holdTimer || !startPt || !ev.touches || !ev.touches[0]) return;
-      const t = ev.touches[0];
-      if (Math.hypot(t.clientX - startPt.x, t.clientY - startPt.y) > 12) {
-        clearTimeout(holdTimer);
-        holdTimer = null;
-      }
-    }, { passive: true });
-
-    mapContainer.addEventListener('touchend', function() {
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-    }, { passive: true });
-
-    // 3. Single tap on map closes BLE HUD or drops destination pin when Pin mode is active
+    // Tap on empty map ONLY drops pin when user explicitly activated Pin Mode; otherwise closes HUD cleanly
     const hudEl = document.getElementById('crowd-hud');
     function hideCrowdHud() {
       if (hudEl) hudEl.style.display = 'none';
@@ -608,15 +611,16 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     function showBleCrowdHud(z) {
       if (!hudEl || !z) return;
       const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
-      const pillBg = isStatic ? '#450A0A' : '#FEF3C7';
-      const pillCol = isStatic ? '#FECACA' : '#B45309';
-      const mobilityBadge = isStatic ? '🔴 STATIC / BLOCKED' : (z.mobility_state === 'SLOW_MOVING' ? '🟡 SLOW TRAFFIC' : '🟢 MOVING FLOW');
+      const tier = getCrowdTier(z.total_mobiles || 1);
+      const pillBg = tier.core;
+      const pillCol = (z.total_mobiles || 0) >= 50 ? '#FFFFFF' : '#0F172A';
+      const mobilityBadge = isStatic ? ('🔴 ' + currentHudStrs.staticCrowd) : (z.mobility_state === 'SLOW_MOVING' ? ('🟡 ' + currentHudStrs.slowCrowd) : ('🟢 ' + currentHudStrs.movingFlow));
       const totalCrowd = z.total_mobiles || 1;
       const staticCount = z.mobiles_stuck || 0;
       const movingCount = z.mobiles_moving || 0;
       const staticPct = z.stuck_percent || 0;
       const movingPct = z.moving_percent || (100 - staticPct);
-      const patternText = z.crowd_pattern || (isStatic ? 'High-Density Static Gathering' : 'Moving Crowd Flow');
+      const patternText = z.crowd_pattern || '';
       const scannerCount = z.scanner_nodes_count || 1;
       const blePeers = z.ble_peers_count || 0;
       const wifiPeers = z.wifi_mobile_count ?? z.wifi_mobile_peers_count ?? 0;
@@ -630,31 +634,31 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         +   '<span class="hud-intensity-pill" style="background:' + pillBg + ';color:' + pillCol + ';">' + mobilityBadge + '</span>'
         + '</div>'
         + '<div class="hud-pattern-row">'
-        +   '<div>' + escapeHtml(patternText) + '</div>'
+        +   (patternText ? ('<div>' + escapeHtml(patternText) + '</div>') : '')
         +   '<div style="font-size:9.5px;color:#475569;margin-top:2px;">'
-        +     scannerCount + ' Open App • +' + blePeers + ' BLE • +' + wifiPeers + ' Wi-Fi (P2P:' + wifiP2p + ' LAN:' + wifiLan + ') • ' + escapeHtml(cellNet) + ' ' + cellLoad + '%'
+        +     scannerCount + ' ' + currentHudStrs.appsLbl + ' • +' + blePeers + ' BLE • +' + wifiPeers + ' Wi-Fi (P2P:' + wifiP2p + ' LAN:' + wifiLan + ') • ' + escapeHtml(cellNet) + ' ' + cellLoad + '%'
         +   '</div>'
         + '</div>'
         + '<div class="hud-grid">'
         +   '<div class="hud-stat-box">'
         +     '<div class="hud-stat-val">' + totalCrowd + '</div>'
-        +     '<div class="hud-stat-lbl">Surrounding</div>'
+        +     '<div class="hud-stat-lbl">' + escapeHtml(currentHudStrs.surrounding) + '</div>'
         +   '</div>'
         +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
         +     '<div class="hud-stat-val" style="color:#DC2626;">' + staticCount + ' (' + staticPct + '%)</div>'
-        +     '<div class="hud-stat-lbl" style="color:#B91C1C;">Static / Stuck</div>'
+        +     '<div class="hud-stat-lbl" style="color:#B91C1C;">' + escapeHtml(currentHudStrs.staticLbl) + '</div>'
         +   '</div>'
         +   '<div class="hud-stat-box" style="background:#F0FDF4;border-color:#BBF7D0;">'
         +     '<div class="hud-stat-val" style="color:#15803D;">' + movingCount + ' (' + movingPct + '%)</div>'
-        +     '<div class="hud-stat-lbl" style="color:#166534;">Moving</div>'
+        +     '<div class="hud-stat-lbl" style="color:#166534;">' + escapeHtml(currentHudStrs.movingLbl) + '</div>'
         +   '</div>'
         + '</div>'
         + '<div class="hud-bar-track">'
-        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, staticPct)) + '%;background:' + (isStatic ? '#7F1D1D' : '#EF4444') + ';"></div>'
+        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, staticPct)) + '%;background:' + tier.core + ';"></div>'
         + '</div>'
         + '<div class="hud-footer">'
-        +   '<span>Traffic Speed: ' + (z.avg_speed_kmh ?? 0) + ' km/h</span>'
-        +   '<span style="color:#0284C7;">50m Multi-Radio</span>'
+        +   '<span>' + escapeHtml(currentHudStrs.speedLbl) + ': ' + (z.avg_speed_kmh ?? 0) + ' km/h</span>'
+        +   '<span style="color:#0284C7;">' + escapeHtml(currentHudStrs.radiusNote) + '</span>'
         + '</div>';
       hudEl.style.display = 'block';
     }
@@ -781,7 +785,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           lineCap: 'round'
         }).addTo(routeLayerGroup);
 
-        altLine.bindTooltip('Alternative Road Route', {
+        altLine.bindTooltip(currentHudStrs.altRoute || 'Alternative Road Route', {
           sticky: true,
           direction: 'top'
         });
@@ -910,13 +914,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
         const popupHtml = '<div onclick="window.__selectArea(\\'' + areaTitle.replace(/'/g, "\\\\'") + '\\')">'
           + '<div class="avoid-header">'
-          +   '<span class="avoid-badge-text">AVOID • ' + evText + '</span>'
+          +   '<span class="avoid-badge-text">' + escapeHtml(currentHudStrs.avoidLbl) + ' • ' + evText + '</span>'
           + '</div>'
           + '<div class="avoid-road-name">' + roadTitle + ' (' + areaTitle + ')</div>'
           + (headText ? ('<div class="avoid-headline">' + headText + '</div>') : '')
           + '<div class="avoid-footer">'
           +   '<span>' + verText + '</span>'
-          +   '<span class="avoid-open-btn">Details ›</span>'
+          +   '<span class="avoid-open-btn">' + escapeHtml(currentHudStrs.detailsLbl) + ' ›</span>'
           + '</div>'
           + '</div>';
 
@@ -994,8 +998,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     }
 
     window.updateMapState = function(payload) {
-      const { currentLocation, destination, todoText, markers, bleHeatmaps, routeGeometry, pinMode } = payload;
+      const { currentLocation, destination, todoText, markers, bleHeatmaps, routeGeometry, pinMode, hudStrings } = payload;
       currentPinMode = Boolean(pinMode);
+      if (hudStrings) {
+        currentHudStrs = hudStrings;
+      }
 
       // 1. User Blue Pulsing Dot (only update if coordinates changed)
       const userSig = currentLocation.lat.toFixed(5) + ',' + currentLocation.lon.toFixed(5);
@@ -1015,7 +1022,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 2. Draggable Google Maps-style Red Teardrop Destination Pin (only recreate if destination changed)
+      // 2. Google Maps-style Red Teardrop Destination Pin (only moves via Pin button or search)
       const pinTitle = escapeHtml(destination.label || todoText || 'Pinned Destination');
       const destSig = destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5) + ':' + pinTitle;
       if (destSig !== lastDestSig) {
@@ -1032,7 +1039,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           + '</div>';
 
         destMarker = L.marker([destination.lat, destination.lon], {
-          draggable: true,
+          draggable: false,
           icon: L.divIcon({
             className: 'custom-pin-wrapper',
             html: gmapPinHtml,
@@ -1041,13 +1048,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           }),
           zIndexOffset: 900
         }).addTo(map);
-
-        destMarker.on('dragend', function(ev) {
-          const pos = ev.target.getLatLng();
-          if (pos) {
-            triggerDropPin(pos.lat, pos.lng);
-          }
-        });
       }
 
       // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots
@@ -1120,7 +1120,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render Live BLE Proximity Heatmaps Around Active App Scanners
+      // 4. Render Live BLE Proximity Heatmaps (Progressive thresholds: 20, 50, 100, 150)
       const bleList = bleHeatmaps || [];
       const bleSig = bleList.map(function(b) {
         return b.area + ':' + (b.total_mobiles || 0) + ':' + (b.stuck_percent || 0) + ':' + (b.mobility_state || '');
@@ -1131,37 +1131,26 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         const heatPoints = [];
 
         bleList.forEach(function(z) {
-          const w = z.heat_intensity || 0.65;
-          const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
-          const outerColor = isStatic ? '#7F1D1D' : '#F59E0B';
-          const coreColor = isStatic ? '#3B0707' : '#D97706';
+          const crowdCount = Number(z.total_mobiles || 1);
+          const tier = getCrowdTier(crowdCount);
 
-          heatPoints.push([z.lat, z.lon, w]);
-          for (let i = 0; i < 8; i++) {
-            const ang = (2 * Math.PI * i) / 8;
-            const r = 0.0018 + (i % 2) * 0.0011;
-            heatPoints.push([
-              z.lat + Math.sin(ang) * r,
-              z.lon + Math.cos(ang) * r,
-              Math.max(0.3, w * 0.82)
-            ]);
-          }
+          heatPoints.push([z.lat, z.lon, tier.weight]);
 
           L.circle([z.lat, z.lon], {
-            radius: isStatic ? 640 : 480,
+            radius: tier.rOuter,
             stroke: false,
-            fillColor: outerColor,
-            fillOpacity: isStatic ? 0.26 : 0.18,
+            fillColor: tier.outer,
+            fillOpacity: tier.outerOp,
             interactive: false
           }).addTo(heatmapLayerGroup);
 
           const clickZone = L.circle([z.lat, z.lon], {
-            radius: isStatic ? 420 : 340,
-            color: coreColor,
-            weight: 1.6,
+            radius: tier.rCore,
+            color: tier.core,
+            weight: 1.5,
             opacity: 0.72,
-            fillColor: coreColor,
-            fillOpacity: isStatic ? 0.40 : 0.25,
+            fillColor: tier.core,
+            fillOpacity: tier.coreOp,
             interactive: true
           }).addTo(heatmapLayerGroup);
 
@@ -1173,14 +1162,17 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
         if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
           L.heatLayer(heatPoints, {
-            radius: 30,
-            blur: 20,
+            radius: 36,
+            blur: 24,
+            max: 1.0,
+            minOpacity: 0.16,
             maxZoom: 15,
             gradient: {
-              0.35: '#F59E0B',
-              0.65: '#DC2626',
-              0.85: '#991B1B',
-              1.00: '#3B0707'
+              0.18: '#FDE68A',
+              0.38: '#F59E0B',
+              0.58: '#EA580C',
+              0.78: '#DC2626',
+              1.00: '#450A0A'
             }
           }).addTo(heatmapLayerGroup);
         }
@@ -1258,13 +1250,15 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       bleHeatmaps,
       routeGeometry: routeGeometry || null,
       pinMode,
+      hudStrings,
+      lang,
     });
     runScript(`window.updateMapState && window.updateMapState(${payload}); true;`);
   };
 
   useEffect(() => {
     pushStateToWebView();
-  }, [currentLocation, destination, todoText, areaMarkers, bleHeatmaps, routeGeometry, pinMode]);
+  }, [currentLocation, destination, todoText, areaMarkers, bleHeatmaps, routeGeometry, pinMode, hudStrings, lang]);
 
   useEffect(() => {
     if (focusCoords) {

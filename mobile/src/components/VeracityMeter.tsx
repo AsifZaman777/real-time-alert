@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "../i18n";
 
 interface VeracityMeterProps {
   veracityPercent: number;
@@ -19,6 +20,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
   sources,
   compact = false,
 }) => {
+  const { t } = useI18n();
   const barColor =
     veracityPercent >= 80
       ? "#10B981"
@@ -35,7 +37,7 @@ export const VeracityMeter: React.FC<VeracityMeterProps> = ({
             size={13}
             color={barColor}
           />
-          <Text style={styles.label}>VERACITY METER</Text>
+          <Text style={styles.label}>{t("veracityLabel")}</Text>
         </View>
         <View style={[styles.badge, { borderColor: barColor }]}>
           <Text style={[styles.badgeText, { color: barColor }]}>

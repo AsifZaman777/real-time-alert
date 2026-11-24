@@ -451,16 +451,17 @@ class CrowdIntelligenceService:
             )
 
             exceeds_peak = total_mobiles >= peak_threshold or avg_cell_load >= 75
-            excess_ratio = max(0.0, (total_mobiles - peak_threshold) / float(max(1, peak_threshold)))
-            raw_int = min(
-                1.0,
-                0.42
-                + min(0.35, (total_mobiles / float(max(1, peak_threshold))) * 0.25)
-                + (stuck_percent / 100.0) * 0.22
-                + (avg_cell_load / 100.0) * 0.14
-                + excess_ratio * 0.18,
-            )
-            heat_intensity = round(raw_int, 2)
+            # Threshold-based progressive heatmap weights: <20 (0.20), 20-49 (0.40), 50-99 (0.60), 100-149 (0.80), 150+ (1.00)
+            if total_mobiles >= 150:
+                heat_intensity = 1.0
+            elif total_mobiles >= 100:
+                heat_intensity = 0.8
+            elif total_mobiles >= 50:
+                heat_intensity = 0.6
+            elif total_mobiles >= 20:
+                heat_intensity = 0.4
+            else:
+                heat_intensity = 0.2
 
             if mobility_state == "STATIC" and exceeds_peak:
                 intensity_label = f"STATIC BLOCKADE ({total_mobiles} Devs)"

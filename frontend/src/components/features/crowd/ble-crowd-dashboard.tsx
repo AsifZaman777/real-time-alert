@@ -220,39 +220,42 @@ export function BleCrowdDashboard() {
       if (hud) hud.style.display = 'none';
     });
 
+    function getCrowdTier(count) {
+      const n = Number(count || 0);
+      if (n >= 150) return { outer: '#7F1D1D', core: '#450A0A', outerOp: 0.40, coreOp: 0.65, weight: 1.0, rOuter: 680, rCore: 440 };
+      if (n >= 100) return { outer: '#DC2626', core: '#991B1B', outerOp: 0.34, coreOp: 0.54, weight: 0.80, rOuter: 620, rCore: 400 };
+      if (n >= 50)  return { outer: '#EA580C', core: '#C2410C', outerOp: 0.28, coreOp: 0.44, weight: 0.60, rOuter: 560, rCore: 360 };
+      if (n >= 20)  return { outer: '#F59E0B', core: '#D97706', outerOp: 0.22, coreOp: 0.34, weight: 0.40, rOuter: 490, rCore: 320 };
+      return         { outer: '#FDE68A', core: '#F59E0B', outerOp: 0.14, coreOp: 0.22, weight: 0.20, rOuter: 410, rCore: 260 };
+    }
+
     window.updateBleMap = function(heatmaps) {
       heatGroup.clearLayers();
       markerGroup.clearLayers();
       const pts = [];
 
       (heatmaps || []).forEach(function(z) {
-        const w = z.heat_intensity || 0.7;
-        const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
-        const outerCol = isStatic ? '#7F1D1D' : (z.mobility_state === 'SLOW_MOVING' ? '#EA580C' : '#16A34A');
-        const coreCol = isStatic ? '#3B0707' : (z.mobility_state === 'SLOW_MOVING' ? '#C2410C' : '#15803D');
+        const tier = getCrowdTier(z.total_mobiles || 1);
+        const outerCol = tier.outer;
+        const coreCol = tier.core;
 
-        pts.push([z.lat, z.lon, w]);
-        for (let i = 0; i < 8; i++) {
-          const ang = (2 * Math.PI * i) / 8;
-          const r = 0.0022 + (i % 2) * 0.0012;
-          pts.push([z.lat + Math.sin(ang) * r, z.lon + Math.cos(ang) * r, Math.max(0.3, w * 0.85)]);
-        }
+        pts.push([z.lat, z.lon, tier.weight]);
 
         L.circle([z.lat, z.lon], {
-          radius: isStatic ? 720 : 520,
+          radius: tier.rOuter,
           stroke: false,
           fillColor: outerCol,
-          fillOpacity: isStatic ? 0.28 : 0.18,
+          fillOpacity: tier.outerOp,
           interactive: false
         }).addTo(heatGroup);
 
         const cZone = L.circle([z.lat, z.lon], {
-          radius: isStatic ? 450 : 350,
+          radius: tier.rCore,
           color: coreCol,
-          weight: 1.8,
+          weight: 1.6,
           opacity: 0.78,
           fillColor: coreCol,
-          fillOpacity: isStatic ? 0.42 : 0.26,
+          fillOpacity: tier.coreOp,
           interactive: true
         }).addTo(heatGroup);
 
@@ -261,9 +264,9 @@ export function BleCrowdDashboard() {
           showHud(z);
         });
 
-        const badgeHtml = '<div class="ble-badge" style="background:' + coreCol + ';">'
-          + '<span class="ble-pulse-dot"></span>'
-          + '<span>' + esc(z.area) + ' • ' + z.total_mobiles + ' BLE</span>'
+        const badgeHtml = '<div class="ble-badge" style="background:' + coreCol + ';color:' + ((z.total_mobiles || 0) >= 50 ? '#FFFFFF' : '#0F172A') + ';">'
+          + '<span class="ble-pulse-dot" style="background:' + ((z.total_mobiles || 0) >= 50 ? '#FFFFFF' : '#0F172A') + ';"></span>'
+          + '<span>' + esc(z.area) + ' • ' + z.total_mobiles + '</span>'
           + '</div>';
 
         const m = L.marker([z.lat, z.lon], {
@@ -278,10 +281,12 @@ export function BleCrowdDashboard() {
 
       if (pts.length > 0 && typeof L.heatLayer === 'function') {
         L.heatLayer(pts, {
-          radius: 32,
-          blur: 22,
+          radius: 36,
+          blur: 24,
+          max: 1.0,
+          minOpacity: 0.16,
           maxZoom: 15,
-          gradient: { 0.35: '#F59E0B', 0.65: '#DC2626', 0.85: '#991B1B', 1.0: '#3B0707' }
+          gradient: { 0.18: '#FDE68A', 0.38: '#F59E0B', 0.58: '#EA580C', 0.78: '#DC2626', 1.0: '#450A0A' }
         }).addTo(heatGroup);
       }
     };
