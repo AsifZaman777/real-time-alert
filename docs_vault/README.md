@@ -45,10 +45,10 @@ Welcome to the central documentation vault for the **BigWarn Real-Time Banglades
   - Baking `EXPO_PUBLIC_BIGWARN_FEED_URL` and `EXPO_PUBLIC_BIGWARN_FEED_TOKEN` from `mobile/.env`
   - Cloud APK build via Expo EAS
 - **[03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md)**
-  - Complete guide to the **BLE Proximity Crowd-Sourcing & Live Mobility Heatmap** feature across Mobile, Backend, and Frontend
-  - How an open app user's phone passively scans nearby BLE devices (`40m` radius, RSSI `dBm`) and combines them with hardware GPS velocity (`speed_kmh`)
-  - Backend multi-scanner BLE deduplication, `STATIC` vs. `SLOW_MOVING` vs. `MOVING` classification, and crowd pattern detection
-  - Mobile clickable `#crowd-hud` and Frontend **`📡 Crowd Sourcing (BLE)`** interactive heatmap map & live scanner table
+  - Complete guide to the **Multi-Radio Crowd-Sourcing & Live Mobility Heatmap** feature across Mobile, Backend, and Frontend
+  - Surrounding device model extraction (`BLE GAP/Manufacturer IDs`, `802.11 WPS IEs`, Multi-SSID router MACs, Wi-Fi Direct `primaryDeviceType`, `mDNS`/`SSDP`/TCP `62078`) and non-phone noise filtering (`Router`, `Earbud/Watch`, `TV/PC`)
+  - Backend deduplication, `STATIC` vs. `SLOW_MOVING` vs. `MOVING` classification, threshold heatmaps (`<20 / 20 / 50 / 100 / 150+`), and crowd pattern detection
+  - Mobile clickable `#crowd-hud` and Frontend **`📡 Crowd Sourcing (BLE)`** interactive heatmap map & dedicated `Detected Devices & Filtered Noise` table column
 - **[04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md)**
   - Implementation plan for **Single-Phone Multi-Radio Surroundings & Traffic Detection (`BLE + Wi-Fi Mobile Peers + 4G LTE Cell-Tower RSRQ Load + GPS Velocity`)**
   - How 1 or 2 BigWarn phones at a strike can detect surrounding devices even when people around them have **Bluetooth turned OFF** and do not have the app installed
