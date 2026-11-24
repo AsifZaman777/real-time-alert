@@ -30,20 +30,13 @@ This document details the architecture of the **BigWarn Mobile Edge App** (`real
 
 ---
 
-## 3. Verified Heatmaps & Clickable Floating `#crowd-hud`
+## 3. Verified Newspaper Area Badges & Detail Drawer (Zero Falsy Phone Numbers)
 
-1. **Strictly Verified Data Only (Zero Synthetic Sine-Wave Numbers)**:
-   - Heatmaps render on the map **only** for locations backed by:
-     - **Verified Multi-Source / Active Disruption Clusters** from the 45-portal Medallion Lakehouse Gold layer, or
-     - **Verified Live Hardware GPS Telemetry** (`/api/v1/crowd/ping` & `/api/v1/crowd/heatmap`) from connected mobile devices whose hardware GPS fix (`pos.coords.speed` & `pos.coords.accuracy`) is validated inside Bangladesh.
-2. **Darker Intensity Scaling**:
-   - Heatmap intensity scales from Warm Amber (`#F59E0B` $\rightarrow$ `#D97706`) to Bright Crimson (`#DC2626` $\rightarrow$ `#991B1B`) to **Deep Maroon / Dark Blood-Red (`#7F1D1D` $\rightarrow$ `#3B0707`)** as additional independent portals and GPS devices corroborate the congestion.
-3. **Single-Click Floating HUD (`#crowd-hud`)**:
-   - Clicking any heatmap opens `#crowd-hud` showing:
-     - **Area Name** & **Verified Peak Pill**
-     - **Verification Shield** (`🛡️ Verified by Prothom Alo, The Daily Star...` or `🛡️ Verified Hardware GPS`)
-     - **Verified Mobiles**, **Mobiles Stuck (`%`)**, **Mobiles Moving (`%`)**, **Stuck vs. Moving Progress Bar**, and **Avg Speed (`km/h`)**
-     - Quick **`View News (N) ›`** button when news articles exist for that area.
+1. **Strictly Verified 45-Portal Newspaper Data**:
+   - All synthetic or estimated phone/device counts and crowd heatmaps have been removed.
+   - Map markers (`area-badge`) display only real, verified disruption clusters scraped from the 45 Bangladesh news portals (showing the canonical area name and verified cluster count, e.g., `Motijheel 2`).
+2. **Tapping an Area Badge**:
+   - Tapping any area badge on the map opens [AreaDetailModal.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/AreaDetailModal.tsx), displaying the corroborating newspaper sources, veracity percentage (`VeracityMeter`), and clickable newest-first news articles.
 
 ---
 

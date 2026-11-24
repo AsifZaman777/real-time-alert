@@ -267,15 +267,6 @@ class MedallionLakehouseManager:
             severity, color = EVENT_SEVERITY.get(cl["event_type"], ("MODERATE", "#6B7280"))
             source_word = "newspaper/portal" if num_sources == 1 else "newspapers/portals"
 
-            crowd_metrics = crowd_service.compute_crowd_metrics_for_cluster(
-                area=cl["area"],
-                event_type=cl["event_type"],
-                source_count=num_sources,
-                is_recent_3h=cluster_is_recent,
-                article_count=len(sorted_articles),
-                veracity_percent=veracity_percent,
-            )
-
             gold_alerts.append(
                 {
                     "cluster_id": cid,
@@ -301,7 +292,6 @@ class MedallionLakehouseManager:
                     "last_updated": cl["last_updated"],
                     "age_minutes": cluster_age,
                     "is_recent_3h": cluster_is_recent,
-                    "crowd_metrics": crowd_metrics,
                     "sample_headline": sorted_articles[0]["headline"] if sorted_articles else "",
                     "articles": sorted_articles,
                 }

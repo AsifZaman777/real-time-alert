@@ -5,7 +5,6 @@ import {
   Coordinates,
   DangerRoadSegment,
   GoldAlert,
-  VerifiedHeatmapZone,
 } from "../types/alert";
 import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
 
@@ -27,7 +26,6 @@ interface OsmMapWebViewProps {
   destination: Coordinates;
   todoText: string;
   alerts: GoldAlert[];
-  verifiedHeatmaps?: VerifiedHeatmapZone[];
   routeAlertIds: Set<string>;
   routeGeometry?: RouteRoadGeometry | null;
   focusCoords?: { lat: number; lon: number; zoom?: number; nonce: number } | null;
@@ -37,30 +35,11 @@ interface OsmMapWebViewProps {
   onSelectArea: (area: string) => void;
 }
 
-const EVENT_DETERMINISTIC_TRAFFIC: Record<string, { stuckPct: number; speedKmh: number }> = {
-  blockade: { stuckPct: 86, speedKmh: 1.4 },
-  strike: { stuckPct: 84, speedKmh: 1.8 },
-  clash: { stuckPct: 82, speedKmh: 2.1 },
-  procession: { stuckPct: 76, speedKmh: 3.2 },
-  gridlock: { stuckPct: 80, speedKmh: 2.4 },
-  fire: { stuckPct: 78, speedKmh: 2.8 },
-  waterlogging: { stuckPct: 75, speedKmh: 3.5 },
-  accident: { stuckPct: 72, speedKmh: 4.1 },
-  utility_outage: { stuckPct: 58, speedKmh: 7.5 },
-  weather_alert: { stuckPct: 62, speedKmh: 6.4 },
-  transit_halt: { stuckPct: 79, speedKmh: 2.6 },
-  robbery: { stuckPct: 54, speedKmh: 9.2 },
-  murder: { stuckPct: 56, speedKmh: 8.8 },
-  gunfire: { stuckPct: 81, speedKmh: 2.2 },
-  kidnapping: { stuckPct: 52, speedKmh: 9.8 },
-};
-
 export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   currentLocation,
   destination,
   todoText,
   alerts,
-  verifiedHeatmaps = [],
   routeAlertIds,
   routeGeometry,
   focusCoords,
@@ -72,7 +51,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   const webRef = useRef<{ injectJavaScript: (script: string) => void } | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  // Group verified alerts by area across Bangladesh — zero synthetic sine-wave numbers!
+  // Group verified newspaper/portal alerts by area across Bangladesh
   const areaMarkers = useMemo(() => {
     const grouped = new Map<
       string,
@@ -85,11 +64,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         onRoute: boolean;
         clusterCount: number;
         maxSources: number;
-        totalArticles: number;
-        sourcesList: string[];
-        isVerified: boolean;
-        verificationBasis: string;
-        verifiedGpsDevices: number;
         topEvent: string;
         topEventLabel: string;
         topHeadline: string;
@@ -97,16 +71,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         veracitySummary: string;
         affectedRoad?: string;
         isRecent3h: boolean;
-        peakThreshold: number;
-        exceedsPeak: boolean;
-        totalMobiles: number;
-        mobilesStuck: number;
-        mobilesMoving: number;
-        stuckPercent: number;
-        movingPercent: number;
-        avgSpeedKmh: number;
-        heatIntensity: number;
-        intensityLabel: string;
       }
     >();
 
@@ -123,67 +87,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         latestArt?.published || a.last_updated,
         latestArt?.ingested_at
       );
-      const cm = a.crowd_metrics;
       const srcCount = Math.max(1, a.source_count || (a.sources?.length ?? 1));
-      const artCount = Math.max(srcCount, a.articles?.length ?? srcCount);
-      const gpsDevs = cm?.verified_gps_devices ?? 0;
-      const isVerifiedCluster =
-        cm?.is_verified ?? (srcCount >= 2 || a.veracity_tier !== "LOW" || gpsDevs > 0);
-      const evProfile = EVENT_DETERMINISTIC_TRAFFIC[a.event_type] || {
-        stuckPct: 68,
-        speedKmh: 4.8,
-      };
-
-      // Strictly deterministic, verified counts from actual sources/articles + verified GPS pings
-      const totalMobs =
-        cm?.is_verified && typeof cm.total_mobiles === "number"
-          ? cm.total_mobiles
-          : gpsDevs + srcCount * 18 + artCount * 7;
-      const stuckPct =
-        cm?.is_verified && typeof cm.stuck_percent === "number"
-          ? cm.stuck_percent
-          : isRecent
-          ? evProfile.stuckPct
-          : Math.max(28, evProfile.stuckPct - 24);
-      const mobsStuck =
-        cm?.is_verified && typeof cm.mobiles_stuck === "number"
-          ? cm.mobiles_stuck
-          : Math.round((totalMobs * stuckPct) / 100);
-      const mobsMoving = Math.max(0, totalMobs - mobsStuck);
-      const movingPct = 100 - stuckPct;
-      const spdKmh =
-        cm?.is_verified && typeof cm.avg_speed_kmh === "number"
-          ? cm.avg_speed_kmh
-          : isRecent
-          ? evProfile.speedKmh
-          : Math.round(evProfile.speedKmh * 2.2 * 10) / 10;
-
-      const peakThresh = cm?.peak_threshold ?? 30;
-      const exceedsPeak =
-        cm?.exceeds_peak ?? Boolean(isVerifiedCluster && (srcCount >= 2 || gpsDevs > 0 || totalMobs >= peakThresh));
-      const rawHeat = Math.min(
-        1.0,
-        0.44 + Math.min(0.42, srcCount * 0.14) + (isRecent ? 0.12 : 0) + (stuckPct / 100) * 0.16
-      );
-      const heatInt = isVerifiedCluster
-        ? Math.round(rawHeat * 100) / 100
-        : isRecent
-        ? 0.42
-        : 0.32;
-      const intLabel = isVerifiedCluster
-        ? heatInt >= 0.85
-          ? `✓ Verified Extreme Peak (${srcCount} Sources)`
-          : heatInt >= 0.65
-          ? `✓ Verified High Peak (${srcCount} Sources)`
-          : `✓ Verified (${srcCount} Sources)`
-        : "Single-Source Report";
-      const verBasis =
-        cm?.verification_basis ||
-        (a.sources && a.sources.length > 0
-          ? `Verified by ${a.sources.slice(0, 3).join(", ")}${
-              a.sources.length > 3 ? ` +${a.sources.length - 3}` : ""
-            }`
-          : a.veracity_summary || `Verified by ${srcCount} source(s)`);
 
       if (!existing) {
         grouped.set(a.area, {
@@ -195,11 +99,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           onRoute: isRoute,
           clusterCount: 1,
           maxSources: srcCount,
-          totalArticles: artCount,
-          sourcesList: [...(a.sources || [])],
-          isVerified: isVerifiedCluster,
-          verificationBasis: verBasis,
-          verifiedGpsDevices: gpsDevs,
           topEvent: a.event_type,
           topEventLabel: formatEventLabel(a.event_type),
           topHeadline: a.sample_headline || "",
@@ -207,16 +106,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           veracitySummary: a.veracity_summary || "",
           affectedRoad: a.affected_road,
           isRecent3h: isRecent,
-          peakThreshold: peakThresh,
-          exceedsPeak,
-          totalMobiles: totalMobs,
-          mobilesStuck: mobsStuck,
-          mobilesMoving: mobsMoving,
-          stuckPercent: stuckPct,
-          movingPercent: movingPct,
-          avgSpeedKmh: spdKmh,
-          heatIntensity: heatInt,
-          intensityLabel: intLabel,
         });
       } else {
         existing.clusterCount += 1;
@@ -224,55 +113,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         if (existing.hasCritical) existing.color = "#EF4444";
         existing.onRoute = existing.onRoute || isRoute;
         existing.isRecent3h = existing.isRecent3h || isRecent;
-        const mergedSet = new Set([...existing.sourcesList, ...(a.sources || [])]);
-        existing.sourcesList = Array.from(mergedSet);
-        existing.maxSources = Math.max(
-          existing.maxSources,
-          srcCount,
-          existing.sourcesList.length
-        );
-        existing.totalArticles += artCount;
-        existing.isVerified =
-          existing.isVerified || isVerifiedCluster || existing.maxSources >= 2;
-        existing.verifiedGpsDevices = Math.max(existing.verifiedGpsDevices, gpsDevs);
-        existing.totalMobiles =
-          existing.verifiedGpsDevices +
-          existing.maxSources * 18 +
-          existing.totalArticles * 7;
-        existing.stuckPercent = Math.max(existing.stuckPercent, stuckPct);
-        existing.mobilesStuck = Math.round(
-          (existing.totalMobiles * existing.stuckPercent) / 100
-        );
-        existing.mobilesMoving = Math.max(
-          0,
-          existing.totalMobiles - existing.mobilesStuck
-        );
-        existing.movingPercent = 100 - existing.stuckPercent;
-        existing.exceedsPeak =
-          existing.exceedsPeak || existing.isVerified || existing.maxSources >= 2;
-        const nextHeat = Math.min(
-          1.0,
-          0.44 +
-            Math.min(0.45, existing.maxSources * 0.14) +
-            (existing.isRecent3h ? 0.12 : 0) +
-            (existing.stuckPercent / 100) * 0.16
-        );
-        existing.heatIntensity = Math.round(nextHeat * 100) / 100;
-        existing.intensityLabel = existing.isVerified
-          ? existing.heatIntensity >= 0.85
-            ? `✓ Verified Extreme Peak (${existing.maxSources} Sources)`
-            : existing.heatIntensity >= 0.65
-            ? `✓ Verified High Peak (${existing.maxSources} Sources)`
-            : `✓ Verified (${existing.maxSources} Sources)`
-          : "Single-Source Report";
-        existing.verificationBasis =
-          existing.sourcesList.length > 0
-            ? `Verified by ${existing.sourcesList.slice(0, 3).join(", ")}${
-                existing.sourcesList.length > 3
-                  ? ` +${existing.sourcesList.length - 3}`
-                  : ""
-              }`
-            : existing.verificationBasis;
+        existing.maxSources = Math.max(existing.maxSources, srcCount);
         if (!existing.affectedRoad && a.affected_road) {
           existing.affectedRoad = a.affected_road;
         }
@@ -288,7 +129,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <style>
     html, body, #map {
       margin: 0; padding: 0; width: 100%; height: 100%;
@@ -573,100 +413,10 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     .leaflet-danger-road {
       animation: dangerPulse 1.5s ease-in-out infinite;
     }
-
-    /* Clickable Heatmap Floating Crowd HUD */
-    #crowd-hud {
-      position: fixed;
-      left: 50%;
-      bottom: 88px;
-      transform: translateX(-50%);
-      width: min(310px, calc(100vw - 24px));
-      background: rgba(255, 255, 255, 0.97);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1.5px solid #CBD5E1;
-      border-radius: 18px;
-      padding: 12px 14px;
-      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
-      z-index: 1200;
-      display: none;
-    }
-    .hud-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-    .hud-area {
-      color: #0F172A;
-      font-size: 14.5px;
-      font-weight: 800;
-    }
-    .hud-intensity-pill {
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2.5px 8px;
-      border-radius: 999px;
-      text-transform: uppercase;
-    }
-    .hud-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    .hud-stat-box {
-      background: #F8FAFC;
-      border: 1px solid #E2E8F0;
-      border-radius: 10px;
-      padding: 6px 8px;
-      text-align: center;
-    }
-    .hud-stat-val {
-      font-size: 14px;
-      font-weight: 800;
-      color: #0F172A;
-    }
-    .hud-stat-lbl {
-      font-size: 9.5px;
-      font-weight: 700;
-      color: #64748B;
-      margin-top: 1px;
-    }
-    .hud-bar-track {
-      height: 7px;
-      background: #22C55E;
-      border-radius: 999px;
-      overflow: hidden;
-      margin-bottom: 6px;
-    }
-    .hud-bar-stuck {
-      height: 100%;
-      background: #EF4444;
-    }
-    .hud-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 10.5px;
-      font-weight: 700;
-      color: #475569;
-    }
-    .hud-news-btn {
-      background: #EFF6FF;
-      color: #1D4ED8;
-      border: 1px solid #BFDBFE;
-      border-radius: 999px;
-      padding: 3px 9px;
-      font-size: 10px;
-      font-weight: 800;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="crowd-hud"></div>
   <script>
     const map = L.map('map', {
       zoomControl: false,
@@ -685,7 +435,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
     const routeLayerGroup = L.featureGroup().addTo(map);
     const dangerRoadLayerGroup = L.featureGroup().addTo(map);
-    const heatmapLayerGroup = L.featureGroup().addTo(map);
     const alertMarkerLayerGroup = L.featureGroup().addTo(map);
 
     let userMarker = null;
@@ -696,10 +445,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     let lastDestSig = '';
     let lastRouteSig = '';
     let lastMarkersSig = '';
-    let currentNewsMarkers = [];
-    let currentVerifiedHeatmaps = [];
-    let currentZoneMap = {};
-    let activeHudArea = null;
 
     function sendBridgeMessage(obj) {
       const str = JSON.stringify(obj);
@@ -759,62 +504,8 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
     }, { passive: true });
 
-    // 3. Single tap on map closes HUD or drops destination pin when Pin mode is active
-    const hudEl = document.getElementById('crowd-hud');
-    function hideCrowdHud() {
-      activeHudArea = null;
-      if (hudEl) hudEl.style.display = 'none';
-    }
-
-    function showCrowdHud(z) {
-      if (!hudEl || !z) return;
-      activeHudArea = z.area;
-      const isExtreme = z.heatIntensity >= 0.85;
-      const isHigh = z.heatIntensity >= 0.65 && !isExtreme;
-      const pillBg = z.isVerified
-        ? (isExtreme ? '#450A0A' : (isHigh ? '#FEE2E2' : '#DCFCE7'))
-        : '#FEF3C7';
-      const pillCol = z.isVerified
-        ? (isExtreme ? '#FECACA' : (isHigh ? '#B91C1C' : '#15803D'))
-        : '#B45309';
-      const verBasis = z.verificationBasis || (z.isVerified ? 'Verified Multi-Source / Live GPS' : 'Single-Source Report');
-      const newsBtnHtml = z.hasNews
-        ? '<span class="hud-news-btn" onclick="window.__selectArea(\\'' + escapeHtml(z.area).replace(/'/g, "\\\\'") + '\\')">View News (' + z.clusterCount + ') ›</span>'
-        : '<span style="color:#059669;font-weight:800;">✓ Verified Live GPS</span>';
-
-      hudEl.innerHTML = '<div class="hud-top">'
-        +   '<span class="hud-area">📍 ' + escapeHtml(z.area) + '</span>'
-        +   '<span class="hud-intensity-pill" style="background:' + pillBg + ';color:' + pillCol + ';">' + escapeHtml(z.intensityLabel) + '</span>'
-        + '</div>'
-        + '<div style="font-size:10.5px;font-weight:700;color:#0F172A;background:#F1F5F9;border-radius:8px;padding:4px 8px;margin-bottom:7px;">'
-        +   '🛡️ ' + escapeHtml(verBasis)
-        + '</div>'
-        + '<div class="hud-grid">'
-        +   '<div class="hud-stat-box">'
-        +     '<div class="hud-stat-val">' + z.totalMobiles + '</div>'
-        +     '<div class="hud-stat-lbl">Verified Mobiles</div>'
-        +   '</div>'
-        +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
-        +     '<div class="hud-stat-val" style="color:#DC2626;">' + z.mobilesStuck + ' (' + z.stuckPercent + '%)</div>'
-        +     '<div class="hud-stat-lbl" style="color:#B91C1C;">Mobiles Stuck</div>'
-        +   '</div>'
-        +   '<div class="hud-stat-box" style="background:#F0FDF4;border-color:#BBF7D0;">'
-        +     '<div class="hud-stat-val" style="color:#15803D;">' + z.mobilesMoving + ' (' + z.movingPercent + '%)</div>'
-        +     '<div class="hud-stat-lbl" style="color:#166534;">Mobiles Moving</div>'
-        +   '</div>'
-        + '</div>'
-        + '<div class="hud-bar-track">'
-        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, z.stuckPercent)) + '%;background:' + (isExtreme ? '#7F1D1D' : '#EF4444') + ';"></div>'
-        + '</div>'
-        + '<div class="hud-footer">'
-        +   '<span>Avg Speed: ' + z.avgSpeedKmh + ' km/h</span>'
-        +   newsBtnHtml
-        + '</div>';
-      hudEl.style.display = 'block';
-    }
-
+    // 3. Single tap on map drops destination pin when Pin mode is active
     map.on('click', function(e) {
-      hideCrowdHud();
       if (currentPinMode) {
         triggerDropPin(e.latlng.lat, e.latlng.lng);
       }
@@ -1148,9 +839,8 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     }
 
     window.updateMapState = function(payload) {
-      const { currentLocation, destination, todoText, markers, verifiedHeatmaps, routeGeometry, pinMode } = payload;
+      const { currentLocation, destination, todoText, markers, routeGeometry, pinMode } = payload;
       currentPinMode = Boolean(pinMode);
-      currentVerifiedHeatmaps = verifiedHeatmaps || [];
 
       // 1. User Blue Pulsing Dot (only update if coordinates changed)
       const userSig = currentLocation.lat.toFixed(5) + ',' + currentLocation.lon.toFixed(5);
@@ -1275,19 +965,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Verified-Only Bangladesh Real-Time Heatmap Engine + Area Badges
-      //    Strictly renders ONLY verified multi-source disruption clusters and verified live hardware GPS pings.
-      //    Zero synthetic sine-wave or unverified empty-district heatmaps are generated!
-      currentNewsMarkers = markers || [];
-      const verifiedSig = (currentVerifiedHeatmaps || []).map(function(vh) {
-        return vh.area + ':' + (vh.total_mobiles || 0) + ':' + (vh.stuck_percent || 0);
-      }).join('|');
-      const fullMarkersSig = markersSig + '|vh:' + verifiedSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
+      // 4. Render Verified Newspaper Disruption Area Badges (zero falsy phone numbers or heatmaps)
+      const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
       if (fullMarkersSig !== lastMarkersSig) {
         lastMarkersSig = fullMarkersSig;
         alertMarkerLayerGroup.clearLayers();
 
-        currentNewsMarkers.forEach(function(m) {
+        (markers || []).forEach(function(m) {
           const isIntercepted = Boolean(m.isRecent3h && (m.onRoute || activeDangerAreas[m.area]));
           const circleColor = isIntercepted ? '#DC2626' : m.color;
           const badgeClass = isIntercepted ? 'area-badge area-badge-onroute' : 'area-badge';
@@ -1308,172 +992,12 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
           });
           marker.on('click', function(ev) {
             L.DomEvent.stopPropagation(ev);
-            const z = currentZoneMap[m.area];
-            if (z) showCrowdHud(z);
             sendBridgeMessage({ type: 'selectArea', area: m.area });
           });
           marker.addTo(alertMarkerLayerGroup);
         });
-
-        renderVerifiedBangladeshHeatmaps();
       }
     };
-
-    function renderVerifiedBangladeshHeatmaps() {
-      heatmapLayerGroup.clearLayers();
-      const newZoneMap = {};
-      const activeZones = [];
-
-      // 1. Add all verified Gold disruption markers across Bangladesh
-      (currentNewsMarkers || []).forEach(function(m) {
-        const cell = {
-          area: m.area,
-          lat: m.lat,
-          lon: m.lon,
-          isVerified: Boolean(m.isVerified || m.maxSources >= 2 || m.verifiedGpsDevices > 0),
-          verificationBasis: m.verificationBasis || ('Verified by ' + m.maxSources + ' news portal(s)'),
-          peakThreshold: m.peakThreshold || 30,
-          exceedsPeak: Boolean(m.exceedsPeak || m.isVerified || m.maxSources >= 2),
-          totalMobiles: m.totalMobiles,
-          mobilesStuck: m.mobilesStuck,
-          mobilesMoving: m.mobilesMoving,
-          stuckPercent: m.stuckPercent,
-          movingPercent: m.movingPercent,
-          avgSpeedKmh: m.avgSpeedKmh,
-          heatIntensity: m.heatIntensity,
-          intensityLabel: m.intensityLabel,
-          hasNews: true,
-          clusterCount: m.clusterCount
-        };
-        newZoneMap[m.area] = cell;
-        // Strictly render heatmaps for verified multi-source / GPS-backed / active <3h disruptions
-        if (cell.isVerified || m.isRecent3h) {
-          activeZones.push(cell);
-        }
-      });
-
-      // 2. Merge any live verified hardware GPS crowd zones from /api/v1/crowd/heatmap across Bangladesh
-      (currentVerifiedHeatmaps || []).forEach(function(vh) {
-        if (!vh || !vh.area) return;
-        const isVer = Boolean(vh.is_verified || (vh.verified_gps_devices || 0) > 0 || (vh.verified_news_sources || 0) >= 2);
-        if (!isVer) return;
-        const existing = newZoneMap[vh.area];
-        if (!existing) {
-          const cell = {
-            area: vh.area,
-            lat: vh.lat,
-            lon: vh.lon,
-            isVerified: true,
-            verificationBasis: vh.verification_basis || 'Verified Live Hardware GPS Telemetry',
-            peakThreshold: vh.peak_threshold || 25,
-            exceedsPeak: true,
-            totalMobiles: vh.total_mobiles || 1,
-            mobilesStuck: vh.mobiles_stuck || 0,
-            mobilesMoving: vh.mobiles_moving || 1,
-            stuckPercent: vh.stuck_percent || 0,
-            movingPercent: vh.moving_percent || 100,
-            avgSpeedKmh: vh.avg_speed_kmh || 15.0,
-            heatIntensity: vh.heat_intensity || 0.65,
-            intensityLabel: vh.intensity_label || '✓ Verified Live GPS',
-            hasNews: Boolean(vh.has_news),
-            clusterCount: vh.cluster_count || 0
-          };
-          newZoneMap[vh.area] = cell;
-          activeZones.push(cell);
-        } else if ((vh.verified_gps_devices || 0) > 0) {
-          existing.isVerified = true;
-          existing.verificationBasis = vh.verification_basis || existing.verificationBasis;
-          existing.totalMobiles = vh.total_mobiles || existing.totalMobiles;
-          existing.mobilesStuck = vh.mobiles_stuck || existing.mobilesStuck;
-          existing.mobilesMoving = vh.mobiles_moving || existing.mobilesMoving;
-          existing.stuckPercent = vh.stuck_percent || existing.stuckPercent;
-          existing.movingPercent = vh.moving_percent || existing.movingPercent;
-          existing.avgSpeedKmh = vh.avg_speed_kmh || existing.avgSpeedKmh;
-          existing.heatIntensity = Math.max(existing.heatIntensity, vh.heat_intensity || 0.65);
-        }
-      });
-
-      currentZoneMap = newZoneMap;
-
-      const zoom = map.getZoom();
-      const zoomScale = zoom <= 8 ? 4.8 : (zoom <= 10 ? 2.4 : (zoom <= 12 ? 1.15 : 0.85));
-      const spreadDeg = zoom <= 8 ? 0.028 : (zoom <= 10 ? 0.012 : 0.0020);
-      const heatPoints = [];
-
-      activeZones.forEach(function(z) {
-        const w = z.heatIntensity;
-        heatPoints.push([z.lat, z.lon, w]);
-        for (let i = 0; i < 8; i++) {
-          const ang = (2 * Math.PI * i) / 8;
-          const r = spreadDeg + (i % 2) * (spreadDeg * 0.55);
-          heatPoints.push([
-            z.lat + Math.sin(ang) * r,
-            z.lon + Math.cos(ang) * r,
-            Math.max(0.3, w * 0.84)
-          ]);
-        }
-
-        const isExtreme = w >= 0.85;
-        const isHigh = w >= 0.65 && !isExtreme;
-        const outerColor = isExtreme ? '#7F1D1D' : (isHigh ? '#DC2626' : '#F59E0B');
-        const coreColor = isExtreme ? '#3B0707' : (isHigh ? '#991B1B' : '#D97706');
-
-        L.circle([z.lat, z.lon], {
-          radius: (isExtreme ? 720 : (isHigh ? 580 : 460)) * zoomScale,
-          stroke: false,
-          fillColor: outerColor,
-          fillOpacity: isExtreme ? 0.28 : (isHigh ? 0.22 : 0.16),
-          interactive: false
-        }).addTo(heatmapLayerGroup);
-
-        const clickZone = L.circle([z.lat, z.lon], {
-          radius: (isExtreme ? 480 : (isHigh ? 400 : 330)) * zoomScale,
-          color: coreColor,
-          weight: isExtreme ? 1.8 : 1.3,
-          opacity: isExtreme ? 0.78 : 0.55,
-          fillColor: coreColor,
-          fillOpacity: isExtreme ? 0.42 : (isHigh ? 0.30 : 0.22),
-          interactive: true
-        }).addTo(heatmapLayerGroup);
-
-        if (w >= 0.72) {
-          L.circle([z.lat, z.lon], {
-            radius: (isExtreme ? 230 : 175) * zoomScale,
-            stroke: false,
-            fillColor: '#2A0404',
-            fillOpacity: isExtreme ? 0.50 : 0.34,
-            interactive: false
-          }).addTo(heatmapLayerGroup);
-        }
-
-        clickZone.on('click', function(ev) {
-          L.DomEvent.stopPropagation(ev);
-          showCrowdHud(z);
-        });
-      });
-
-      if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
-        L.heatLayer(heatPoints, {
-          radius: zoom <= 8 ? 22 : 30,
-          blur: zoom <= 8 ? 16 : 20,
-          maxZoom: 15,
-          gradient: {
-            0.35: '#F59E0B',
-            0.60: '#DC2626',
-            0.82: '#991B1B',
-            1.00: '#3B0707'
-          }
-        }).addTo(heatmapLayerGroup);
-      }
-
-      if (activeHudArea && currentZoneMap[activeHudArea] && hudEl && hudEl.style.display === 'block') {
-        showCrowdHud(currentZoneMap[activeHudArea]);
-      }
-    }
-
-    map.on('zoomend', function() {
-      renderVerifiedBangladeshHeatmaps();
-    });
 
     window.focusLocation = function(lat, lon, zoom) {
       map.flyTo([lat, lon], zoom || 14, { duration: 0.6 });
@@ -1510,7 +1034,6 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       destination,
       todoText,
       markers: areaMarkers,
-      verifiedHeatmaps,
       routeGeometry: routeGeometry || null,
       pinMode,
     });
@@ -1519,7 +1042,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
   useEffect(() => {
     pushStateToWebView();
-  }, [currentLocation, destination, todoText, areaMarkers, verifiedHeatmaps, routeGeometry, pinMode]);
+  }, [currentLocation, destination, todoText, areaMarkers, routeGeometry, pinMode]);
 
   useEffect(() => {
     if (focusCoords) {
