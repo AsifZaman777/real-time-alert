@@ -102,18 +102,16 @@ On the mobile map:
 
 ### 3.4 Frontend Web Console: `📡 Crowd Sourcing (BLE)` Feature Tab ([frontend/src/components/features/crowd/ble-crowd-dashboard.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/frontend/src/components/features/crowd/ble-crowd-dashboard.tsx))
 
-In the Next.js Web Console, clicking the **`📡 Crowd Sourcing (BLE)`** tab (in the top navigation bar on desktop or the bottom thumb-navigation bar on mobile) displays:
+In the Next.js Web Console, clicking the **`📡 Crowd Sourcing (BLE)`** tab (in the top navigation bar on desktop or the bottom thumb-navigation bar on mobile) displays a **read-only live observatory** of active mobile app users (no browser-level pinging):
 
-1. **Open-App BLE Scanner Controls & Multi-User Mesh Broadcaster**:
-   - Automatically pings the server when opened (`🟢 Auto-Ping From Open App: ON`), and lets you test or inspect any Bangladesh location, BLE peer density (`4–140 BLE`), and scanner GPS speed (`0–30 km/h`), or broadcast a 4-area multi-user BLE mesh across Bangladesh.
-2. **4 Live BLE Telemetry KPI Cards**:
-   - **📱 Open App BLE Scanners**: Total active app instances currently scanning BLE.
-   - **📡 Accumulated BLE Crowd**: Total scanners + nearby BLE peers detected.
+1. **4 Live BLE Telemetry KPI Cards**:
+   - **📱 Open App BLE Scanners**: Total active mobile app instances currently scanning BLE.
+   - **📡 Accumulated BLE Crowd**: Total mobile app scanners + nearby BLE peers detected.
    - **🔴 Static / Stuck Crowd**: Count and percentage of stationary devices (`< 3.5 km/h`).
    - **🟢 Moving Crowd Flow**: Count and percentage of moving devices (`>= 3.5 km/h`).
-3. **Interactive Bangladesh BLE Crowd Heatmap Map**:
-   - Full Leaflet + OpenStreetMap canvas rendering live BLE heatmaps and pulsing `📡 Area • N BLE` badges. Clicking any heatmap opens the detailed HUD overlay.
-4. **Live BLE Crowd Telemetry Table (*"Crowd Around Each Open App User"*)**:
+2. **Interactive Bangladesh BLE Crowd Heatmap Map**:
+   - Full Leaflet + OpenStreetMap canvas rendering live BLE heatmaps and pulsing `📡 Area • N BLE` badges from active mobile app users. Clicking any heatmap opens the detailed HUD overlay.
+3. **Live BLE Crowd Telemetry Table (*"Crowd Around Each Open App User"*)**:
    - Displays every active open-app scanner in real time with:
      - **Open App Scanner** (`device_label`, `device_id`, live pulsing indicator)
      - **Location (Area & GPS)** (`Area`, `City`, `lat°N, lon°E`)

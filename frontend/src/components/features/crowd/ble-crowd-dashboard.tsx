@@ -74,37 +74,9 @@ export interface BleCrowdSnapshot {
   heatmaps: BleHeatmapZone[];
 }
 
-const PRESET_SCAN_LOCATIONS: Array<{
-  area: string;
-  lat: number;
-  lon: number;
-  defaultBle: number;
-  defaultSpeed: number;
-}> = [
-  { area: "Mirpur-10", lat: 23.8069, lon: 90.3687, defaultBle: 58, defaultSpeed: 0.9 },
-  { area: "Shahbagh", lat: 23.7389, lon: 90.3948, defaultBle: 64, defaultSpeed: 0.6 },
-  { area: "Motijheel", lat: 23.7330, lon: 90.4172, defaultBle: 49, defaultSpeed: 1.4 },
-  { area: "Farmgate", lat: 23.7561, lon: 90.3872, defaultBle: 52, defaultSpeed: 2.1 },
-  { area: "Jatrabari", lat: 23.7104, lon: 90.4349, defaultBle: 61, defaultSpeed: 1.1 },
-  { area: "Uttara", lat: 23.8759, lon: 90.3795, defaultBle: 32, defaultSpeed: 16.4 },
-  { area: "Gulshan", lat: 23.7925, lon: 90.4158, defaultBle: 29, defaultSpeed: 18.2 },
-  { area: "Dhanmondi", lat: 23.7461, lon: 90.3742, defaultBle: 36, defaultSpeed: 6.5 },
-  { area: "Chattogram", lat: 22.3569, lon: 91.7832, defaultBle: 47, defaultSpeed: 1.8 },
-  { area: "Sylhet", lat: 24.8949, lon: 91.8687, defaultBle: 28, defaultSpeed: 14.0 },
-];
-
 export function BleCrowdDashboard() {
   const [snapshot, setSnapshot] = useState<BleCrowdSnapshot | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<string>("Mirpur-10");
-  const [simBleCount, setSimBleCount] = useState<number>(58);
-  const [simSpeedKmh, setSimSpeedKmh] = useState<number>(0.9);
-  const [autoPingOpenApp, setAutoPingOpenApp] = useState<boolean>(true);
-  const [isPinging, setIsPinging] = useState<boolean>(false);
-
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const webDeviceIdRef = useRef<string>(
-    `bw-web-${Math.random().toString(36).slice(2, 8)}`
-  );
 
   const fetchCrowdSnapshot = useCallback(async () => {
     try {
@@ -116,71 +88,12 @@ export function BleCrowdDashboard() {
     } catch {}
   }, []);
 
-  const sendBlePing = useCallback(
-    async (
-      areaName: string,
-      bleCountVal: number,
-      speedVal: number,
-      customId?: string,
-      customLabel?: string
-    ) => {
-      const preset =
-        PRESET_SCAN_LOCATIONS.find((p) => p.area === areaName) ||
-        PRESET_SCAN_LOCATIONS[0];
-      setIsPinging(true);
-      try {
-        const res = await fetch("/api/crowd", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            device_id: customId || webDeviceIdRef.current,
-            device_label:
-              customLabel ||
-              `My Open App (${areaName} • ${webDeviceIdRef.current.slice(-4)})`,
-            lat: preset.lat,
-            lon: preset.lon,
-            speed_kmh: speedVal,
-            ble_count: bleCountVal,
-            avg_rssi_dbm: -61,
-            scan_radius_m: 40,
-            network_type: "BLE_5.0 + 4G",
-          }),
-        });
-        if (res.ok) {
-          const json = await res.json();
-          if (json.snapshot) {
-            setSnapshot(json.snapshot);
-          } else {
-            await fetchCrowdSnapshot();
-          }
-        }
-      } catch {
-      } finally {
-        setIsPinging(false);
-      }
-    },
-    [fetchCrowdSnapshot]
-  );
-
-  // When this tab opens, automatically emit an active BLE scan ping if autoPingOpenApp is enabled
+  // Poll active mobile app users' BLE crowd telemetry every 5 seconds (read-only on web)
   useEffect(() => {
     fetchCrowdSnapshot();
-    if (autoPingOpenApp) {
-      sendBlePing(selectedPreset, simBleCount, simSpeedKmh);
-    }
-    const timer = setInterval(() => {
-      if (autoPingOpenApp) {
-        const jitterBle = Math.max(
-          5,
-          simBleCount + (Math.floor(Date.now() / 5000) % 5) - 2
-        );
-        sendBlePing(selectedPreset, jitterBle, simSpeedKmh);
-      } else {
-        fetchCrowdSnapshot();
-      }
-    }, 5000);
+    const timer = setInterval(fetchCrowdSnapshot, 5000);
     return () => clearInterval(timer);
-  }, [autoPingOpenApp, selectedPreset, simBleCount, simSpeedKmh, fetchCrowdSnapshot, sendBlePing]);
+  }, [fetchCrowdSnapshot]);
 
   const mapHtml = useMemo(
     () => `<!DOCTYPE html>
@@ -410,8 +323,8 @@ export function BleCrowdDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Top Live BLE Crowd-Sourcing Header & Simulator / Open-App Controls */}
-      <div className="rounded-xl border border-[#2e312e] bg-[#181a18] p-4 space-y-4">
+      {/* 1. Top Live BLE Crowd-Sourcing Observatory Header (Read-Only View of Active Mobile App Users) */}
+      <div className="rounded-xl border border-[#2e312e] bg-[#181a18] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-3 w-3">
@@ -423,134 +336,18 @@ export function BleCrowdDashboard() {
                 📡 BLE Proximity Crowd-Sourcing &amp; Live Mobility Heatmap
               </h2>
               <p className="text-xs text-[#9a988f] m-0">
-                When an app user opens BigWarn, their phone automatically pings nearby BLE advertisements (40m radius) and sends the accumulated BLE crowd &amp; GPS velocity to the server.
+                Live telemetry streamed exclusively from active BigWarn mobile app users scanning nearby BLE devices (40m radius) and GPS velocity.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setAutoPingOpenApp((v) => !v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer transition-colors ${
-                autoPingOpenApp
-                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
-                  : "bg-[#262926] border-[#2e312e] text-[#9a988f]"
-              }`}
-            >
-              {autoPingOpenApp
-                ? "🟢 Auto-Ping From Open App: ON"
-                : "⚪ Auto-Ping From Open App: OFF"}
-            </button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                sendBlePing(selectedPreset, simBleCount, simSpeedKmh)
-              }
-              disabled={isPinging}
-            >
-              {isPinging ? "Scanning BLE…" : "📡 Ping BLE Now"}
-            </Button>
-          </div>
-        </div>
-
-        {/* Open-App BLE Scanner Controls Bar (Test / Inspect Any Location & Mobility Pattern) */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3 border-t border-[#2e312e] text-xs">
-          <div>
-            <label className="block text-[11px] text-[#9a988f] mb-1 font-semibold">
-              📍 Active App User Location
-            </label>
-            <select
-              value={selectedPreset}
-              onChange={(e) => {
-                const nextArea = e.target.value;
-                setSelectedPreset(nextArea);
-                const found = PRESET_SCAN_LOCATIONS.find(
-                  (p) => p.area === nextArea
-                );
-                if (found) {
-                  setSimBleCount(found.defaultBle);
-                  setSimSpeedKmh(found.defaultSpeed);
-                  sendBlePing(
-                    found.area,
-                    found.defaultBle,
-                    found.defaultSpeed,
-                    `bw-app-${found.area.toLowerCase()}`,
-                    `Open App (${found.area})`
-                  );
-                }
-              }}
-              className="w-full h-9 rounded-lg bg-[#121312] border border-[#2e312e] px-2.5 text-xs text-[#ecebe6]"
-            >
-              {PRESET_SCAN_LOCATIONS.map((p) => (
-                <option key={p.area} value={p.area}>
-                  {p.area} ({p.lat.toFixed(3)}°N, {p.lon.toFixed(3)}°E)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] text-[#9a988f] mb-1 font-semibold">
-              📶 Nearby BLE Devices Detected (40m):{" "}
-              <b className="text-sky-400">{simBleCount} BLE</b>
-            </label>
-            <input
-              type="range"
-              min={4}
-              max={140}
-              value={simBleCount}
-              onChange={(e) => setSimBleCount(Number(e.target.value))}
-              className="w-full accent-sky-400 cursor-pointer"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] text-[#9a988f] mb-1 font-semibold">
-              🚶 Scanner GPS Speed:{" "}
-              <b className="text-amber-400">{simSpeedKmh} km/h</b> (
-              {simSpeedKmh < 3.5
-                ? "STATIC"
-                : simSpeedKmh < 10
-                ? "SLOW"
-                : "MOVING"}
-              )
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={30}
-              step={0.5}
-              value={simSpeedKmh}
-              onChange={(e) => setSimSpeedKmh(Number(e.target.value))}
-              className="w-full accent-amber-400 cursor-pointer"
-            />
-          </div>
-
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                // Seed 4 realistic active app scanner nodes across Bangladesh so multi-zone heatmaps can be compared
-                [
-                  PRESET_SCAN_LOCATIONS[0],
-                  PRESET_SCAN_LOCATIONS[1],
-                  PRESET_SCAN_LOCATIONS[5],
-                  PRESET_SCAN_LOCATIONS[8],
-                ].forEach((p, idx) => {
-                  sendBlePing(
-                    p.area,
-                    p.defaultBle,
-                    p.defaultSpeed,
-                    `bw-mobile-node-${idx + 1}`,
-                    `Mobile App #${idx + 1} (${p.area})`
-                  );
-                });
-              }}
-              className="w-full h-9 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-300 font-semibold text-xs cursor-pointer transition-colors"
-            >
-              ⚡ Broadcast Multi-User BLE Mesh (4 Areas)
-            </button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchCrowdSnapshot}
+          >
+            ↻ Refresh Live Feed
+          </Button>
         </div>
       </div>
 
