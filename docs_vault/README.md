@@ -49,3 +49,6 @@ Welcome to the central documentation vault for the **BigWarn Real-Time Banglades
   - How an open app user's phone passively scans nearby BLE devices (`40m` radius, RSSI `dBm`) and combines them with hardware GPS velocity (`speed_kmh`)
   - Backend multi-scanner BLE deduplication, `STATIC` vs. `SLOW_MOVING` vs. `MOVING` classification, and crowd pattern detection
   - Mobile clickable `#crowd-hud` and Frontend **`📡 Crowd Sourcing (BLE)`** interactive heatmap map & live scanner table
+- **[04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md)**
+  - Implementation plan for **Single-Phone Multi-Radio Surroundings & Traffic Detection (`BLE + Wi-Fi Mobile Peers + 4G LTE Cell-Tower RSRQ Load + GPS Velocity`)**
+  - How 1 or 2 BigWarn phones at a strike can detect surrounding devices even when people around them have **Bluetooth turned OFF** and do not have the app installed
