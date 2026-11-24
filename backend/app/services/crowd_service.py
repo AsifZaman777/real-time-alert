@@ -174,17 +174,23 @@ class CrowdIntelligenceService:
         lon: float,
         speed_kmh: float = 0.0,
         accuracy_m: float = 20.0,
-        network_type: str = "MULTI_RADIO_BLE_WIFI_CELL",
+        network_type: str = "NATIVE_MULTI_RADIO",
         ble_count: int | None = None,
         ble_static_count: int | None = None,
         ble_moving_count: int | None = None,
+        bt_classic_count: int | None = None,
         wifi_mobile_count: int | None = None,
+        wifi_hotspot_count: int | None = None,
+        wifi_p2p_count: int | None = None,
+        wifi_lan_count: int | None = None,
         wifi_ap_count: int | None = None,
         wifi_static_count: int | None = None,
         wifi_moving_count: int | None = None,
         cell_rsrp_dbm: int | None = None,
         cell_rsrq_db: int | None = None,
         cell_load_percent: int | None = None,
+        cell_tower_count: int | None = None,
+        cell_network_type: str = "",
         avg_rssi_dbm: int = -70,
         scan_radius_m: int = 50,
         device_label: str = "",
@@ -220,6 +226,7 @@ class CrowdIntelligenceService:
             clean_id = f"ble-node-{area.lower().replace(' ', '-')}"
 
         detected_ble = max(0, int(ble_count)) if ble_count is not None else 0
+        detected_bt_classic = max(0, int(bt_classic_count)) if bt_classic_count is not None else 0
         st_ble = (
             max(0, int(ble_static_count))
             if ble_static_count is not None
@@ -227,7 +234,14 @@ class CrowdIntelligenceService:
         )
         mv_ble = max(0, detected_ble - st_ble)
 
-        detected_wifi_mob = max(0, int(wifi_mobile_count)) if wifi_mobile_count is not None else 0
+        detected_wifi_hs = max(0, int(wifi_hotspot_count)) if wifi_hotspot_count is not None else 0
+        detected_wifi_p2p = max(0, int(wifi_p2p_count)) if wifi_p2p_count is not None else 0
+        detected_wifi_lan = max(0, int(wifi_lan_count)) if wifi_lan_count is not None else 0
+        detected_wifi_mob = (
+            max(0, int(wifi_mobile_count))
+            if wifi_mobile_count is not None
+            else (detected_wifi_hs + detected_wifi_p2p + detected_wifi_lan)
+        )
         detected_wifi_ap = max(0, int(wifi_ap_count)) if wifi_ap_count is not None else 0
         st_wifi = (
             max(0, int(wifi_static_count))
@@ -238,8 +252,10 @@ class CrowdIntelligenceService:
 
         c_rsrp = int(cell_rsrp_dbm) if cell_rsrp_dbm is not None else -85
         c_rsrq = int(cell_rsrq_db) if cell_rsrq_db is not None else -9
+        c_towers = max(0, int(cell_tower_count)) if cell_tower_count is not None else 0
+        c_net_type = (cell_network_type or "4G_LTE").strip() or "4G_LTE"
         c_load = (
-            max(10, min(100, int(cell_load_percent)))
+            max(0, min(100, int(cell_load_percent)))
             if cell_load_percent is not None
             else max(12, min(98, int(round(((-5.0 - c_rsrq) / 15.0) * 100.0))))
         )
@@ -256,17 +272,23 @@ class CrowdIntelligenceService:
             "lon": round(lon, 6),
             "speed_kmh": round(clean_speed, 1),
             "accuracy_m": round(max(1.0, float(accuracy_m)), 1),
-            "network_type": network_type or "MULTI_RADIO_BLE_WIFI_CELL",
+            "network_type": network_type or "NATIVE_MULTI_RADIO",
             "raw_ble_count": detected_ble,
+            "bt_classic_count": detected_bt_classic,
             "raw_ble_static": st_ble,
             "raw_ble_moving": mv_ble,
             "raw_wifi_mobile_count": detected_wifi_mob,
+            "wifi_hotspot_count": detected_wifi_hs,
+            "wifi_p2p_count": detected_wifi_p2p,
+            "wifi_lan_count": detected_wifi_lan,
             "raw_wifi_ap_count": detected_wifi_ap,
             "raw_wifi_static": st_wifi,
             "raw_wifi_moving": mv_wifi,
             "cell_rsrp_dbm": c_rsrp,
             "cell_rsrq_db": c_rsrq,
             "cell_load_percent": c_load,
+            "cell_tower_count": c_towers,
+            "cell_network_type": c_net_type,
             "avg_rssi_dbm": int(avg_rssi_dbm or -70),
             "scan_radius_m": max(15, min(100, int(scan_radius_m or 50))),
             "peak_threshold": peak_threshold,
@@ -394,10 +416,15 @@ class CrowdIntelligenceService:
             scanner_count = len(nodes)
             max_hw_ble = max(int(n.get("raw_ble_count", 0)) for n in nodes)
             max_wifi_mob = max(int(n.get("wifi_mobile_count", 0)) for n in nodes)
+            max_wifi_hs = max(int(n.get("wifi_hotspot_count", 0)) for n in nodes)
+            max_wifi_p2p = max(int(n.get("wifi_p2p_count", 0)) for n in nodes)
+            max_wifi_lan = max(int(n.get("wifi_lan_count", 0)) for n in nodes)
             max_wifi_ap = max(int(n.get("wifi_ap_count", 0)) for n in nodes)
-            avg_cell_load = int(round(sum(int(n.get("cell_load_percent", 25)) for n in nodes) / len(nodes)))
+            avg_cell_load = int(round(sum(int(n.get("cell_load_percent", 0)) for n in nodes) / len(nodes)))
             avg_cell_rsrq = int(round(sum(int(n.get("cell_rsrq_db", -9)) for n in nodes) / len(nodes)))
             avg_cell_rsrp = int(round(sum(int(n.get("cell_rsrp_dbm", -85)) for n in nodes) / len(nodes)))
+            cell_net = str(nodes[0].get("cell_network_type") or "4G_LTE")
+            cell_towers = max(int(n.get("cell_tower_count", 0)) for n in nodes)
 
             total_mobiles = scanner_count + max_hw_ble + max_wifi_mob
 
@@ -458,10 +485,16 @@ class CrowdIntelligenceService:
                     "scanner_nodes_count": scanner_count,
                     "ble_peers_count": max_hw_ble,
                     "wifi_mobile_count": max_wifi_mob,
+                    "wifi_mobile_peers_count": max_wifi_mob,
+                    "wifi_hotspot_count": max_wifi_hs,
+                    "wifi_p2p_count": max_wifi_p2p,
+                    "wifi_lan_count": max_wifi_lan,
                     "wifi_ap_count": max_wifi_ap,
                     "cell_rsrp_dbm": avg_cell_rsrp,
                     "cell_rsrq_db": avg_cell_rsrq,
                     "cell_load_percent": avg_cell_load,
+                    "cell_tower_count": cell_towers,
+                    "cell_network_type": cell_net,
                     "total_mobiles": total_mobiles,
                     "mobiles_stuck": mobiles_stuck,
                     "mobiles_moving": mobiles_moving,

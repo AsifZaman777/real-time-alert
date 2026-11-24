@@ -31,8 +31,14 @@ cd "$MOBILE_DIR"
 echo "==> Running TypeScript check..."
 npx tsc --noEmit
 
-echo "==> Syncing native Android project (preserving native BigWarnBleScannerModule.kt)..."
-npx expo prebuild --platform android
+echo "==> Syncing native Android project (via plugins/withBigWarnMultiRadio.js)..."
+npx expo prebuild --platform android --no-install
+
+echo "==> Verifying BigWarnBleScannerModule.kt was generated..."
+if [[ ! -f "$MOBILE_DIR/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt" ]]; then
+  echo "ERROR: BigWarnBleScannerModule.kt missing after expo prebuild!"
+  exit 1
+fi
 
 echo "==> Building Release APK (arm64-v8a)..."
 cd "$MOBILE_DIR/android"

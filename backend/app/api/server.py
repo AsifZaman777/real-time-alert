@@ -173,13 +173,19 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                     ble_count = int((q.get("ble_count") or ["0"])[0])
                     ble_static = int((q["ble_static_count"])[0]) if "ble_static_count" in q else None
                     ble_moving = int((q["ble_moving_count"])[0]) if "ble_moving_count" in q else None
+                    bt_classic_count = int((q.get("bt_classic_count") or ["0"])[0])
                     wifi_mobile_count = int((q.get("wifi_mobile_count") or ["0"])[0])
+                    wifi_hotspot_count = int((q.get("wifi_hotspot_count") or ["0"])[0])
+                    wifi_p2p_count = int((q.get("wifi_p2p_count") or ["0"])[0])
+                    wifi_lan_count = int((q.get("wifi_lan_count") or ["0"])[0])
                     wifi_ap_count = int((q.get("wifi_ap_count") or ["0"])[0])
                     wifi_static = int((q["wifi_static_count"])[0]) if "wifi_static_count" in q else None
                     wifi_moving = int((q["wifi_moving_count"])[0]) if "wifi_moving_count" in q else None
                     cell_rsrp_dbm = int((q.get("cell_rsrp_dbm") or ["-85"])[0])
                     cell_rsrq_db = int((q.get("cell_rsrq_db") or ["-9"])[0])
                     cell_load_percent = int((q.get("cell_load_percent") or ["0"])[0])
+                    cell_tower_count = int((q.get("cell_tower_count") or ["0"])[0])
+                    cell_network_type = (q.get("cell_network_type") or ["4G_LTE"])[0]
                     avg_rssi_dbm = int((q.get("avg_rssi_dbm") or ["-65"])[0])
                     scan_radius_m = int((q.get("scan_radius_m") or ["50"])[0])
                 except ValueError:
@@ -196,13 +202,19 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         ble_count=ble_count,
                         ble_static_count=ble_static,
                         ble_moving_count=ble_moving,
+                        bt_classic_count=bt_classic_count,
                         wifi_mobile_count=wifi_mobile_count,
+                        wifi_hotspot_count=wifi_hotspot_count,
+                        wifi_p2p_count=wifi_p2p_count,
+                        wifi_lan_count=wifi_lan_count,
                         wifi_ap_count=wifi_ap_count,
                         wifi_static_count=wifi_static,
                         wifi_moving_count=wifi_moving,
                         cell_rsrp_dbm=cell_rsrp_dbm,
                         cell_rsrq_db=cell_rsrq_db,
                         cell_load_percent=cell_load_percent,
+                        cell_tower_count=cell_tower_count,
+                        cell_network_type=cell_network_type,
                         avg_rssi_dbm=avg_rssi_dbm,
                         scan_radius_m=scan_radius_m,
                     )
@@ -234,13 +246,19 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         ble_count=int(body["ble_count"]) if "ble_count" in body and body["ble_count"] is not None else 0,
                         ble_static_count=int(body["ble_static_count"]) if "ble_static_count" in body and body["ble_static_count"] is not None else None,
                         ble_moving_count=int(body["ble_moving_count"]) if "ble_moving_count" in body and body["ble_moving_count"] is not None else None,
+                        bt_classic_count=int(body["bt_classic_count"]) if "bt_classic_count" in body and body["bt_classic_count"] is not None else 0,
                         wifi_mobile_count=int(body["wifi_mobile_count"]) if "wifi_mobile_count" in body and body["wifi_mobile_count"] is not None else 0,
+                        wifi_hotspot_count=int(body["wifi_hotspot_count"]) if "wifi_hotspot_count" in body and body["wifi_hotspot_count"] is not None else 0,
+                        wifi_p2p_count=int(body["wifi_p2p_count"]) if "wifi_p2p_count" in body and body["wifi_p2p_count"] is not None else 0,
+                        wifi_lan_count=int(body["wifi_lan_count"]) if "wifi_lan_count" in body and body["wifi_lan_count"] is not None else 0,
                         wifi_ap_count=int(body["wifi_ap_count"]) if "wifi_ap_count" in body and body["wifi_ap_count"] is not None else 0,
                         wifi_static_count=int(body["wifi_static_count"]) if "wifi_static_count" in body and body["wifi_static_count"] is not None else None,
                         wifi_moving_count=int(body["wifi_moving_count"]) if "wifi_moving_count" in body and body["wifi_moving_count"] is not None else None,
                         cell_rsrp_dbm=int(body.get("cell_rsrp_dbm") or -85),
                         cell_rsrq_db=int(body.get("cell_rsrq_db") or -9),
                         cell_load_percent=int(body.get("cell_load_percent") or 0),
+                        cell_tower_count=int(body.get("cell_tower_count") or 0),
+                        cell_network_type=str(body.get("cell_network_type") or "4G_LTE"),
                         avg_rssi_dbm=int(body.get("avg_rssi_dbm") or -65),
                         scan_radius_m=int(body.get("scan_radius_m") or 50),
                     )

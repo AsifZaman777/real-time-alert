@@ -35,7 +35,11 @@ import {
   VerifiedHeatmapZone,
 } from "./src/types/alert";
 import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
-import { scanNearbyBleCrowdAsync } from "./src/services/bleCrowdScanner";
+import {
+  BleScanTelemetry,
+  requestMultiRadioPermissionsAsync,
+  scanNearbyBleCrowdAsync,
+} from "./src/services/bleCrowdScanner";
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
 import {
@@ -213,6 +217,7 @@ export default function App() {
   } | null>(null);
   const [fitRouteNonce, setFitRouteNonce] = useState<number>(0);
   const [bleHeatmaps, setBleHeatmaps] = useState<VerifiedHeatmapZone[]>([]);
+  const [radioTelemetry, setRadioTelemetry] = useState<BleScanTelemetry | null>(null);
 
   const lastPollSigRef = useRef<string>("");
   const deviceIdRef = useRef<string>(
@@ -360,6 +365,35 @@ export default function App() {
     [offsetFull, offsetHalf, offsetOff, snapDrawerTo, translateY]
   );
 
+  const applyPositionSample = useCallback(
+    (pos: Location.LocationObject, flyTo: boolean = false) => {
+      hasRealGpsFixRef.current = true;
+      const rawSpeedMs = pos.coords.speed;
+      if (typeof rawSpeedMs === "number" && rawSpeedMs >= 0) {
+        gpsSpeedKmhRef.current = Math.round(rawSpeedMs * 3.6 * 10) / 10;
+      }
+      if (typeof pos.coords.accuracy === "number" && pos.coords.accuracy > 0) {
+        gpsAccuracyMRef.current = Math.round(pos.coords.accuracy * 10) / 10;
+      }
+      const next = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        label: "My Location",
+      };
+      setCurrentLocation(next);
+      if (flyTo) {
+        setFocusCoords({
+          lat: next.lat,
+          lon: next.lon,
+          zoom: 15,
+          nonce: Date.now(),
+        });
+      }
+      return next;
+    },
+    []
+  );
+
   const handleLocateMe = useCallback(
     async (flyTo: boolean = true) => {
       try {
@@ -373,33 +407,20 @@ export default function App() {
               nonce: Date.now(),
             });
           }
-          return;
+          return null;
         }
-        const pos = await Location.getCurrentPositionAsync({});
-        hasRealGpsFixRef.current = true;
-        const rawSpeedMs = pos.coords.speed;
-        if (typeof rawSpeedMs === "number" && rawSpeedMs >= 0) {
-          gpsSpeedKmhRef.current = Math.round(rawSpeedMs * 3.6 * 10) / 10;
+        const lastKnown = await Location.getLastKnownPositionAsync({
+          maxAge: 600000,
+        }).catch(() => null);
+        if (lastKnown) {
+          applyPositionSample(lastKnown, flyTo);
         }
-        if (typeof pos.coords.accuracy === "number" && pos.coords.accuracy > 0) {
-          gpsAccuracyMRef.current = Math.round(pos.coords.accuracy * 10) / 10;
-        }
-        const next = {
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          label: "My Location",
-        };
-        setCurrentLocation(next);
-        if (flyTo) {
-          setFocusCoords({
-            lat: next.lat,
-            lon: next.lon,
-            zoom: 15,
-            nonce: Date.now(),
-          });
-        }
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        return applyPositionSample(pos, flyTo);
       } catch {
-        if (flyTo) {
+        if (flyTo && !hasRealGpsFixRef.current) {
           setFocusCoords({
             lat: currentLocation.lat,
             lon: currentLocation.lon,
@@ -407,13 +428,39 @@ export default function App() {
             nonce: Date.now(),
           });
         }
+        return null;
       }
     },
-    [currentLocation.lat, currentLocation.lon]
+    [applyPositionSample, currentLocation.lat, currentLocation.lon]
   );
 
   useEffect(() => {
-    handleLocateMe(false);
+    let sub: Location.LocationSubscription | null = null;
+    let active = true;
+    (async () => {
+      await handleLocateMe(false);
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === "granted" && active) {
+          sub = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 5000,
+              distanceInterval: 2,
+            },
+            (pos) => {
+              if (active) applyPositionSample(pos, false);
+            }
+          );
+        }
+      } catch {}
+    })();
+    return () => {
+      active = false;
+      try {
+        sub?.remove();
+      } catch {}
+    };
   }, []);
 
   const fetchAlerts = useCallback(
@@ -424,10 +471,29 @@ export default function App() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
+        let activeLat = currentLocation.lat;
+        let activeLon = currentLocation.lon;
+
+        if (!hasRealGpsFixRef.current && Platform.OS !== "web") {
+          try {
+            const perm = await Location.getForegroundPermissionsAsync();
+            if (perm.status === "granted") {
+              const quickPos =
+                (await Location.getLastKnownPositionAsync({ maxAge: 900000 }).catch(() => null)) ||
+                (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }).catch(() => null));
+              if (quickPos) {
+                const updated = applyPositionSample(quickPos, false);
+                activeLat = updated.lat;
+                activeLon = updated.lon;
+              }
+            }
+          } catch {}
+        }
+
         const routeParams = new URLSearchParams({
           date: "latest",
-          cur_lat: String(currentLocation.lat),
-          cur_lon: String(currentLocation.lon),
+          cur_lat: String(activeLat),
+          cur_lon: String(activeLon),
           dest_lat: String(destination.lat),
           dest_lon: String(destination.lon),
           todo: todoText,
@@ -441,26 +507,33 @@ export default function App() {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
 
-        // Query real hardware Multi-Radio scanner (`BigWarnBleScannerModule.kt`: BLE + Wi-Fi Mobile Peers + 4G Cell Load)
+        // Query real hardware Multi-Radio scanner (`BigWarnBleScannerModule.kt`: BLE + Wi-Fi Hotspots/P2P/LAN + 4G Cell Load)
         const bleScan = await scanNearbyBleCrowdAsync(gpsSpeedKmhRef.current);
+        setRadioTelemetry(bleScan);
         if (hasRealGpsFixRef.current && Platform.OS !== "web") {
           const pingParams = new URLSearchParams({
             device_id: deviceIdRef.current,
             device_label: `BigWarn ${Platform.OS.toUpperCase()} (${deviceIdRef.current.slice(-4)})`,
-            lat: String(currentLocation.lat),
-            lon: String(currentLocation.lon),
+            lat: String(activeLat),
+            lon: String(activeLon),
             speed_kmh: String(gpsSpeedKmhRef.current),
             accuracy_m: String(gpsAccuracyMRef.current),
             ble_count: String(bleScan.bleCount),
             ble_static_count: String(bleScan.bleStaticCount),
             ble_moving_count: String(bleScan.bleMovingCount),
+            bt_classic_count: String(bleScan.btClassicCount),
             wifi_mobile_count: String(bleScan.wifiMobileCount),
+            wifi_hotspot_count: String(bleScan.wifiHotspotCount),
+            wifi_p2p_count: String(bleScan.wifiP2pCount),
+            wifi_lan_count: String(bleScan.wifiLanPeerCount),
             wifi_ap_count: String(bleScan.wifiFixedApCount),
             wifi_static_count: String(bleScan.wifiStaticCount),
             wifi_moving_count: String(bleScan.wifiMovingCount),
             cell_rsrp_dbm: String(bleScan.cellRsrpDbm),
             cell_rsrq_db: String(bleScan.cellRsrqDb),
             cell_load_percent: String(bleScan.cellLoadPercent),
+            cell_tower_count: String(bleScan.cellTowerCount),
+            cell_network_type: String(bleScan.cellNetworkType),
             avg_rssi_dbm: String(bleScan.avgRssiDbm),
             scan_radius_m: String(bleScan.scanRadiusM),
             network_type: bleScan.scannerMode,
@@ -998,6 +1071,40 @@ export default function App() {
             {advisoryText}
           </Text>
         </TouchableOpacity>
+
+        {/* Live Multi-Radio Hardware Sensor Telemetry Bar (BLE + Wi-Fi P2P/LAN + 4G) */}
+        {radioTelemetry && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={async () => {
+              await requestMultiRadioPermissionsAsync();
+              await handleLocateMe(false);
+              fetchAlerts(true);
+            }}
+            style={styles.sensorHudStrip}
+          >
+            <View style={styles.sensorHudLeft}>
+              <Ionicons
+                name="radio-outline"
+                size={13}
+                color={
+                  radioTelemetry.diagStatus === "ALL_RADIOS_ACTIVE"
+                    ? "#0284C7"
+                    : "#D97706"
+                }
+              />
+              <Text style={styles.sensorHudText} numberOfLines={1}>
+                {`Peers: +${radioTelemetry.bleCount} BLE • +${radioTelemetry.wifiMobileCount} Wi-Fi (P2P:${radioTelemetry.wifiP2pCount} LAN:${radioTelemetry.wifiLanPeerCount} HS:${radioTelemetry.wifiHotspotCount}) • ${radioTelemetry.cellNetworkType} ${radioTelemetry.cellLoadPercent}% (${radioTelemetry.cellRsrpDbm}dBm)`}
+              </Text>
+            </View>
+            {radioTelemetry.diagStatus !== "ALL_RADIOS_ACTIVE" &&
+              radioTelemetry.diagStatus !== "OK" && (
+                <Text style={styles.sensorWarnTag}>
+                  {radioTelemetry.diagStatus.replace("NO_BT_PERM", "Grant BT").replace("NO_WIFI_PERM", "Grant WiFi")}
+                </Text>
+              )}
+          </TouchableOpacity>
+        )}
       </SafeAreaView>
 
       {/* Bottom-Right Google Maps Floating Action Stack */}
@@ -1510,6 +1617,40 @@ const styles = StyleSheet.create({
   },
   advisoryTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 },
   advisoryBody: { color: "#1E293B", fontSize: 11.5, lineHeight: 15.5, fontWeight: "600" },
+  sensorHudStrip: {
+    marginTop: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(248, 250, 252, 0.96)",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  sensorHudLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  sensorHudText: {
+    flex: 1,
+    color: "#0F172A",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
+  sensorWarnTag: {
+    color: "#B45309",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 9.5,
+    fontWeight: "800",
+  },
   mapActionStack: {
     position: "absolute",
     right: 12,

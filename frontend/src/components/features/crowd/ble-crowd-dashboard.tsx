@@ -16,11 +16,17 @@ export interface BleScannerRow {
   accuracy_m: number;
   network_type: string;
   ble_count: number;
+  bt_classic_count?: number;
   wifi_mobile_count?: number;
+  wifi_hotspot_count?: number;
+  wifi_p2p_count?: number;
+  wifi_lan_count?: number;
   wifi_ap_count?: number;
   cell_rsrp_dbm?: number;
   cell_rsrq_db?: number;
   cell_load_percent?: number;
+  cell_tower_count?: number;
+  cell_network_type?: string;
   total_crowd_around_me: number;
   static_devices: number;
   moving_devices: number;
@@ -638,7 +644,10 @@ export function BleCrowdDashboard() {
                           +{sc.ble_count} BLE
                         </div>
                         <div className="text-[10.5px] font-semibold text-amber-300">
-                          +{sc.wifi_mobile_count || 0} Wi-Fi (BT Off)
+                          +{sc.wifi_mobile_count || 0} Wi-Fi
+                          {(sc.wifi_p2p_count || sc.wifi_lan_count || sc.wifi_hotspot_count)
+                            ? ` (P2P:${sc.wifi_p2p_count || 0} LAN:${sc.wifi_lan_count || 0} HS:${sc.wifi_hotspot_count || 0})`
+                            : " (BT Off)"}
                         </div>
                       </td>
 
@@ -687,7 +696,7 @@ export function BleCrowdDashboard() {
 
                       <td className="p-2.5 text-right font-mono text-[11px] text-[#9a988f]">
                         <div className="text-sky-300 font-semibold">
-                          4G Load: {sc.cell_load_percent || 0}%
+                          {sc.cell_network_type || "4G"}: {sc.cell_load_percent || 0}% ({sc.cell_rsrp_dbm ?? -85} dBm)
                         </div>
                         <div>
                           {sc.avg_rssi_dbm} dBm • {sc.density_per_100m2}/100m²

@@ -51,26 +51,22 @@ flowchart LR
 
 ## 3. Step-by-Step Technical Breakdown
 
-### 3.1 Native Android Hardware BLE Scanner & JS Bridge ([BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt) & [bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))
+### 3.1 Expo Config Plugin & Native Android 4-Radio Scanner ([withBigWarnMultiRadio.js](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/plugins/withBigWarnMultiRadio.js) & [bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))
 
-1. **Native Kotlin Hardware Bluetooth Scanner (`android.bluetooth.le.BluetoothLeScanner`)**:
-   - Implemented in [BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt) and registered in [BigWarnBleScannerPackage.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerPackage.kt) / [MainApplication.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/MainApplication.kt).
-   - Uses Android's hardware `BluetoothManager.adapter.bluetoothLeScanner` with `ScanSettings.SCAN_MODE_BALANCED` and `BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` runtime permissions ([AndroidManifest.xml](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/AndroidManifest.xml)).
-   - Records every real hardware BLE packet (`onScanResult`) in a thread-safe `ConcurrentHashMap<String, PeerReading>` keyed by device MAC/advertising address with real RSSI (`-95 dBm <= rssi < 0 dBm`), pruning peers not heard in the last `45 seconds`.
-   - Classifies each real BLE peer as **Static (`bleStaticCount`)** when `speedKmh < 3.5` and $|\text{lastRssi} - \text{firstRssi}| \le 6\text{ dBm}$, or **Moving (`bleMovingCount`)** otherwise.
-2. **Zero Synthetic or Fallback BLE Numbers ([bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))**:
-   - **`scanNearbyBleCrowdAsync(speedKmh)`** requests Android runtime `BLUETOOTH_SCAN` & `BLUETOOTH_CONNECT` permissions and queries `NativeModules.BigWarnBleScanner.getScanSnapshot(speedKmh)`.
-   - Strictly returns **only** the real hardware BLE devices physically detected by the phone's Bluetooth radio (`0` if Bluetooth is off or no devices are nearby—never synthetic or coordinate-hashed numbers).
-3. **Automatic Telemetry Transmission ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx#L424-L455))**:
-   - Only transmits `/api/v1/crowd/ping` when a real hardware GPS fix (`hasRealGpsFixRef.current === true`) is active on a mobile device:
-     - `device_id`: Unique app instance ID (e.g., `bw-android-a8f39c`)
-     - `device_label`: Human-readable scanner label (e.g., `BigWarn ANDROID (f39c)`)
-     - `lat`, `lon`, `speed_kmh`, `accuracy_m`
-     - `ble_count`: Exact count of real nearby BLE devices detected within `40m`
-     - `ble_static_count` & `ble_moving_count`
-     - `avg_rssi_dbm`: Real average BLE signal strength in `dBm`
-     - `scan_radius_m`: `40` meters
-     - `network_type`: `"NATIVE_BLE_HARDWARE"` or `"BLE_PERMISSION_OR_ADAPTER_OFF"`
+1. **Persistent Native Generation via Expo Config Plugin (`mobile/plugins/withBigWarnMultiRadio.js`)**:
+   - Because `mobile/android/` is gitignored and `npx expo prebuild --platform android` regenerates `MainApplication.kt` and `AndroidManifest.xml`, the Kotlin native scanner is maintained inside [withBigWarnMultiRadio.js](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/plugins/withBigWarnMultiRadio.js) (registered in [app.json](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/app.json)).
+   - On every `npx expo prebuild`, it writes `BigWarnBleScannerModule.kt` and `BigWarnBleScannerPackage.kt`, registers `add(BigWarnBleScannerPackage())` in `MainApplication.kt`, injects Android 12–16 permissions (`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `BLUETOOTH_ADVERTISE`, `NEARBY_WIFI_DEVICES`, `ACCESS_FINE_LOCATION`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_STATE`, `ACCESS_NETWORK_STATE`), and adds R8/ProGuard keep rules in `proguard-rules.pro`.
+2. **Radio A — BLE Scan + BigWarn Beacon Advertiser + Classic BT (`BluetoothLeScanner` / `BluetoothLeAdvertiser`)**:
+   - Uses `SCAN_MODE_LOW_LATENCY`, `MATCH_MODE_AGGRESSIVE`, `CALLBACK_TYPE_ALL_MATCHES` + Broadcast `ACTION_FOUND` inquiry (60 s TTL) + BigWarn BLE service UUID (`0000b19a-...`) advertising so nearby BigWarn devices detect each other even offline.
+3. **Radio B — Wi-Fi 3-Layer Detection (`wifi_mobile_count = hotspot + p2p + lan`)**:
+   - **Hotspots & Mobile APs (`WifiManager.startScan()`)**: Detects nearby phones with Hotspot ON or mobile OUI/Locally-Administered MACs (`2, 6, A, E`).
+   - **Wi-Fi Direct (`WifiP2pManager.discoverPeers()`)**: Discovers nearby Android phones with Wi-Fi ON even without sharing a router.
+   - **Shared Room/Bus Wi-Fi LAN (`NsdManager` mDNS + `/24` local subnet reachability)**: When connected to a `/24` Wi-Fi router (such as a room, cafe, or bus Wi-Fi), discovers live sibling phones sharing the same router—**even iPhones or idle Androids with screen off and Bluetooth off**—excluding self and gateway IP.
+4. **Radio C — Cellular Congestion (`TelephonyManager.requestCellInfoUpdate` + `allCellInfo`)**:
+   - Refreshes real serving/neighbor **4G LTE**, **5G NR**, **3G**, and **2G** signal strength (`rsrp`, `rsrq`, `rssnr`, `cqi`, `dbm`) across available cells to compute `cell_load_percent` (`0–100%`) and `cell_tower_count`.
+5. **Indoor/Outdoor Location + Live Sensor HUD Bar ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx))**:
+   - Uses `getLastKnownPositionAsync` + `Accuracy.Balanced` + continuous `watchPositionAsync` (with 6 s retry) so pings work indoors in rooms immediately rather than stalling for outdoor GPS lock.
+   - Renders a live sensor bar directly below the route advisory showing `+X BLE • +Y Wi-Fi (P2P:.. LAN:.. HS:..) • 4G Z%` and any missing permission/adapter warning.
 
 ---
 

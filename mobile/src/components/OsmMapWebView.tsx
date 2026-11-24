@@ -619,8 +619,11 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       const patternText = z.crowd_pattern || (isStatic ? 'High-Density Static Gathering' : 'Moving Crowd Flow');
       const scannerCount = z.scanner_nodes_count || 1;
       const blePeers = z.ble_peers_count || 0;
-      const wifiPeers = z.wifi_mobile_count || 0;
-      const cellLoad = z.cell_load_percent || 25;
+      const wifiPeers = z.wifi_mobile_count ?? z.wifi_mobile_peers_count ?? 0;
+      const wifiP2p = z.wifi_p2p_count || 0;
+      const wifiLan = z.wifi_lan_count || 0;
+      const cellLoad = z.cell_load_percent || 0;
+      const cellNet = z.cell_network_type || '4G';
 
       hudEl.innerHTML = '<div class="hud-top">'
         +   '<span class="hud-area">📡 ' + escapeHtml(z.area) + '</span>'
@@ -629,7 +632,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         + '<div class="hud-pattern-row">'
         +   '<div>' + escapeHtml(patternText) + '</div>'
         +   '<div style="font-size:9.5px;color:#475569;margin-top:2px;">'
-        +     scannerCount + ' Open App • +' + blePeers + ' BLE (40m) • +' + wifiPeers + ' Wi-Fi (BT Off) • 4G Load ' + cellLoad + '%'
+        +     scannerCount + ' Open App • +' + blePeers + ' BLE • +' + wifiPeers + ' Wi-Fi (P2P:' + wifiP2p + ' LAN:' + wifiLan + ') • ' + escapeHtml(cellNet) + ' ' + cellLoad + '%'
         +   '</div>'
         + '</div>'
         + '<div class="hud-grid">'

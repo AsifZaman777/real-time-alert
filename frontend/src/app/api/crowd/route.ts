@@ -509,11 +509,17 @@ export async function GET(req: NextRequest) {
       return {
         ...sc,
         ble_count: Math.max(hwBle, nearbyApps),
+        bt_classic_count: sc.bt_classic_count || 0,
         wifi_mobile_count: hwWifiMobile,
+        wifi_hotspot_count: sc.wifi_hotspot_count || 0,
+        wifi_p2p_count: sc.wifi_p2p_count || 0,
+        wifi_lan_count: sc.wifi_lan_count || 0,
         wifi_ap_count: sc.wifi_ap_count || 0,
         cell_rsrp_dbm: sc.cell_rsrp_dbm ?? -85,
         cell_rsrq_db: sc.cell_rsrq_db ?? -9,
         cell_load_percent: sc.cell_load_percent || 0,
+        cell_tower_count: sc.cell_tower_count || 0,
+        cell_network_type: sc.cell_network_type || "4G_LTE",
         total_crowd_around_me: totalAround,
         static_devices: staticDevs,
         moving_devices: movingDevs,
@@ -538,7 +544,20 @@ export async function GET(req: NextRequest) {
         ...nodes.map((n) => n.wifi_mobile_count || 0),
         0
       );
+      const maxWifiHs = Math.max(
+        ...nodes.map((n) => n.wifi_hotspot_count || 0),
+        0
+      );
+      const maxWifiP2p = Math.max(
+        ...nodes.map((n) => n.wifi_p2p_count || 0),
+        0
+      );
+      const maxWifiLan = Math.max(
+        ...nodes.map((n) => n.wifi_lan_count || 0),
+        0
+      );
       const maxWifiAp = Math.max(...nodes.map((n) => n.wifi_ap_count || 0), 0);
+      const cellNetType = nodes[0].cell_network_type || "4G_LTE";
       const avgCellLoad = Math.round(
         nodes.reduce((s, n) => s + (n.cell_load_percent || 0), 0) / nodes.length
       );
@@ -584,11 +603,16 @@ export async function GET(req: NextRequest) {
         } • +${maxBle} BLE • +${maxWifiMobile} Wi-Fi [BT Off] • 4G Load ${avgCellLoad}%)`,
         scanner_nodes_count: scannerCount,
         ble_peers_count: maxBle,
+        wifi_mobile_count: maxWifiMobile,
         wifi_mobile_peers_count: maxWifiMobile,
+        wifi_hotspot_count: maxWifiHs,
+        wifi_p2p_count: maxWifiP2p,
+        wifi_lan_count: maxWifiLan,
         wifi_fixed_ap_count: maxWifiAp,
         cell_load_percent: avgCellLoad,
         cell_rsrq_db: avgRsrq,
         cell_rsrp_dbm: avgRsrp,
+        cell_network_type: cellNetType,
         total_mobiles: totalMobiles,
         mobiles_stuck: mobilesStuck,
         mobiles_moving: mobilesMoving,

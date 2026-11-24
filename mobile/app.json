@@ -27,15 +27,22 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_STATE",
+        "ACCESS_NETWORK_STATE",
+        "CHANGE_NETWORK_STATE",
+        "NEARBY_WIFI_DEVICES",
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_SCAN",
         "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
         "VIBRATE"
       ],
       "package": "com.bigwarn.edge",
-      "versionCode": 2
+      "versionCode": 3
     },
+    "plugins": [
+      "./plugins/withBigWarnMultiRadio.js"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

@@ -33,11 +33,17 @@ export interface VerifiedHeatmapZone extends CrowdMetrics {
   lon: number;
   scanner_nodes_count?: number;
   ble_peers_count?: number;
+  bt_classic_count?: number;
   wifi_mobile_count?: number;
+  wifi_hotspot_count?: number;
+  wifi_p2p_count?: number;
+  wifi_lan_count?: number;
   wifi_ap_count?: number;
   cell_rsrp_dbm?: number;
   cell_rsrq_db?: number;
   cell_load_percent?: number;
+  cell_tower_count?: number;
+  cell_network_type?: string;
   mobility_state?: "STATIC" | "SLOW_MOVING" | "MOVING" | string;
   crowd_pattern?: string;
   avg_rssi_dbm?: number;
