@@ -59,8 +59,13 @@ real-time-alert/
 │       ├── config/api.ts                     # Auto-detected LAN host & Dhaka presets
 │       └── services/notifications.ts         # Event labels & Dhaka timestamp formatters
 ├── frontend/                                 # Next.js 14 Web Observatory, Lakehouse Explorer & PWA
-└── docs/                                     # Detailed architecture & development guides (.md & .docx)
+└── docs_vault/                               # Central Documentation Vault (backend/, frontend/, mobile/)
 ```
+
+> 📚 **Documentation Vault (`docs_vault/`)**: All detailed guides for **Backend**, **Frontend**, and **Mobile** are stored in [`docs_vault/README.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/README.md):
+> - **Backend**: [`01_ARCHITECTURE_AND_MEDALLION_LAKEHOUSE.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/backend/01_ARCHITECTURE_AND_MEDALLION_LAKEHOUSE.md) · [`02_SERVER_DEPLOYMENT_SSH_AND_OPERATIONS.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/backend/02_SERVER_DEPLOYMENT_SSH_AND_OPERATIONS.md)
+> - **Frontend**: [`01_WEB_CONSOLE_RESPONSIVE_UI_AND_VERCEL.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/frontend/01_WEB_CONSOLE_RESPONSIVE_UI_AND_VERCEL.md)
+> - **Mobile**: [`01_MOBILE_NAVIGATION_UI_AND_HEATMAP_HUD.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/01_MOBILE_NAVIGATION_UI_AND_HEATMAP_HUD.md) · [`02_ANDROID_APK_LOCAL_AND_EAS_BUILD_GUIDE.md`](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/02_ANDROID_APK_LOCAL_AND_EAS_BUILD_GUIDE.md)
 
 ---
 
