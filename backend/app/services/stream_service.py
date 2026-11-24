@@ -186,6 +186,11 @@ class StreamService:
             except OSError:
                 pass
 
+        configured_sources = get_all_sources_metadata()
+        host_to_key = {
+            s["host"].lower().removeprefix("www."): s["key"]
+            for s in configured_sources
+        }
         seen_stats: dict[str, dict[str, int]] = {}
         seen_candidates = [
             self.primary_logdir.parent / "seen_urls.json",
@@ -198,13 +203,17 @@ class StreamService:
                     raw = json.loads(cand.read_text(encoding="utf-8"))
                     if isinstance(raw, dict):
                         for k, status in raw.items():
-                            site_prefix = (
-                                k.split(":", 1)[0]
-                                if ":" in k and not k.startswith("http")
-                                else (urlparse(k).netloc.lower().removeprefix("www.") if k.startswith("http") else "other")
-                            )
-                            bucket = seen_stats.setdefault(site_prefix, {})
                             st_key = str(status)
+                            if st_key in ("failed", "http_403", "robots"):
+                                continue
+                            if ":" in k and not k.startswith("http"):
+                                site_prefix = k.split(":", 1)[0]
+                            elif k.startswith("http"):
+                                h = urlparse(k).netloc.lower().removeprefix("www.")
+                                site_prefix = host_to_key.get(h, h)
+                            else:
+                                site_prefix = "other"
+                            bucket = seen_stats.setdefault(site_prefix, {})
                             bucket[st_key] = bucket.get(st_key, 0) + 1
                     break
                 except (OSError, ValueError):
@@ -214,7 +223,7 @@ class StreamService:
             "date": day,
             "log_lines": lines,
             "seen_stats": seen_stats,
-            "configured_sources": get_all_sources_metadata(),
+            "configured_sources": configured_sources,
         }
 
     def read_48h_rolling_items(self, ref_day: str, enrich_legacy: bool = False) -> list[dict[str, Any]]:

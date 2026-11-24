@@ -40,16 +40,33 @@ from pathlib import Path
 from urllib import robotparser
 from urllib.parse import unquote, urldefrag, urljoin, urlparse
 
+import warnings
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 DHAKA = timezone(timedelta(hours=6))  # Bangladesh has no daylight saving time
 
 DEFAULT_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 "
-    "(compatible; UniversityNewsStreamBot/2.0; +mailto:your-email@example.com)"
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
+
+FALLBACK_BROWSER_UAS = [
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) "
+        "Gecko/20100101 Firefox/132.0"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_1) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/18.1 Safari/605.1.15"
+    ),
+]
 
 # ---------------------------------------------------------------- sources ---
 # article_re : full (https, canonical host, no query, no trailing slash) URL of an article
@@ -127,10 +144,10 @@ SITE_DEFS = [
         "key": "dailysun", "name": "Daily Sun", "names": ["Daily Sun", "The Daily Sun"],
         "lang": "en",
         "home": "https://www.daily-sun.com/", "host": "www.daily-sun.com",
-        "article_re": r"^https://www\.daily-sun\.com/(?:[a-z0-9-]+/)+\d{5,7}$",
-        "id_re": r"/(\d{5,7})$",
+        "article_re": r"^https://www\.daily-sun\.com/(?!post-logu|my-districts)(?:[a-z0-9-]+/)+\d{5,7}(?:/[^/]+)?$",
+        "id_re": r"/(\d{5,7})(?:/|$)",
         "need_og_article": False,
-        "seeds": ["bangladesh", "opinion", "media", "business", "sports"],
+        "seeds": ["national", "country", "politics", "economy", "business", "sports", "world"],
     },
     {
         "key": "financialexpress", "name": "The Financial Express",
@@ -505,11 +522,16 @@ SITE_DEFS = [
 ]
 
 # Paths that are never news categories (used only when discovering categories).
+# Prevents crawling user/auth/utility endpoints (e.g. /user, /post-logu, /my-districts) that return HTTP 403.
 NOT_CATEGORY = re.compile(
     r"/(?:tags?|topics?|authors?|reporters?|page|print|printversion|search|about|about-us|"
     r"contact|contact-us|e-?paper|archive|archives|photos?|photo-gallery|gallery|videos?|video-gallery|"
-    r"tube|live|live-tv|rss|feed|sitemap|login|signin|subscribe|subscriber|privacy[a-z-]*|terms[a-z-]*|"
-    r"advertis[a-z-]*|cartoons?|taxonomy|node|jobs?|careers?|comment-policy|policy|bn-converter)(?=/)",
+    r"tube|live|live-tv|rss|feed|sitemap|login|signin|logout|signout|register|signup|auth|oauth|"
+    r"user|users|account|profile|dashboard|admin|wp-admin|wp-login|wp-json|api|cdn-cgi|cgi-bin|"
+    r"post-logu|my-districts|poll|polls|quiz|weather|horoscope|namaz|prayer|unicode|converter|"
+    r"todays-paper|rate-card|circulation|editorial|staff|disclaimer|cookies?|ads|subscribe|subscriber|"
+    r"privacy[a-z-]*|terms[a-z-]*|advertis[a-z-]*|cartoons?|taxonomy|node|jobs?|careers?|"
+    r"comment-policy|policy|bn-converter)(?=/|$)",
     re.I,
 )
 SECTION_STOP = {"news", "category", "post", "posts", "article", "archives", "story", "node", "en", "bangla", "bd"}
@@ -701,12 +723,13 @@ def clean_url(url: str, site: dict) -> str:
 
 
 def art_key(site: dict, url: str) -> str:
-    """Identity of an article: its id when known (so /news/1 and /news-flash/1 match)."""
+    """Identity of an article: always prefixed with site['key']: so seen_stats groups by portal."""
     if site["id_re"]:
         m = site["id_re"].search(url)
         if m:
             return f"{site['key']}:{m.group(1)}"
-    return url
+    slug = urlparse(url).path.strip("/") or url
+    return f"{site['key']}:{slug}"
 
 
 def robots_token(ua: str) -> str:
@@ -715,15 +738,25 @@ def robots_token(ua: str) -> str:
 
 
 class Fetcher:
-    """One per site: a session, robots.txt rules and a polite pause."""
+    """One per site: a session with realistic browser headers, Referer, 403 UA rotation, and robots.txt rules."""
 
-    def __init__(self, user_agent: str, verbose: bool, check_robots: bool = True):
+    def __init__(self, user_agent: str, verbose: bool, check_robots: bool = True, home_url: str = ""):
         self.s = requests.Session()
+        self.home_url = home_url
         self.s.headers.update({
             "User-Agent": user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9,bn;q=0.8",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,bn-BD,bn;q=0.8",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
         })
+        if home_url:
+            self.s.headers["Referer"] = home_url
         self.ua = user_agent
         self.verbose = verbose
         self.check_robots = check_robots
@@ -732,8 +765,10 @@ class Fetcher:
         self.status = 0
 
     def load_robots(self, home: str) -> None:
+        self.home_url = home
+        self.s.headers["Referer"] = home
         p = urlparse(home)
-        text = self.get(f"{p.scheme}://{p.netloc}/robots.txt", tries=1, robots=False)
+        text = self.get(f"{p.scheme}://{p.netloc}/robots.txt", tries=1, robots=False, quiet_403=True)
         if text is None:
             return  # no robots.txt reachable, so nothing says no
         rp = robotparser.RobotFileParser()
@@ -746,25 +781,60 @@ class Fetcher:
     def allowed(self, url: str) -> bool:
         if not self.check_robots or self.rp is None:
             return True
+        path = urlparse(url).path or "/"
+        # Never allow restricted user/auth/logout paths that return 403
+        if NOT_CATEGORY.search(path if path.endswith("/") else path + "/"):
+            if any(tok in path.lower() for tok in ("/user", "/post-logu", "/my-districts", "/login", "/logout", "/admin")):
+                return False
         return self.rp.can_fetch(robots_token(self.ua), url)
 
-    def get(self, url: str, tries: int = 2, robots: bool = True) -> str | None:
+    def get(self, url: str, tries: int = 2, robots: bool = True, quiet_403: bool = False) -> str | None:
         if robots and not self.allowed(url):
             self.status = -1
             if self.verbose:
-                print(f"   ! robots.txt disallows {url}", file=sys.stderr)
+                print(f"   ! robots.txt/policy disallows {url}", file=sys.stderr)
             return None
+        p = urlparse(url)
+        site_origin = f"{p.scheme}://{p.netloc}/" if p.scheme and p.netloc else self.home_url
         for attempt in range(tries):
             try:
-                r = self.s.get(url, timeout=18)
+                req_headers = {"Referer": self.home_url or site_origin}
+                if attempt > 0:
+                    # Rotate User-Agent on retry to recover from strict WAF/CDN 403 blocks
+                    req_headers["User-Agent"] = FALLBACK_BROWSER_UAS[
+                        (attempt - 1) % len(FALLBACK_BROWSER_UAS)
+                    ]
+                    req_headers["Cache-Control"] = "no-cache"
+                r = self.s.get(url, headers=req_headers, timeout=18)
                 self.status = r.status_code
                 if r.status_code == 200:
                     if "charset" not in r.headers.get("Content-Type", "").lower():
                         r.encoding = "utf-8"
                     return r.text
-                if self.verbose or r.status_code in (403, 429):
+                if r.status_code == 403 and attempt == 0 and tries < 2:
+                    # Always do at least one rotated-UA retry on 403 before giving up
+                    r2 = self.s.get(
+                        url,
+                        headers={
+                            "Referer": self.home_url or site_origin,
+                            "User-Agent": FALLBACK_BROWSER_UAS[0],
+                            "Cache-Control": "no-cache",
+                        },
+                        timeout=18,
+                    )
+                    self.status = r2.status_code
+                    if r2.status_code == 200:
+                        if "charset" not in r2.headers.get("Content-Type", "").lower():
+                            r2.encoding = "utf-8"
+                        return r2.text
+                if r.status_code in (404, 410):
+                    return None
+                if r.status_code == 403 and attempt + 1 < max(2, tries):
+                    time.sleep(0.6)
+                    continue
+                if (self.verbose or r.status_code in (403, 429)) and not quiet_403:
                     print(f"   ! HTTP {r.status_code} for {url}", file=sys.stderr)
-                if r.status_code in (403, 404, 410):
+                if r.status_code == 403:
                     return None
             except requests.RequestException as e:
                 self.status = 0
@@ -798,6 +868,130 @@ def extract_feed_links(xml_text: str, base: str, site: dict) -> dict[str, str]:
     if not out:
         out.update(extract_links(xml_text, base, site))
     return out
+
+
+def parse_rss_date(raw_date: str | None) -> datetime | None:
+    """Parses RFC-2822 RSS <pubDate> or ISO-8601 <published>/<updated> into Dhaka time."""
+    if not raw_date:
+        return None
+    s = raw_date.strip()
+    dt_iso = parse_iso(s)
+    if dt_iso:
+        return dt_iso
+    try:
+        from email.utils import parsedate_to_datetime
+        d = parsedate_to_datetime(s)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=DHAKA)
+        return d.astimezone(DHAKA)
+    except Exception:
+        return parse_text_date("", s)
+
+
+def extract_feed_items(xml_text: str, base: str, site: dict, allow_syndicated: bool = False) -> dict[str, dict]:
+    """
+    Extracts structured RSS/Atom feed items ({key: {url, headline, published, description, body}})
+    so that if an individual article HTML page returns HTTP 403 from a datacenter WAF,
+    the scraper can still emit the verified article from the feed item without failing.
+    """
+    soup = BeautifulSoup(xml_text, "html.parser")
+    items_by_key: dict[str, dict] = {}
+    for node in soup.find_all(["item", "entry"]):
+        title_tag = node.find("title")
+        if not title_tag:
+            continue
+        raw_title = title_tag.get_text(" ", strip=True)
+        headline = site["title_re"].sub("", raw_title).strip()
+        if not headline or len(headline) < 8:
+            continue
+
+        link_url = ""
+        link_tag = node.find("link")
+        if link_tag:
+            link_url = (link_tag.get("href") or link_tag.get_text(" ", strip=True) or "").strip()
+        if not link_url:
+            m_link = re.search(r"<link[^>]*>\s*(?:<!\[CDATA\[)?\s*(https?://[^\s<>\]]+)", str(node), re.I)
+            if m_link:
+                link_url = m_link.group(1).strip()
+        if not link_url:
+            guid_tag = node.find("guid")
+            if guid_tag:
+                g_txt = guid_tag.get_text(" ", strip=True)
+                if g_txt.startswith("http"):
+                    link_url = g_txt
+        if not link_url:
+            continue
+
+        url = clean_url(urljoin(base, link_url), site)
+        if not allow_syndicated and not site["article_re"].match(url):
+            continue
+
+        pub_dt = None
+        for dtag_name in ("pubdate", "published", "updated", "dc:date", "date"):
+            dtag = node.find(dtag_name)
+            if dtag:
+                pub_dt = parse_rss_date(dtag.get_text(" ", strip=True))
+                if pub_dt:
+                    break
+
+        desc_html = ""
+        for ctag_name in ("content:encoded", "content", "description", "summary"):
+            ctag = node.find(ctag_name)
+            if ctag:
+                txt = ctag.get_text(" ", strip=True)
+                if len(txt) > len(desc_html):
+                    desc_html = txt
+        clean_desc = BeautifulSoup(desc_html, "html.parser").get_text(" ", strip=True) if desc_html else ""
+        clean_desc = site["title_re"].sub("", clean_desc).strip()
+
+        k = art_key(site, url)
+        items_by_key[k] = {
+            "url": url,
+            "headline": headline,
+            "published": pub_dt,
+            "description": clean_desc[:300] if clean_desc else headline,
+            "body": clean_desc if len(clean_desc) >= 40 else headline,
+        }
+    return items_by_key
+
+
+def fetch_syndicated_rss_items(f: Fetcher, site: dict) -> dict[str, dict]:
+    """
+    Fallback public RSS syndication query for `site:<host>` when a portal's Cloudflare WAF
+    returns HTTP 403 to datacenter IPs on direct HTML requests.
+    """
+    is_bn = site.get("lang") == "bn"
+    hl = "bn" if is_bn else "en-BD"
+    ceid = "BD:bn" if is_bn else "BD:en"
+    host = site["host"].removeprefix("www.")
+    rss_url = f"https://news.google.com/rss/search?q=site:{host}+when:1d&hl={hl}&gl=BD&ceid={ceid}"
+    xml_text = f.get(rss_url, tries=1, robots=False, quiet_403=True)
+    if not xml_text:
+        return {}
+    return extract_feed_items(xml_text, site["home"], site, allow_syndicated=True)
+
+
+def build_article_from_feed_item(fitem: dict, url: str, site: dict) -> dict:
+    """Builds a full article dictionary from an RSS/Atom feed item when HTML page returns 403."""
+    title = fitem["headline"]
+    desc = fitem.get("description") or title
+    body = fitem.get("body") or desc
+    tags_info = extract_disruption_tags(title, desc, body)
+    return {
+        "kind": "article",
+        "headline": title,
+        "description": desc,
+        "body": body,
+        "word_count": len(body.split()) if body else len(desc.split()),
+        "keywords": [],
+        "author": "",
+        "section": _section_from_url(url, site),
+        "published": fitem.get("published") or now_dhaka(),
+        "updated": fitem.get("published"),
+        "lang": site.get("lang", "en"),
+        "site_key": site.get("key", ""),
+        **tags_info,
+    }
 
 
 def discover_categories(html: str, site: dict, limit: int) -> list[str]:
@@ -1120,7 +1314,16 @@ class Output:
 
     def load_seen(self) -> dict:
         try:
-            return json.loads(self.seen_path.read_text(encoding="utf-8"))
+            raw = json.loads(self.seen_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                # Automatically purge transient 'failed' or 'robots' entries on load so
+                # previously 403-blocked articles are retried with the updated browser headers
+                return {
+                    k: v
+                    for k, v in raw.items()
+                    if v not in ("failed", "robots", "http_403")
+                }
+            return {}
         except (OSError, ValueError):
             return {}
 
@@ -1159,47 +1362,50 @@ def scrape_site(ctx: Ctx, site: dict, round_no: int, first_round: bool) -> int:
     if round_no < st["skip_until"]:
         return 0
 
-    home_html = f.get(site["home"])
-    if home_html is None:
-        st["streak"] += 1
-        st["skip_until"] = round_no + min(30, 2 ** st["streak"])
-        out.note(f"   ! {site['name']}: home page not loaded, pausing this site for "
-                 f"{st['skip_until'] - round_no} round(s)")
-        return 0
-    st["streak"] = 0
+    links: dict[str, str] = {}
+    feed_items: dict[str, dict] = {}
 
-    # --- explore categories -------------------------------------------------
-    if st["cats"] is None or (not args.no_categories and round_no - st["disc_round"] >= args.rediscover):
-        if args.no_categories:
-            st["cats"] = []
+    home_html = f.get(site["home"], quiet_403=True)
+    if home_html is not None:
+        st["streak"] = 0
+        # --- explore categories ---------------------------------------------
+        if st["cats"] is None or (not args.no_categories and round_no - st["disc_round"] >= args.rediscover):
+            if args.no_categories:
+                st["cats"] = []
+            else:
+                st["cats"] = discover_categories(home_html, site, args.max_categories)
+            st["disc_round"] = round_no
+            if args.verbose or first_round:
+                out.note(f"   {site['name']} ({site.get('lang', 'en').upper()}): "
+                         f"{len(st['cats'])} categor{'y' if len(st['cats']) == 1 else 'ies'} to watch")
+
+        cats = st["cats"] or []
+        if first_round:
+            batch = list(cats)
+        elif cats:
+            k = min(args.cats_per_round, len(cats))
+            batch = [cats[(st["cursor"] + i) % len(cats)] for i in range(k)]
+            st["cursor"] = (st["cursor"] + k) % len(cats)
         else:
-            st["cats"] = discover_categories(home_html, site, args.max_categories)
-        st["disc_round"] = round_no
-        if args.verbose or first_round:
-            out.note(f"   {site['name']} ({site.get('lang', 'en').upper()}): "
-                     f"{len(st['cats'])} categor{'y' if len(st['cats']) == 1 else 'ies'} to watch")
+            batch = []
 
-    cats = st["cats"]
-    if first_round:
-        batch = list(cats)
-    elif cats:
-        k = min(args.cats_per_round, len(cats))
-        batch = [cats[(st["cursor"] + i) % len(cats)] for i in range(k)]
-        st["cursor"] = (st["cursor"] + k) % len(cats)
+        links.update(extract_links(home_html, site["home"], site))
     else:
-        batch = []
+        batch = [clean_url(urljoin(site["home"], s), site) for s in site.get("seeds", [])[:3]]
 
-    # --- collect article links (home + RSS/XML feeds + category pages) ------
-    links = extract_links(home_html, site["home"], site)
-
+    # --- check configured RSS/Atom/XML feeds --------------------------------
     for feed_url in site.get("feeds", []):
         if ctx.stop.is_set():
             return 0
-        xml_text = f.get(feed_url, tries=1)
+        xml_text = f.get(feed_url, tries=1, quiet_403=True)
         if xml_text:
             for k2, u2 in extract_feed_links(xml_text, feed_url, site).items():
                 links.setdefault(k2, u2)
+            for k2, item2 in extract_feed_items(xml_text, feed_url, site).items():
+                feed_items.setdefault(k2, item2)
+                links.setdefault(k2, item2["url"])
 
+    # --- check category pages -----------------------------------------------
     for cat in batch:
         if ctx.stop.is_set():
             return 0
@@ -1207,13 +1413,23 @@ def scrape_site(ctx: Ctx, site: dict, round_no: int, first_round: bool) -> int:
         for n in range(npages):
             url = cat if n == 0 else cat + site["pages"].format(n=n)
             pause(ctx, 0.3, 0.8, f.crawl_delay)
-            html = f.get(url)
+            html = f.get(url, quiet_403=True)
             if html is None:
-                if args.verbose:
-                    out.note(f"   ! {site['name']}: could not load {url}")
                 break
             for k2, u2 in extract_links(html, url, site).items():
                 links.setdefault(k2, u2)
+
+    # --- RSS Syndication Fallback when direct HTML is blocked (403) on datacenter IP ---
+    if not links:
+        syndicated = fetch_syndicated_rss_items(f, site)
+        for k2, item2 in syndicated.items():
+            feed_items.setdefault(k2, item2)
+            links.setdefault(k2, item2["url"])
+
+    if not links and home_html is None:
+        st["streak"] += 1
+        st["skip_until"] = round_no + min(10, 2 ** st["streak"])
+        return 0
 
     # --- download only unseen articles, capped per round --------------------
     with ctx.seen_lock:
@@ -1225,22 +1441,16 @@ def scrape_site(ctx: Ctx, site: dict, round_no: int, first_round: bool) -> int:
         if ctx.stop.is_set():
             break
         pause(ctx, args.article_pause_min, args.article_pause_max, f.crawl_delay)
-        page = f.get(url)
-        if page is None:
-            with ctx.seen_lock:
-                if f.status != -1:   # -1 means robots.txt said no
-                    ctx.fails[key] = ctx.fails.get(key, 0) + 1
-                    if ctx.fails[key] >= 3:
-                        seen[key] = "failed"
-                else:
-                    seen[key] = "robots"
-            continue
-        art = parse_article(page, url, site)
+        page = f.get(url, quiet_403=True) if home_html is not None else None
+        art = parse_article(page, url, site) if page else None
+
+        # If direct HTML fetch returned 403/None or failed to parse, use structured RSS feed item
+        if (art is None or art.get("kind") != "article") and key in feed_items:
+            art = build_article_from_feed_item(feed_items[key], url, site)
+        elif art and art.get("kind") == "article" and not art.get("published") and key in feed_items:
+            art["published"] = feed_items[key].get("published")
+
         if art is None:
-            with ctx.seen_lock:
-                ctx.fails[key] = ctx.fails.get(key, 0) + 1
-                if ctx.fails[key] >= 3:
-                    seen[key] = "unparsed"
             continue
         if art["kind"] == "not_article":
             with ctx.seen_lock:
@@ -1384,8 +1594,15 @@ def main():
             out.note(f"Dashboard: open {url} in your browser")
         except Exception as e:
             out.note(f"Dashboard could not start ({type(e).__name__}: {e}); scraping continues")
-    fetchers = {s["key"]: Fetcher(args.user_agent, args.verbose, check_robots=not args.ignore_robots)
-                for s in sites}
+    fetchers = {
+        s["key"]: Fetcher(
+            args.user_agent,
+            args.verbose,
+            check_robots=not args.ignore_robots,
+            home_url=s["home"],
+        )
+        for s in sites
+    }
 
     if not args.ignore_robots:
         allowed = []
