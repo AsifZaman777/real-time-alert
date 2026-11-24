@@ -463,20 +463,20 @@ export function BleCrowdDashboard() {
         </CardContent>
       </Card>
 
-      {/* 4. Live Table: Crowd Around Open App Users (Location, BLE Count, Static vs Moving, Crowd Pattern) */}
+      {/* 4. Live Table: Crowd Around Opened App Users (Location, BLE Count, Static vs Moving, Crowd Pattern) */}
       <Card className="bg-[#181a18] border-[#2e312e]">
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <CardTitle className="text-sm sm:text-base">
-                📋 Live BLE Crowd Telemetry Table — Crowd Around Each Open App User
+                📋 Live BLE Crowd Telemetry Table — Crowd Around Opened App User
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Real-time breakdown of how many nearby BLE devices are around each active app user, their location, static vs. moving ratio, and crowd pattern. Click any row to focus the heatmap.
+                Real-time breakdown of the BLE crowd detected around each opened mobile app user, their location, static vs. moving ratio, and crowd pattern. Click any row to focus the heatmap.
               </p>
             </div>
             <Badge variant="outline" className="font-mono">
-              {snapshot?.scanners.length || 0} Active Open-App Scanner(s)
+              {snapshot?.scanners.length || 0} Opened App User(s)
             </Badge>
           </div>
         </CardHeader>
@@ -523,7 +523,7 @@ export function BleCrowdDashboard() {
                         {sc.total_crowd_around_me}
                       </div>
                       <div className="text-[10px] text-[#9a988f]">
-                        Crowd Around Me
+                        Crowd Around Opened App User
                       </div>
                     </div>
                     <div className="rounded-lg bg-red-950/30 p-2 border border-red-900/40">
@@ -541,13 +541,18 @@ export function BleCrowdDashboard() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between text-[11px] text-[#9a988f] font-mono pt-1">
-                    <span>App: {sc.device_label}</span>
+                    <span>Opened App User: {sc.device_label}</span>
                     <span>Speed: {sc.speed_kmh} km/h</span>
                     <span>RSSI: {sc.avg_rssi_dbm} dBm</span>
                   </div>
                 </div>
               );
             })}
+            {(!snapshot?.scanners || snapshot.scanners.length === 0) && (
+              <div className="p-6 text-center text-xs text-[#9a988f] rounded-xl border border-[#2e312e] bg-[#121312]">
+                No opened mobile app users are currently transmitting BLE scans. Open the BigWarn app on an Android phone with Bluetooth &amp; GPS enabled to stream the live BLE crowd around that opened app user.
+              </div>
+            )}
           </div>
 
           {/* Desktop Table View (>= md) */}
@@ -555,9 +560,9 @@ export function BleCrowdDashboard() {
             <table className="w-full border-collapse text-left text-xs">
               <thead>
                 <tr className="border-b border-[#2e312e] bg-[#121312] text-[#9a988f]">
-                  <th className="p-2.5">Open App Scanner</th>
+                  <th className="p-2.5">Opened App User</th>
                   <th className="p-2.5">Location (Area &amp; GPS)</th>
-                  <th className="p-2.5 text-right">Crowd Around Me</th>
+                  <th className="p-2.5 text-right">Crowd Around Opened App User</th>
                   <th className="p-2.5 text-right">BLE Peers (40m)</th>
                   <th className="p-2.5">Static vs. Moving Split</th>
                   <th className="p-2.5">Mobility State</th>
@@ -668,6 +673,16 @@ export function BleCrowdDashboard() {
                     </tr>
                   );
                 })}
+                {(!snapshot?.scanners || snapshot.scanners.length === 0) && (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="p-8 text-center text-xs text-[#9a988f]"
+                    >
+                      No opened mobile app users are currently transmitting BLE scans. Open the BigWarn app on an Android phone with Bluetooth &amp; GPS enabled to stream the live BLE crowd around that opened app user.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

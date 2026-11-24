@@ -216,7 +216,27 @@ export default function App() {
 
   const lastPollSigRef = useRef<string>("");
   const deviceIdRef = useRef<string>(
-    `bw-${Platform.OS}-${Math.random().toString(36).slice(2, 8)}`
+    (() => {
+      const c: any = Platform.constants || {};
+      const hw = [
+        Platform.OS,
+        c.Brand || c.Manufacturer || "",
+        c.Model || "",
+        c.Release || String(Platform.Version || ""),
+        Math.round(windowWidth || 390),
+        Math.round(windowHeight || 840),
+      ]
+        .join("-")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
+      let hash = 2166136261;
+      for (let i = 0; i < hw.length; i++) {
+        hash ^= hw.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      const suffix = Math.abs(hash).toString(36).slice(0, 6);
+      return `bw-${Platform.OS}-${suffix}`;
+    })()
   );
   const hasRealGpsFixRef = useRef<boolean>(false);
   const gpsSpeedKmhRef = useRef<number>(0);

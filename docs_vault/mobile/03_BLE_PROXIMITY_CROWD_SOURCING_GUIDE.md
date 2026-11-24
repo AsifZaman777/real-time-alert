@@ -71,15 +71,24 @@ When `/api/v1/crowd/ping` receives a scan from an open app user:
 1. **Bangladesh Geofence Verification & Area Snapping**:
    - Validates that `20.50°N <= lat <= 26.70°N` and `88.00°E <= lon <= 92.80°E`.
    - Uses Haversine distance (`snap_to_bangladesh_area`) to snap the coordinates to the nearest canonical Bangladesh neighborhood or district in `AREA_METADATA`.
-2. **Crowd Around Each Open App User (`total_crowd_around_me`)**:
-   $$\text{total\_crowd\_around\_me} = 1\text{ (scanner phone)} + \text{ble\_count}$$
-3. **Spatial Density per $100\text{ m}^2$**:
+2. **Strict 30-Second Live Session TTL (No Ghost Rows)**:
+   - An opened app pings every `6 seconds`, so `PING_TTL_SECONDS = 30`. Any session that has not pinged in the last `30 seconds` (app closed, backgrounded, or reloaded) is pruned immediately from the live table and heatmaps.
+3. **Legacy Synthetic Ping Rejection**:
+   - Pings tagged with the old synthetic `network_type: "BLE_5.0 + 4G"` (sent by outdated cached app bundles) have their `ble_count` forced to `0` on ingest, and any such stored records are filtered out on load, so fabricated numbers (e.g., `+38 BLE` / `+41 BLE`) can never appear.
+4. **50-Meter Cross-Detection of Other Opened App Phones**:
+   - For each opened app user, the server also counts any **other opened BigWarn phones within `50 m`** (Haversine). Two phones opened side-by-side detect each other as `+1` peer each.
+   - Effective nearby peers:
+   $$\text{ble\_count} = \max\left(\text{hardware BLE peers},\ \text{nearby opened app phones within 50 m}\right)$$
+5. **Crowd Around Opened App User (`total_crowd_around_me`)**:
+   $$\text{total\_crowd\_around\_me} = 1\text{ (this opened app phone)} + \text{ble\_count}$$
+   - Example: 1 phone, Bluetooth on, no devices nearby → `1` (`+0 BLE`). 2 phones opened together → each shows `2` (`+1 BLE`).
+6. **Spatial Density per $100\text{ m}^2$**:
    With a BLE scan radius $r = 40\text{ m}$ ($\text{Area} = \pi r^2 \approx 5,026.5\text{ m}^2$):
    $$\text{density\_per\_100m2} = \frac{\text{total\_crowd\_around\_me}}{\pi r^2} \times 100$$
-4. **Multi-Scanner Area Deduplication**:
-   If multiple BigWarn app users ($N_{\text{scanners}} > 1$) are open in the same area at the same time, their overlapping BLE rings are deduplicated using an overlap factor (`0.78` for 2 scanners, `0.65` for 3+ scanners):
-   $$\text{total\_mobiles} = N_{\text{scanners}} + \text{round}\left(\text{overlap\_factor} \times \sum_{i=1}^{N_{\text{scanners}}} \text{ble\_count}_i\right)$$
-5. **Mobility State & Crowd Pattern Classification (`classify_crowd_pattern`)**:
+7. **Area Heatmap Aggregation (Overlap-Safe)**:
+   Phones in the same area hear largely the same BLE devices, so hardware peers are not summed. The area crowd is the number of opened app phones plus the largest single hardware BLE scan in that area:
+   $$\text{total\_mobiles} = N_{\text{opened apps}} + \max_{i}\left(\text{hardware ble\_count}_i\right)$$
+8. **Mobility State & Crowd Pattern Classification (`classify_crowd_pattern`)**:
 
 | Mobility State | Trigger Condition | Crowd Pattern Classification (Based on Peak Threshold) | Heatmap Color |
 | :--- | :--- | :--- | :--- |
@@ -113,11 +122,11 @@ In the Next.js Web Console, clicking the **`📡 Crowd Sourcing (BLE)`** tab (in
    - **🟢 Moving Crowd Flow**: Count and percentage of moving devices (`>= 3.5 km/h`).
 2. **Interactive Bangladesh BLE Crowd Heatmap Map**:
    - Full Leaflet + OpenStreetMap canvas rendering live BLE heatmaps and pulsing `📡 Area • N BLE` badges from active mobile app users. Clicking any heatmap opens the detailed HUD overlay.
-3. **Live BLE Crowd Telemetry Table (*"Crowd Around Each Open App User"*)**:
-   - Displays every active open-app scanner in real time with:
-     - **Open App Scanner** (`device_label`, `device_id`, live pulsing indicator)
+3. **Live BLE Crowd Telemetry Table (*"Crowd Around Opened App User"*)**:
+   - Displays every active opened app user in real time with:
+     - **Opened App User** (`device_label`, `device_id`, live pulsing indicator)
      - **Location (Area & GPS)** (`Area`, `City`, `lat°N, lon°E`)
-     - **Crowd Around Me** (`total_crowd_around_me` vs. `peak_threshold`)
+     - **Crowd Around Opened App User** (`total_crowd_around_me` vs. `peak_threshold`)
      - **BLE Peers (`40m` radius)** (`+N BLE`)
      - **Static vs. Moving Split** (exact counts, percentages, and visual red/green progress bar)
      - **Mobility State Badge** (`🔴 STATIC / STUCK`, `🟡 SLOW CRAWL`, `🟢 MOVING`)
@@ -133,4 +142,15 @@ In the Next.js Web Console, clicking the **`📡 Crowd Sourcing (BLE)`** tab (in
 | :--- | :--- | :--- |
 | `/api/v1/crowd/ping` | `GET` / `POST` | Ingests a live BLE proximity scan + GPS velocity ping from an open mobile or web client (`device_id`, `device_label`, `lat`, `lon`, `speed_kmh`, `ble_count`, `ble_static_count`, `ble_moving_count`, `avg_rssi_dbm`, `scan_radius_m`). |
 | `/api/v1/crowd/heatmap` | `GET` | Returns the live BLE crowd snapshot containing `summary` KPIs, `scanners` (rows for the live table), and `heatmaps` (aggregated area heatmap zones for the map). |
-| `/api/crowd` | `GET` / `POST` | Next.js frontend proxy route ([frontend/src/app/api/crowd/route.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/frontend/src/app/api/crowd/route.ts)) that syncs browser and mobile BLE pings with the backend server. |
+| `/api/crowd` | `GET` | Next.js read-only proxy route ([frontend/src/app/api/crowd/route.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/frontend/src/app/api/crowd/route.ts)) used by the web console. It also drops stale (`> 30s`) and legacy `"BLE_5.0 + 4G"` rows and re-applies 50 m cross-detection, so the table stays correct even if the remote backend has not been redeployed yet. |
+
+---
+
+## 5. Troubleshooting: Suspicious Rows in the Live Table
+
+| Symptom | Cause | Fix |
+| :--- | :--- | :--- |
+| Extra rows with large BLE counts (e.g., `+38 BLE`) and old ages (e.g., `489s ago`) | Sessions from an older app bundle with the synthetic fallback, kept alive by the former 15-minute TTL | Now auto-removed (30 s TTL + legacy-tag rejection). Redeploy the backend with `deploy.sh`. |
+| One phone appears as several rows | Older builds generated a random `device_id` on every reload | Now uses a stable hardware-fingerprint ID. Rebuild the APK with `build_apk.sh`. |
+| Shows `1` (`+0 BLE`) with people around | Bluetooth off, `BLUETOOTH_SCAN` permission denied, or the app is an Expo Go/Web build without the native module | Enable Bluetooth, grant Nearby Devices permission, and install the APK built from `build_apk.sh`. |
+| Two phones together each show `1` | Their GPS fixes are more than 50 m apart, or one of them stopped pinging | Ensure both have a GPS fix and the app is open in the foreground. |

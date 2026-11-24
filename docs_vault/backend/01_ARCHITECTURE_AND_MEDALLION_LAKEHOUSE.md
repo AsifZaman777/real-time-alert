@@ -61,15 +61,18 @@ $$\text{credibility\_score} = \min\left(0.99,\; 0.45 + 0.18 \times N_{\text{sour
 
 ---
 
-## 5. Verified Crowd-Sourcing & Heatmap Service ([crowd_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/crowd_service.py))
+## 5. BLE Proximity Crowd-Sourcing Service ([crowd_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/crowd_service.py))
 
-- **Zero Synthetic Sine-Wave Data**: All mathematical sine-wave generators have been removed.
-- **Hardware GPS Ping Verification (`record_verified_ping`)**:
-  - Validates that incoming `/api/v1/crowd/ping` coordinates lie inside Bangladesh (`20.50°N–26.70°N`, `88.00°E–92.80°E`), have valid velocity (`0–160 km/h`) and GPS accuracy (`<= 1000m`), and snap within `18 km` to a canonical `AREA_METADATA` location.
-  - Persists active verified device pings in `backend/lakehouse/storage/gold/verified_crowd_pings.json` over a **15-minute sliding window (`900s` TTL)**.
-  - Classifies real devices with `speed_kmh < 5.0` as **Stuck** and `speed_kmh >= 5.0` as **Moving**.
-- **Verified Multi-Source Disruption Heatmaps (`get_all_bangladesh_heatmaps`)**:
-  - Combines verified live hardware GPS pings with corroborated Gold alerts from the 45-portal Lakehouse (`source_count`, `article_count`, `sources`).
+> Full feature guide: [03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md)
+
+- **Real Data Only**: Accepts pings only from opened mobile apps reporting real hardware BLE scans (`BigWarnBleScannerModule.kt`) and a real GPS fix. The web console never sends pings.
+- **Ingest (`record_verified_ping`)**:
+  - Validates coordinates inside Bangladesh (`20.50°N–26.70°N`, `88.00°E–92.80°E`) and snaps them to the nearest `AREA_METADATA` area.
+  - Rejects the legacy synthetic tag `network_type: "BLE_5.0 + 4G"` by forcing its BLE counts to `0`.
+  - Persists sessions in `backend/lakehouse/storage/gold/verified_ble_crowd_pings.json` with a **30-second live TTL** (apps ping every 6 s).
+- **Snapshot (`get_live_crowd_snapshot`)**:
+  - Per opened app user: `ble_count = max(hardware BLE peers, other opened app phones within 50 m)`, `total_crowd_around_me = 1 + ble_count`, static vs. moving split (`< 3.5 km/h` = static), and crowd pattern.
+  - Per area heatmap: `total_mobiles = opened apps in area + largest single hardware BLE scan` (no double counting of overlapping scans).
 
 ---
 
@@ -80,8 +83,8 @@ $$\text{credibility\_score} = \min\left(0.99,\; 0.45 + 0.18 \times N_{\text{sour
 | `/api/v1/health` | `GET` | Service health check (`status: "ok"`). |
 | `/api/v1/alerts/route` | `GET` | Computes OSRM road route, 3-hour route hazards (`danger_segments`), risk level, and optional `include_map=1` Gold alerts. |
 | `/api/v1/alerts/map` | `GET` | Returns all active Gold alert clusters (`?city=ALL` or specific city). |
-| `/api/v1/crowd/ping` | `GET` / `POST` | Validates and records a real hardware GPS telemetry ping (`device_id`, `lat`, `lon`, `speed_kmh`, `accuracy_m`). |
-| `/api/v1/crowd/heatmap` | `GET` | Returns all verified active heatmap zones across Bangladesh. |
+| `/api/v1/crowd/ping` | `GET` / `POST` | Records a BLE + GPS ping from an opened mobile app (`device_id`, `device_label`, `lat`, `lon`, `speed_kmh`, `accuracy_m`, `ble_count`, `ble_static_count`, `ble_moving_count`, `avg_rssi_dbm`, `scan_radius_m`, `network_type`). |
+| `/api/v1/crowd/heatmap` | `GET` | Returns the live BLE crowd snapshot: `summary` KPIs, `scanners` (one row per opened app user, last 30 s), and `heatmaps` (per-area zones). |
 | `/api/v1/lakehouse` | `GET` | Returns full Bronze, Silver, and Gold Medallion stats and tables. |
 | `/api/v1/sources` | `GET` | Returns metadata for all 45 configured Bangladesh news portals. |
 | `/api/v1/stream/feed` | `GET` | Unified open public feed (`?layer=gold|silver|bronze&format=json|ndjson|sse|rss`). |

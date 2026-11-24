@@ -64,7 +64,12 @@ function loadLocalScanners(): Record<string, LocalBleScannerRecord> {
       const valid: Record<string, LocalBleScannerRecord> = {};
       for (const [k, v] of Object.entries(raw || {})) {
         const rec = v as LocalBleScannerRecord;
-        if (rec && nowS - (rec.ts || 0) <= 900) {
+        // Strict 30-second live TTL & reject legacy synthetic "BLE_5.0 + 4G" ghost rows
+        if (
+          rec &&
+          nowS - (rec.ts || 0) <= 30 &&
+          rec.network_type !== "BLE_5.0 + 4G"
+        ) {
           valid[k] = rec;
         }
       }
@@ -359,9 +364,15 @@ export async function GET(req: NextRequest) {
   const local = buildLocalSnapshot();
 
   if (remote && Array.isArray(remote.heatmaps)) {
-    // Merge remote server BLE scanners with any local scanners
+    // Filter out any legacy synthetic "BLE_5.0 + 4G" or stale (> 30s) ghost records from an un-updated remote server
+    const cleanRemoteScanners = (remote.scanners || []).filter((s: any) => {
+      const age = typeof s.age_seconds === "number" ? s.age_seconds : 0;
+      const isLegacySynthetic = s.network_type === "BLE_5.0 + 4G";
+      return age <= 30 && !isLegacySynthetic;
+    });
+
     const mergedScannersMap = new Map<string, any>();
-    (remote.scanners || []).forEach((s: any) =>
+    cleanRemoteScanners.forEach((s: any) =>
       mergedScannersMap.set(s.device_id, s)
     );
     local.scanners.forEach((s) => {
@@ -369,17 +380,103 @@ export async function GET(req: NextRequest) {
         mergedScannersMap.set(s.device_id, s);
       }
     });
-    const mergedHeatmapsMap = new Map<string, any>();
-    (remote.heatmaps || []).forEach((h: any) =>
-      mergedHeatmapsMap.set(h.area, h)
-    );
-    local.heatmaps.forEach((h) => {
-      if (!mergedHeatmapsMap.has(h.area)) {
-        mergedHeatmapsMap.set(h.area, h);
-      }
+
+    const rawScanners = Array.from(mergedScannersMap.values());
+    // Cross-detect nearby opened BigWarn phones within 50m of each other
+    const scanners = rawScanners.map((sc: any) => {
+      let nearbyOpenAppsStatic = 0;
+      let nearbyOpenAppsMoving = 0;
+      rawScanners.forEach((other: any) => {
+        if (other.device_id === sc.device_id) return;
+        const dKm =
+          Math.hypot(sc.lat - other.lat, sc.lon - other.lon) * 111.32;
+        if (dKm <= 0.05) {
+          if ((other.speed_kmh || 0) < 3.5) nearbyOpenAppsStatic += 1;
+          else nearbyOpenAppsMoving += 1;
+        }
+      });
+      const hwBle = sc.ble_count || 0;
+      const totalBlePeers = Math.max(
+        hwBle,
+        nearbyOpenAppsStatic + nearbyOpenAppsMoving
+      );
+      const selfStatic = (sc.speed_kmh || 0) < 3.5 ? 1 : 0;
+      const staticDevs = selfStatic + Math.max(0, totalBlePeers - nearbyOpenAppsMoving);
+      const movingDevs = (1 - selfStatic) + nearbyOpenAppsMoving;
+      const totalAround = Math.max(1, staticDevs + movingDevs);
+      const staticPct = Math.round((staticDevs / totalAround) * 100);
+      return {
+        ...sc,
+        ble_count: totalBlePeers,
+        total_crowd_around_me: totalAround,
+        static_devices: staticDevs,
+        moving_devices: movingDevs,
+        static_percent: staticPct,
+        moving_percent: 100 - staticPct,
+      };
     });
-    const scanners = Array.from(mergedScannersMap.values());
-    const heatmaps = Array.from(mergedHeatmapsMap.values());
+
+    // Rebuild area heatmaps strictly from active non-legacy scanners
+    const byArea = new Map<string, any[]>();
+    scanners.forEach((sc: any) => {
+      const list = byArea.get(sc.area) || [];
+      list.push(sc);
+      byArea.set(sc.area, list);
+    });
+    const heatmaps = Array.from(byArea.entries()).map(([area, nodes]) => {
+      const avgLat = nodes.reduce((s, n) => s + n.lat, 0) / nodes.length;
+      const avgLon = nodes.reduce((s, n) => s + n.lon, 0) / nodes.length;
+      const scannerCount = nodes.length;
+      const maxBle = Math.max(...nodes.map((n) => n.ble_count || 0), 0);
+      const totalMobiles = Math.max(scannerCount, 1 + maxBle);
+      const rawStatic = nodes.reduce((s, n) => s + (n.static_devices || 0), 0);
+      const rawTotal = Math.max(
+        1,
+        nodes.reduce((s, n) => s + (n.total_crowd_around_me || 1), 0)
+      );
+      const stuckPct = Math.round((rawStatic / rawTotal) * 100);
+      const mobilesStuck = Math.round((totalMobiles * stuckPct) / 100);
+      const mobilesMoving = Math.max(0, totalMobiles - mobilesStuck);
+      const avgSpeed =
+        Math.round(
+          (nodes.reduce((s, n) => s + (n.speed_kmh || 0), 0) / nodes.length) *
+            10
+        ) / 10;
+      const peakThreshold = MAJOR_HUBS.has(area) ? 45 : 25;
+      const { mobility_state, crowd_pattern } = classifyPattern(
+        totalMobiles,
+        stuckPct,
+        avgSpeed,
+        peakThreshold
+      );
+      return {
+        area,
+        city: nodes[0].city || "Dhaka",
+        lat: Number(avgLat.toFixed(6)),
+        lon: Number(avgLon.toFixed(6)),
+        is_verified: true,
+        verification_basis: `BLE Proximity Scan (${scannerCount} opened app user${
+          scannerCount !== 1 ? "s" : ""
+        })`,
+        scanner_nodes_count: scannerCount,
+        ble_peers_count: Math.max(0, totalMobiles - scannerCount),
+        total_mobiles: totalMobiles,
+        mobiles_stuck: mobilesStuck,
+        mobiles_moving: mobilesMoving,
+        stuck_percent: stuckPct,
+        moving_percent: 100 - stuckPct,
+        avg_speed_kmh: avgSpeed,
+        mobility_state,
+        crowd_pattern,
+        avg_rssi_dbm: nodes[0].avg_rssi_dbm || -70,
+        density_per_100m2: nodes[0].density_per_100m2 || 0.04,
+        peak_threshold: peakThreshold,
+        exceeds_peak: totalMobiles >= peakThreshold,
+        heat_intensity: mobility_state === "STATIC" ? 0.78 : 0.55,
+        intensity_label: `${mobility_state} (${totalMobiles} BLE)`,
+      };
+    });
+
     return NextResponse.json({
       status: "ok",
       updated_at: remote.updated_at || local.updated_at,
