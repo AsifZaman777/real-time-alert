@@ -29,6 +29,7 @@ const MODULE_KT = `package com.bigwarn.edge
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.AdvertiseCallback
@@ -49,12 +50,11 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.ScanResult as WifiScanResult
 import android.net.wifi.WifiManager
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.ParcelUuid
 import android.telephony.CellInfo
 import android.telephony.CellInfoGsm
@@ -80,6 +80,7 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -93,20 +94,28 @@ import kotlin.math.roundToInt
 class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext), LifecycleEventListener {
 
+  companion object {
+    const val CAT_PHONE = "PHONE"
+    const val CAT_ROUTER = "ROUTER"
+    const val CAT_AUDIO_WEARABLE = "AUDIO_WEARABLE"
+    const val CAT_TV_PC_IOT = "TV_PC_IOT"
+    const val CAT_UNKNOWN = "UNKNOWN"
+  }
+
   data class PeerReading(
     var firstRssi: Int,
     var lastRssi: Int,
     var packetCount: Int,
     var lastSeenMs: Long,
-    var label: String = ""
+    var category: String = CAT_UNKNOWN,
+    var modelLabel: String = "",
+    var radioSource: String = ""
   )
 
-  private val mainHandler = Handler(Looper.getMainLooper())
   private val bgExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
-  // Radio A: BLE + Classic BT
-  private val blePeers = ConcurrentHashMap<String, PeerReading>()
-  private val btClassicPeers = ConcurrentHashMap<String, PeerReading>()
+  // Radio A: BLE + Classic BT (phones vs filtered earbuds/watches/PCs)
+  private val btAllPeers = ConcurrentHashMap<String, PeerReading>()
   private var bleScanner: BluetoothLeScanner? = null
   private var bleAdvertiser: BluetoothLeAdvertiser? = null
   private var activeScanCallback: ScanCallback? = null
@@ -115,12 +124,12 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
   private var isBleAdvertising = false
   private var lastClassicBtDiscoveryMs = 0L
 
-  // Radio B: Wi-Fi Hotspots/APs + Wi-Fi Direct P2P + Shared Wi-Fi Room LAN & mDNS
-  private val wifiHotspotPeers = ConcurrentHashMap<String, PeerReading>()
-  private val wifiFixedAps = ConcurrentHashMap<String, PeerReading>()
+  // Radio B: Wi-Fi Hotspots/APs + Wi-Fi Direct P2P + Room LAN & mDNS + SSDP exclusions
+  private val wifiScannedAps = ConcurrentHashMap<String, PeerReading>()
   private val wifiP2pPeers = ConcurrentHashMap<String, PeerReading>()
   private val wifiLanPeers = ConcurrentHashMap<String, PeerReading>()
-  private val mdnsPeers = ConcurrentHashMap<String, Long>()
+  private val lanFilteredIps = ConcurrentHashMap<String, Pair<String, String>>() // ip -> (cat, model)
+  private val lanMdnsModels = ConcurrentHashMap<String, Triple<String, String, Long>>() // ip/key -> (cat, model, ts)
   private var wifiP2pManager: WifiP2pManager? = null
   private var wifiP2pChannel: WifiP2pManager.Channel? = null
   private var nsdManager: NsdManager? = null
@@ -144,8 +153,18 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
   private val peerTtlMs = 60_000L
   private val wifiPeerTtlMs = 95_000L
 
-  private val mobileHotspotPattern = Regex(
-    "(?i)(DIRECT-|AndroidAP|AndroidShare|Galaxy|Samsung|Redmi|Xiaomi|POCO|Poco|vivo|OPPO|Realme|OnePlus|iPhone|iPad|Pixel|Nothing|Huawei|Honor|Tecno|Infinix|Itel|Hotspot|Portable|Tether|Car-|Dashcam|DVR|BYD|Toyota|Honda)"
+  // Phone model/hotspot keywords vs Router/Audio/TV exclusion keywords
+  private val phoneModelRegex = Regex(
+    "(?i)(iPhone|Galaxy|Samsung|Redmi|Xiaomi|POCO|Poco|vivo|OPPO|Realme|OnePlus|Pixel|Nothing|Motorola|Moto|Nokia\\s*[0-9GXC]|Huawei|Honor|Tecno|Infinix|Itel|Symphony|Walton|AndroidAP|AndroidShare|BigWarn)"
+  )
+  private val audioWearableRegex = Regex(
+    "(?i)(AirPods|Beats|Galaxy\\s*Buds|Buds\\s*[0-9ProLiveFE]*|TWS|Earbud|Earphone|Headset|Headphone|Speaker|Soundcore|Anker|JBL|boAt|Boat|Oraimo|QCY|Haylou|Edifier|Marshall|Bose|Sony\\s*WH|Sony\\s*WF|Marshall|Watch|Mi\\s*Band|Smart\\s*Band|Galaxy\\s*Fit|Amazfit|Mibro|Garmin|Fitbit)"
+  )
+  private val routerApRegex = Regex(
+    "(?i)(TP-?Link|TL-?W|Archer|Tenda|Mercusys|MERCUSYS|D-?Link|Netis|NETIS|MikroTik|Cisco|Ubiquiti|UniFi|Linksys|Netgear|HUAWEI-|HG[0-9]|EG[0-9]|ZTE_|ZXHN|FiberHome|ONT|ONU|Repeater|Extender|Router|Broadband|Wifi|Wi-Fi|_5G|_2\\.4G|5GHz|2\\.4GHz|Guest)"
+  )
+  private val tvComputerIotRegex = Regex(
+    "(?i)(Bravia|QLED|OLED|WebOS|Smart\\s*TV|Android\\s*TV|Mi\\s*TV|Mi\\s*Box|Fire\\s*TV|Chromecast|Roku|Apple\\s*TV|HomePod|MacBook|iMac|Mac\\s*mini|DESKTOP-|LAPTOP-|THINKPAD|Printer|Epson|Canon|HP\\s*Laser|Brother|Camera|ESP_|Tuya|Sonoff)"
   )
 
   private val bigWarnServiceUuid = ParcelUuid(UUID.fromString("0000b19a-0000-1000-8000-00805f9b34fb"))
@@ -154,12 +173,8 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     override fun onReceive(context: Context?, intent: Intent?) {
       val action = intent?.action ?: return
       when (action) {
-        WifiManager.SCAN_RESULTS_AVAILABLE_ACTION -> {
-          refreshWifiApResults()
-        }
-        WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> {
-          requestP2pPeersSafe()
-        }
+        WifiManager.SCAN_RESULTS_AVAILABLE_ACTION -> refreshWifiApResults()
+        WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION -> requestP2pPeersSafe()
         BluetoothDevice.ACTION_FOUND -> {
           val device: BluetoothDevice? = if (Build.VERSION.SDK_INT >= 33) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -173,7 +188,11 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
             val name = try {
               if (hasBleConnectPermission()) (device.name ?: "") else ""
             } catch (_: SecurityException) { "" }
-            recordPeer(btClassicPeers, addr, rssi, name)
+            val majorCls = try {
+              if (hasBleConnectPermission()) device.bluetoothClass?.majorDeviceClass ?: -1 else -1
+            } catch (_: Exception) { -1 }
+            val (cat, model) = classifyClassicBluetooth(name, majorCls)
+            recordPeer(btAllPeers, addr, rssi, cat, model, "BT_CLASSIC")
           }
         }
       }
@@ -186,62 +205,37 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
 
   override fun getName(): String = "BigWarnBleScanner"
 
-  private fun hasPermission(perm: String): Boolean {
-    return ContextCompat.checkSelfPermission(reactContext, perm) == PackageManager.PERMISSION_GRANTED
-  }
+  private fun hasPermission(perm: String): Boolean =
+    ContextCompat.checkSelfPermission(reactContext, perm) == PackageManager.PERMISSION_GRANTED
 
-  private fun hasFineLocationPermission(): Boolean {
-    return hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-  }
+  private fun hasFineLocationPermission(): Boolean = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 
-  private fun hasAnyLocationPermission(): Boolean {
-    return hasFineLocationPermission() || hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
-  }
+  private fun hasAnyLocationPermission(): Boolean =
+    hasFineLocationPermission() || hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
 
-  private fun hasBleScanPermission(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      hasPermission(Manifest.permission.BLUETOOTH_SCAN)
-    } else {
-      hasAnyLocationPermission()
-    }
-  }
+  private fun hasBleScanPermission(): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hasPermission(Manifest.permission.BLUETOOTH_SCAN)
+    else hasAnyLocationPermission()
 
-  private fun hasBleConnectPermission(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-      true
-    }
-  }
+  private fun hasBleConnectPermission(): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    else true
 
-  private fun hasBleAdvertisePermission(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      hasPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
-    } else {
-      hasPermission(Manifest.permission.BLUETOOTH_ADMIN)
-    }
-  }
+  private fun hasBleAdvertisePermission(): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) hasPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
+    else hasPermission(Manifest.permission.BLUETOOTH_ADMIN)
 
-  private fun hasWifiScanPermission(): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+  private fun hasWifiScanPermission(): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
       hasPermission("android.permission.NEARBY_WIFI_DEVICES") || hasFineLocationPermission()
-    } else {
-      hasAnyLocationPermission()
-    }
-  }
+    else hasAnyLocationPermission()
 
   private fun isLocationServiceEnabled(): Boolean {
     return try {
       val lm = reactContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return true
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        lm.isLocationEnabled
-      } else {
-        lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-          lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-      }
-    } catch (_: Exception) {
-      true
-    }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) lm.isLocationEnabled
+      else lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    } catch (_: Exception) { true }
   }
 
   private fun ensureReceiversRegistered() {
@@ -265,17 +259,24 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     map: ConcurrentHashMap<String, PeerReading>,
     key: String,
     rssi: Int,
-    label: String = ""
+    category: String,
+    modelLabel: String,
+    radioSource: String
   ) {
     val now = System.currentTimeMillis()
     map.compute(key) { _, existing ->
       if (existing == null) {
-        PeerReading(rssi, rssi, 1, now, label)
+        PeerReading(rssi, rssi, 1, now, category, modelLabel, radioSource)
       } else {
         existing.lastRssi = rssi
         existing.packetCount += 1
         existing.lastSeenMs = now
-        if (label.isNotBlank()) existing.label = label
+        if (category != CAT_UNKNOWN && (existing.category == CAT_UNKNOWN || category == CAT_AUDIO_WEARABLE || category == CAT_ROUTER || category == CAT_TV_PC_IOT)) {
+          existing.category = category
+        }
+        if (modelLabel.isNotBlank() && (existing.modelLabel.isBlank() || existing.modelLabel.startsWith("BLE") || modelLabel.length > existing.modelLabel.length)) {
+          existing.modelLabel = modelLabel
+        }
         existing
       }
     }
@@ -285,10 +286,112 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     val cutoff = System.currentTimeMillis() - ttl
     val iter = map.entries.iterator()
     while (iter.hasNext()) {
-      if (iter.next().value.lastSeenMs < cutoff) {
-        iter.remove()
+      if (iter.next().value.lastSeenMs < cutoff) iter.remove()
+    }
+  }
+
+  // Classify Classic Bluetooth peer via BluetoothClass + Name
+  private fun classifyClassicBluetooth(name: String, majorCls: Int): Pair<String, String> {
+    if (name.isNotBlank()) {
+      if (audioWearableRegex.containsMatchIn(name)) return Pair(CAT_AUDIO_WEARABLE, name.take(28))
+      if (tvComputerIotRegex.containsMatchIn(name)) return Pair(CAT_TV_PC_IOT, name.take(28))
+      if (phoneModelRegex.containsMatchIn(name)) return Pair(CAT_PHONE, name.take(28))
+    }
+    return when (majorCls) {
+      BluetoothClass.Device.Major.PHONE -> Pair(CAT_PHONE, if (name.isNotBlank()) name.take(28) else "Bluetooth Phone")
+      BluetoothClass.Device.Major.AUDIO_VIDEO -> Pair(CAT_AUDIO_WEARABLE, if (name.isNotBlank()) name.take(28) else "Bluetooth Audio")
+      BluetoothClass.Device.Major.WEARABLE -> Pair(CAT_AUDIO_WEARABLE, if (name.isNotBlank()) name.take(28) else "Smartwatch / Band")
+      BluetoothClass.Device.Major.COMPUTER,
+      BluetoothClass.Device.Major.IMAGING -> Pair(CAT_TV_PC_IOT, if (name.isNotBlank()) name.take(28) else "Computer / Peripheral")
+      else -> Pair(if (name.isNotBlank()) CAT_PHONE else CAT_UNKNOWN, if (name.isNotBlank()) name.take(28) else "BT Device")
+    }
+  }
+
+  // Extract BLE GAP Appearance (0x19), Apple Continuity subType (0x004C), Vendor IDs, and Device Name
+  private fun classifyBleScanResult(result: ScanResult): Pair<String, String> {
+    val sr = result.scanRecord
+    val devName = (sr?.deviceName ?: "").trim()
+
+    // Check explicit device name patterns first
+    if (devName.isNotBlank()) {
+      if (audioWearableRegex.containsMatchIn(devName)) return Pair(CAT_AUDIO_WEARABLE, devName.take(28))
+      if (tvComputerIotRegex.containsMatchIn(devName)) return Pair(CAT_TV_PC_IOT, devName.take(28))
+      if (phoneModelRegex.containsMatchIn(devName)) return Pair(CAT_PHONE, devName.take(28))
+    }
+
+    // Check BigWarn advertised beacon UUID
+    val uuids = sr?.serviceUuids ?: emptyList()
+    for (u in uuids) {
+      val s = u.uuid.toString().uppercase()
+      if (s.startsWith("0000B19A")) return Pair(CAT_PHONE, "BigWarn App Phone")
+      if (s.startsWith("0000180D") || s.startsWith("0000FEE0") || s.startsWith("0000110B") || s.startsWith("0000184E")) {
+        return Pair(CAT_AUDIO_WEARABLE, if (devName.isNotBlank()) devName.take(28) else "Wearable / Earbuds")
       }
     }
+
+    // Parse raw AD bytes for GAP Appearance (0x19)
+    val rawBytes = sr?.bytes
+    if (rawBytes != null) {
+      var idx = 0
+      while (idx < rawBytes.size - 1) {
+        val len = rawBytes[idx].toInt() and 0xFF
+        if (len == 0 || idx + len >= rawBytes.size) break
+        val adType = rawBytes[idx + 1].toInt() and 0xFF
+        if (adType == 0x19 && len >= 3 && idx + 3 < rawBytes.size) {
+          val appearance = (rawBytes[idx + 2].toInt() and 0xFF) or ((rawBytes[idx + 3].toInt() and 0xFF) shl 8)
+          val categoryTop = appearance shr 6
+          if (categoryTop == 1) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Smartphone")
+          if (categoryTop == 3 || categoryTop == 33 || categoryTop == 34 || categoryTop == 40) {
+            return Pair(CAT_AUDIO_WEARABLE, if (devName.isNotBlank()) devName.take(28) else "Watch / Earbuds")
+          }
+          if (categoryTop == 2 || categoryTop == 15) {
+            return Pair(CAT_TV_PC_IOT, if (devName.isNotBlank()) devName.take(28) else "PC / Peripheral")
+          }
+        }
+        idx += len + 1
+      }
+    }
+
+    // Check Bluetooth Classic major class if cached by stack
+    try {
+      if (hasBleConnectPermission()) {
+        val cls = result.device?.bluetoothClass?.majorDeviceClass ?: -1
+        if (cls == BluetoothClass.Device.Major.AUDIO_VIDEO || cls == BluetoothClass.Device.Major.WEARABLE) {
+          return Pair(CAT_AUDIO_WEARABLE, if (devName.isNotBlank()) devName.take(28) else "BT Audio / Watch")
+        }
+        if (cls == BluetoothClass.Device.Major.COMPUTER) {
+          return Pair(CAT_TV_PC_IOT, if (devName.isNotBlank()) devName.take(28) else "Computer")
+        }
+        if (cls == BluetoothClass.Device.Major.PHONE) {
+          return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Smartphone")
+        }
+      }
+    } catch (_: Exception) {}
+
+    // Inspect Bluetooth SIG Manufacturer Specific Data IDs
+    val mfg = sr?.manufacturerSpecificData
+    if (mfg != null && mfg.size() > 0) {
+      val appleData = mfg.get(0x004C)
+      if (appleData != null && appleData.isNotEmpty()) {
+        val subType = appleData[0].toInt() and 0xFF
+        return when (subType) {
+          0x07 -> Pair(CAT_AUDIO_WEARABLE, "Apple AirPods / Beats")
+          0x09, 0x0A -> Pair(CAT_TV_PC_IOT, "Apple TV / HomePod")
+          0x12 -> Pair(CAT_AUDIO_WEARABLE, "FindMy Tag / Accessory")
+          else -> Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Apple iPhone")
+        }
+      }
+      if (mfg.get(0x0006) != null) return Pair(CAT_TV_PC_IOT, "Windows PC (Swift Pair)")
+      if (mfg.get(0x0075) != null) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Samsung Galaxy")
+      if (mfg.get(0x038F) != null) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Xiaomi / Redmi")
+      if (mfg.get(0x0837) != null) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "vivo Phone")
+      if (mfg.get(0x079A) != null || mfg.get(0x009E) != null) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "OPPO / Realme / OnePlus")
+      if (mfg.get(0x00E0) != null) return Pair(CAT_PHONE, if (devName.isNotBlank()) devName.take(28) else "Android Phone (Google)")
+      if (mfg.get(0x0157) != null) return Pair(CAT_AUDIO_WEARABLE, "Amazfit / Huami Watch")
+    }
+
+    if (devName.isNotBlank()) return Pair(CAT_PHONE, devName.take(28))
+    return Pair(CAT_UNKNOWN, "Unidentified BLE")
   }
 
   @SuppressLint("MissingPermission")
@@ -314,12 +417,8 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
             .setIncludeDeviceName(false)
             .build()
           val advCb = object : AdvertiseCallback() {
-            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
-              isBleAdvertising = true
-            }
-            override fun onStartFailure(errorCode: Int) {
-              isBleAdvertising = false
-            }
+            override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) { isBleAdvertising = true }
+            override fun onStartFailure(errorCode: Int) { isBleAdvertising = false }
           }
           activeAdvertiseCallback = advCb
           bleAdvertiser?.startAdvertising(advSettings, advData, advCb)
@@ -340,8 +439,8 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
         val addr = result.device?.address ?: return
         val rssi = result.rssi
         if (rssi < -98 || rssi >= 0) return
-        val devName = result.scanRecord?.deviceName ?: ""
-        recordPeer(blePeers, addr, rssi, devName)
+        val (cat, model) = classifyBleScanResult(result)
+        recordPeer(btAllPeers, addr, rssi, cat, model, "BLE")
       }
 
       override fun onBatchScanResults(results: MutableList<ScanResult>) {
@@ -349,7 +448,8 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
           val addr = res.device?.address ?: continue
           val rssi = res.rssi
           if (rssi < -98 || rssi >= 0) continue
-          recordPeer(blePeers, addr, rssi, res.scanRecord?.deviceName ?: "")
+          val (cat, model) = classifyBleScanResult(res)
+          recordPeer(btAllPeers, addr, rssi, cat, model, "BLE")
         }
       }
 
@@ -374,9 +474,6 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
       isBleScanning = true
       triggerPeriodicClassicBtIfNeeded(adapter)
       true
-    } catch (_: SecurityException) {
-      isBleScanning = false
-      false
     } catch (_: Exception) {
       isBleScanning = false
       false
@@ -394,9 +491,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
         adapter.startDiscovery()
         bgExecutor.schedule({
           try {
-            if (hasBleScanPermission() && adapter.isDiscovering) {
-              adapter.cancelDiscovery()
-            }
+            if (hasBleScanPermission() && adapter.isDiscovering) adapter.cancelDiscovery()
           } catch (_: Exception) {}
         }, 7, TimeUnit.SECONDS)
       }
@@ -409,26 +504,83 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     return secondChar == '2' || secondChar == '6' || secondChar == 'A' || secondChar == 'E'
   }
 
+  // Extract router manufacturer/model strings inside unencrypted 802.11 WPS/Vendor Information Elements
+  private fun extractWifiWpsVendor(sr: WifiScanResult): String {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return ""
+    try {
+      val ies = sr.informationElements ?: return ""
+      for (ie in ies) {
+        if (ie.id == 221 || ie.id == 222) {
+          val buf = ie.bytes ?: continue
+          val arr = ByteArray(buf.remaining())
+          buf.get(arr)
+          val ascii = StringBuilder()
+          for (b in arr) {
+            val c = b.toInt() and 0xFF
+            ascii.append(if (c in 32..126) c.toChar() else ' ')
+          }
+          val txt = ascii.toString()
+          val m = routerApRegex.find(txt)
+          if (m != null) return m.value
+        }
+      }
+    } catch (_: Exception) {}
+    return ""
+  }
+
   @SuppressLint("MissingPermission")
   private fun refreshWifiApResults() {
     val wifiManager = reactContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
     if (!wifiManager.isWifiEnabled) return
     try {
       val results = wifiManager.scanResults ?: return
+
+      // Pass 1: Build index of fixed router suffixes (last 4 octets + freq) to spot Multi-SSID / Guest virtual APs
+      val fixedRouterSignatures = HashSet<String>()
       for (sr in results) {
-        val bssid = sr.BSSID ?: continue
-        if (sr.level < -88 || sr.level >= 0) continue
+        val bssid = (sr.BSSID ?: "").lowercase()
+        if (bssid.length < 17) continue
         @Suppress("DEPRECATION")
         val ssid = sr.SSID ?: ""
-        val isMobile = isLocallyAdministeredMac(bssid) ||
-          (ssid.isNotBlank() && mobileHotspotPattern.containsMatchIn(ssid))
-        if (isMobile) {
-          recordPeer(wifiHotspotPeers, bssid.lowercase(), sr.level, ssid)
-        } else {
-          recordPeer(wifiFixedAps, bssid.lowercase(), sr.level, ssid)
+        val wpsVendor = extractWifiWpsVendor(sr)
+        if (!isLocallyAdministeredMac(bssid) || wpsVendor.isNotBlank() || (ssid.isNotBlank() && routerApRegex.containsMatchIn(ssid) && !phoneModelRegex.containsMatchIn(ssid))) {
+          fixedRouterSignatures.add(bssid.substring(3, 14) + "@" + sr.frequency)
         }
       }
-    } catch (_: SecurityException) {
+
+      // Pass 2: Classify every scanned Wi-Fi AP as PHONE Hotspot vs ROUTER
+      for (sr in results) {
+        val bssid = (sr.BSSID ?: "").lowercase()
+        if (bssid.length < 17 || sr.level < -88 || sr.level >= 0) continue
+        @Suppress("DEPRECATION")
+        val ssid = sr.SSID ?: ""
+        val wpsVendor = extractWifiWpsVendor(sr)
+        val hasRouterKeyword = (ssid.isNotBlank() && routerApRegex.containsMatchIn(ssid)) || wpsVendor.isNotBlank()
+        val hasPhoneKeyword = ssid.isNotBlank() && phoneModelRegex.containsMatchIn(ssid)
+        val isVirtualGuestVap = isLocallyAdministeredMac(bssid) && fixedRouterSignatures.contains(bssid.substring(3, 14) + "@" + sr.frequency)
+
+        if (hasPhoneKeyword && !hasRouterKeyword && !isVirtualGuestVap) {
+          recordPeer(wifiScannedAps, bssid, sr.level, CAT_PHONE, ssid.take(28), "WIFI_HOTSPOT")
+        } else if (hasRouterKeyword || isVirtualGuestVap || !isLocallyAdministeredMac(bssid)) {
+          val rLabel = when {
+            wpsVendor.isNotBlank() && ssid.isNotBlank() -> (ssid.take(18) + " [" + wpsVendor + "]")
+            ssid.isNotBlank() -> ssid.take(28)
+            wpsVendor.isNotBlank() -> wpsVendor + " Router"
+            else -> "Fixed Router / Guest AP"
+          }
+          recordPeer(wifiScannedAps, bssid, sr.level, CAT_ROUTER, rLabel, "WIFI_AP")
+        } else {
+          // Locally-administered BSSID NOT matching any router WPS IE or Multi-SSID physical AP
+          recordPeer(
+            wifiScannedAps,
+            bssid,
+            sr.level,
+            CAT_PHONE,
+            if (ssid.isNotBlank()) ssid.take(28) else "Mobile Hotspot (LAA)",
+            "WIFI_HOTSPOT"
+          )
+        }
+      }
     } catch (_: Exception) {}
   }
 
@@ -437,7 +589,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     if (wifiP2pManager != null && wifiP2pChannel != null) return
     try {
       val mgr = reactContext.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager ?: return
-      val ch = mgr.initialize(reactContext, Looper.getMainLooper(), null)
+      val ch = mgr.initialize(reactContext, reactContext.mainLooper, null)
       wifiP2pManager = mgr
       wifiP2pChannel = ch
     } catch (_: Exception) {}
@@ -453,12 +605,20 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
         val list = peerList?.deviceList ?: emptyList<WifiP2pDevice>()
         for (dev in list) {
           val addr = dev.deviceAddress
-          if (!addr.isNullOrBlank()) {
-            recordPeer(wifiP2pPeers, addr.lowercase(), -62, dev.deviceName ?: "Android P2P")
+          if (addr.isNullOrBlank()) continue
+          val name = (dev.deviceName ?: "").trim()
+          val pType = (dev.primaryDeviceType ?: "").trim()
+          val cat = when {
+            tvComputerIotRegex.containsMatchIn(name) -> CAT_TV_PC_IOT
+            pType.startsWith("7-") -> CAT_TV_PC_IOT // Displays / TVs
+            pType.startsWith("3-") -> CAT_ROUTER    // Network Infrastructure
+            pType.startsWith("1-") && !phoneModelRegex.containsMatchIn(name) -> CAT_TV_PC_IOT // Computer
+            else -> CAT_PHONE // Category 10 (Telephone) or Android P2P phone
           }
+          val label = if (name.isNotBlank()) name.take(28) else "Android Phone (P2P)"
+          recordPeer(wifiP2pPeers, addr.lowercase(), -62, cat, label, "WIFI_P2P")
         }
       }
-    } catch (_: SecurityException) {
     } catch (_: Exception) {}
   }
 
@@ -486,13 +646,10 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
         val ch = wifiP2pChannel
         if (mgr != null && ch != null) {
           mgr.discoverPeers(ch, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-              requestP2pPeersSafe()
-            }
+            override fun onSuccess() { requestP2pPeersSafe() }
             override fun onFailure(reason: Int) {}
           })
         }
-      } catch (_: SecurityException) {
       } catch (_: Exception) {}
     }
 
@@ -512,11 +669,10 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
       nsdManager = mgr
       mdnsStarted = true
       val serviceTypes = listOf(
-        "_airplay._tcp.",
-        "_googlecast._tcp.",
         "_companion-link._tcp.",
-        "_adb._tcp.",
-        "_http._tcp."
+        "_googlecast._tcp.",
+        "_airplay._tcp.",
+        "_ipp._tcp."
       )
       for (stype in serviceTypes) {
         val listener = object : NsdManager.DiscoveryListener {
@@ -527,15 +683,77 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
           override fun onServiceLost(serviceInfo: NsdServiceInfo?) {}
           override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
             val svcName = serviceInfo?.serviceName ?: return
-            mdnsPeers[svcName + ":" + (serviceInfo.serviceType ?: "")] = System.currentTimeMillis()
+            try {
+              @Suppress("DEPRECATION")
+              mgr.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(si: NsdServiceInfo?, err: Int) {}
+                override fun onServiceResolved(si: NsdServiceInfo?) {
+                  val hostIp = si?.host?.hostAddress ?: return
+                  var model = svcName.take(26)
+                  try {
+                    val attrs = si.attributes
+                    val mdBytes = attrs["rpMd"] ?: attrs["md"] ?: attrs["model"]
+                    if (mdBytes != null) {
+                      model = String(mdBytes, Charsets.UTF_8).trim().take(28)
+                    }
+                  } catch (_: Exception) {}
+                  val lower = (model + " " + stype + " " + svcName).lowercase()
+                  val cat = when {
+                    stype.contains("googlecast") || stype.contains("ipp") || tvComputerIotRegex.containsMatchIn(lower) || lower.contains("macbook") || lower.contains("appletv") -> CAT_TV_PC_IOT
+                    lower.contains("iphone") || stype.contains("companion-link") -> CAT_PHONE
+                    else -> CAT_TV_PC_IOT
+                  }
+                  if (cat != CAT_PHONE) {
+                    lanFilteredIps[hostIp] = Pair(cat, model)
+                  }
+                  lanMdnsModels[hostIp] = Triple(cat, model, System.currentTimeMillis())
+                }
+              })
+            } catch (_: Exception) {}
           }
         }
         nsdListeners.add(listener)
-        try {
-          mgr.discoverServices(stype, NsdManager.PROTOCOL_DNS_SD, listener)
-        } catch (_: Exception) {}
+        try { mgr.discoverServices(stype, NsdManager.PROTOCOL_DNS_SD, listener) } catch (_: Exception) {}
       }
     } catch (_: Exception) {}
+  }
+
+  // Query Smart TV / Router / Printer devices on room LAN via SSDP M-SEARCH so we filter them out
+  private fun runSsdpRoomDeviceCheck() {
+    var sock: DatagramSocket? = null
+    try {
+      sock = DatagramSocket()
+      sock.soTimeout = 500
+      val query = ("M-SEARCH * HTTP/1.1\r\n" +
+        "HOST: 239.255.255.250:1900\r\n" +
+        "MAN: \"ssdp:discover\"\r\n" +
+        "MX: 1\r\n" +
+        "ST: ssdp:all\r\n\r\n").toByteArray(Charsets.UTF_8)
+      val mcast = InetAddress.getByName("239.255.255.250")
+      sock.send(DatagramPacket(query, query.size, mcast, 1900))
+      val startMs = System.currentTimeMillis()
+      val buf = ByteArray(1024)
+      while (System.currentTimeMillis() - startMs < 650) {
+        val dp = DatagramPacket(buf, buf.size)
+        try {
+          sock.receive(dp)
+          val ip = dp.address?.hostAddress ?: continue
+          val resp = String(dp.data, 0, dp.length, Charsets.UTF_8)
+          val serverLine = Regex("(?i)SERVER:\\s*([^\r\n]+)").find(resp)?.groupValues?.get(1)?.trim() ?: ""
+          val cat = when {
+            Regex("(?i)(router|gateway|igd|tp-link|tenda|huawei|mikrotik)").containsMatchIn(resp) -> CAT_ROUTER
+            Regex("(?i)(tv|bravia|webos|tizen|chromecast|renderer|printer|scanner|xbox|playstation)").containsMatchIn(resp) -> CAT_TV_PC_IOT
+            else -> CAT_TV_PC_IOT
+          }
+          lanFilteredIps[ip] = Pair(cat, if (serverLine.isNotBlank()) serverLine.take(26) else "TV / Router (SSDP)")
+        } catch (_: SocketTimeoutException) {
+          break
+        }
+      }
+    } catch (_: Exception) {
+    } finally {
+      try { sock?.close() } catch (_: Exception) {}
+    }
   }
 
   private fun triggerWifiLanRoomSweepIfNeeded() {
@@ -580,12 +798,11 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     bgExecutor.execute {
       val pool = Executors.newFixedThreadPool(24)
       try {
-        // Send brief mDNS wakeup packet so idle room phones update ARP entries
+        runSsdpRoomDeviceCheck()
         try {
           DatagramSocket().use { ds ->
             val msg = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            val mcast = InetAddress.getByName("224.0.0.251")
-            ds.send(DatagramPacket(msg, msg.size, mcast, 5353))
+            ds.send(DatagramPacket(msg, msg.size, InetAddress.getByName("224.0.0.251"), 5353))
           }
         } catch (_: Exception) {}
 
@@ -599,16 +816,18 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
               (hBytes[2].toInt() and 0xFF).toString() + "." +
               (hBytes[3].toInt() and 0xFF).toString()
             var alive = false
+            var isAppleIphonePort = false
             try {
               val inet = InetAddress.getByAddress(hBytes)
               if (inet.isReachable(120)) {
                 alive = true
-              } else {
-                // Fast TCP RST presence probe against Apple Lockdownd / mDNS ports on local /24 Wi-Fi
+              }
+              if (!alive) {
                 val sock = Socket()
                 try {
                   sock.connect(InetSocketAddress(inet, 62078), 110)
                   alive = true
+                  isAppleIphonePort = true
                 } catch (ce: ConnectException) {
                   val m = (ce.message ?: "").lowercase()
                   if (m.contains("refused") || m.contains("econnrefused")) {
@@ -621,7 +840,24 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
               }
             } catch (_: Exception) {}
             if (alive) {
-              recordPeer(wifiLanPeers, ipStr, -55, "LAN:" + ipStr)
+              val filteredMeta = lanFilteredIps[ipStr]
+              val mdnsMeta = lanMdnsModels[ipStr]
+              val cat: String
+              val model: String
+              if (filteredMeta != null) {
+                cat = filteredMeta.first
+                model = filteredMeta.second
+              } else if (mdnsMeta != null) {
+                cat = mdnsMeta.first
+                model = mdnsMeta.second
+              } else if (isAppleIphonePort) {
+                cat = CAT_PHONE
+                model = "Apple iPhone (LAN)"
+              } else {
+                cat = CAT_PHONE
+                model = "Room Phone (Wi-Fi LAN)"
+              }
+              recordPeer(wifiLanPeers, ipStr, -55, cat, model, "WIFI_LAN")
             }
           })
         }
@@ -636,9 +872,8 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     }
   }
 
-  private fun isValidCellMetric(v: Int, minVal: Int, maxVal: Int): Boolean {
-    return v != CellInfo.UNAVAILABLE && v in minVal..maxVal
-  }
+  private fun isValidCellMetric(v: Int, minVal: Int, maxVal: Int): Boolean =
+    v != CellInfo.UNAVAILABLE && v in minVal..maxVal
 
   private fun parseCellInfoList(cells: List<CellInfo>?) {
     if (cells.isNullOrEmpty()) {
@@ -650,9 +885,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
 
     for (ci in cells) {
       if (!ci.isRegistered && ci !is CellInfoLte && ci !is CellInfoNr) continue
-      if (ci is CellInfoLte || ci is CellInfoNr || ci is CellInfoWcdma) {
-        towerCount += 1
-      }
+      if (ci is CellInfoLte || ci is CellInfoNr || ci is CellInfoWcdma) towerCount += 1
       if (!ci.isRegistered && bestAssigned) continue
 
       if (ci is CellInfoLte) {
@@ -666,36 +899,22 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
         val rsrp = if (isValidCellMetric(rsrpRaw, -140, -40)) rsrpRaw
         else if (isValidCellMetric(dbmRaw, -140, -40)) dbmRaw
         else -85
-
         val rsrq = if (isValidCellMetric(rsrqRaw, -34, -1)) rsrqRaw else Int.MIN_VALUE
         val rssnr = if (isValidCellMetric(rssnrRaw, -20, 35)) rssnrRaw else Int.MIN_VALUE
         val cqi = if (isValidCellMetric(cqiRaw, 0, 15)) cqiRaw else -1
 
-        var loadScore = 25.0
         var signalsUsed = 0
         var loadAccum = 0.0
-
         if (rsrq != Int.MIN_VALUE) {
-          loadAccum += max(5.0, min(98.0, ((-3.0 - rsrq) / 17.0) * 100.0))
-          signalsUsed += 1
+          loadAccum += max(5.0, min(98.0, ((-3.0 - rsrq) / 17.0) * 100.0)); signalsUsed += 1
         }
         if (rssnr != Int.MIN_VALUE) {
-          // 25 dB = very clean/empty (10% load), -5 dB = heavily loaded (95% load)
-          loadAccum += max(8.0, min(98.0, ((25.0 - rssnr) / 30.0) * 90.0))
-          signalsUsed += 1
+          loadAccum += max(8.0, min(98.0, ((25.0 - rssnr) / 30.0) * 90.0)); signalsUsed += 1
         }
         if (cqi >= 0) {
-          loadAccum += max(10.0, min(95.0, ((15.0 - cqi) / 14.0) * 85.0))
-          signalsUsed += 1
+          loadAccum += max(10.0, min(95.0, ((15.0 - cqi) / 14.0) * 85.0)); signalsUsed += 1
         }
-        if (signalsUsed == 0) {
-          // Fallback from signal power + visible LTE neighbor cell density
-          val sigLoad = max(12.0, min(85.0, ((-55.0 - rsrp) / 65.0) * 70.0))
-          loadScore = sigLoad
-        } else {
-          loadScore = loadAccum / signalsUsed
-        }
-
+        val loadScore = if (signalsUsed > 0) loadAccum / signalsUsed else max(12.0, min(85.0, ((-55.0 - rsrp) / 65.0) * 70.0))
         cachedCellRsrp = rsrp
         cachedCellRsrq = if (rsrq != Int.MIN_VALUE) rsrq else -9
         cachedCellRssnr = if (rssnr != Int.MIN_VALUE) rssnr else 10
@@ -708,13 +927,9 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
           val rsrp = if (isValidCellMetric(ss.ssRsrp, -140, -40)) ss.ssRsrp else -85
           val rsrq = if (isValidCellMetric(ss.ssRsrq, -34, -1)) ss.ssRsrq else Int.MIN_VALUE
           val sinr = if (isValidCellMetric(ss.ssSinr, -20, 40)) ss.ssSinr else Int.MIN_VALUE
-          val load = if (rsrq != Int.MIN_VALUE) {
-            max(8.0, min(98.0, ((-3.0 - rsrq) / 17.0) * 100.0)).roundToInt()
-          } else if (sinr != Int.MIN_VALUE) {
-            max(8.0, min(95.0, ((25.0 - sinr) / 30.0) * 90.0)).roundToInt()
-          } else {
-            max(12, min(80, ((-55.0 - rsrp) / 65.0 * 70.0).roundToInt()))
-          }
+          val load = if (rsrq != Int.MIN_VALUE) max(8.0, min(98.0, ((-3.0 - rsrq) / 17.0) * 100.0)).roundToInt()
+          else if (sinr != Int.MIN_VALUE) max(8.0, min(95.0, ((25.0 - sinr) / 30.0) * 90.0)).roundToInt()
+          else max(12, min(80, ((-55.0 - rsrp) / 65.0 * 70.0).roundToInt()))
           cachedCellRsrp = rsrp
           cachedCellRsrq = if (rsrq != Int.MIN_VALUE) rsrq else -9
           cachedCellRssnr = if (sinr != Int.MIN_VALUE) sinr else 12
@@ -723,18 +938,14 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
           bestAssigned = true
         }
       } else if (ci is CellInfoWcdma && !bestAssigned) {
-        val ss: CellSignalStrengthWcdma = ci.cellSignalStrength
-        val dbm = if (isValidCellMetric(ss.dbm, -130, -40)) ss.dbm else -88
+        val dbm = if (isValidCellMetric(ci.cellSignalStrength.dbm, -130, -40)) ci.cellSignalStrength.dbm else -88
         cachedCellRsrp = dbm
-        cachedCellRsrq = -10
         cachedCellLoadPct = max(12, min(80, ((-55.0 - dbm) / 65.0 * 70.0).roundToInt()))
         cachedCellNetworkType = "3G_WCDMA"
         bestAssigned = true
       } else if (ci is CellInfoGsm && !bestAssigned) {
-        val ss: CellSignalStrengthGsm = ci.cellSignalStrength
-        val dbm = if (isValidCellMetric(ss.dbm, -120, -40)) ss.dbm else -90
+        val dbm = if (isValidCellMetric(ci.cellSignalStrength.dbm, -120, -40)) ci.cellSignalStrength.dbm else -90
         cachedCellRsrp = dbm
-        cachedCellRsrq = -10
         cachedCellLoadPct = max(12, min(80, ((-55.0 - dbm) / 65.0 * 70.0).roundToInt()))
         cachedCellNetworkType = "2G_GSM"
         bestAssigned = true
@@ -752,19 +963,12 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     }
     val tm = reactContext.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager ?: return
     val now = System.currentTimeMillis()
-    try {
-      parseCellInfoList(tm.allCellInfo)
-    } catch (_: SecurityException) {
-      cachedCellNetworkType = "NO_PERM"
-    } catch (_: Exception) {}
-
+    try { parseCellInfoList(tm.allCellInfo) } catch (_: Exception) {}
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && now - lastCellRefreshMs >= 10_000L) {
       lastCellRefreshMs = now
       try {
         tm.requestCellInfoUpdate(bgExecutor, object : TelephonyManager.CellInfoCallback() {
-          override fun onCellInfo(cellInfo: MutableList<CellInfo>) {
-            parseCellInfoList(cellInfo)
-          }
+          override fun onCellInfo(cellInfo: MutableList<CellInfo>) { parseCellInfoList(cellInfo) }
         })
       } catch (_: Exception) {}
     }
@@ -785,10 +989,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     promise.resolve(true)
   }
 
-  private fun countStaticAndMoving(
-    peers: Collection<PeerReading>,
-    speedKmh: Double
-  ): Pair<Int, Int> {
+  private fun countStaticAndMoving(peers: Collection<PeerReading>, speedKmh: Double): Pair<Int, Int> {
     var st = 0
     var mv = 0
     for (p in peers) {
@@ -805,56 +1006,111 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     triggerWifiScansIfNeeded()
     refreshCellularInfo()
 
-    pruneMap(blePeers, peerTtlMs)
-    pruneMap(btClassicPeers, peerTtlMs)
-    pruneMap(wifiHotspotPeers, wifiPeerTtlMs)
-    pruneMap(wifiFixedAps, wifiPeerTtlMs)
+    pruneMap(btAllPeers, peerTtlMs)
+    pruneMap(wifiScannedAps, wifiPeerTtlMs)
     pruneMap(wifiP2pPeers, wifiPeerTtlMs)
     pruneMap(wifiLanPeers, wifiPeerTtlMs)
 
     val mdnsCutoff = System.currentTimeMillis() - wifiPeerTtlMs
-    val mdnsIter = mdnsPeers.entries.iterator()
-    while (mdnsIter.hasNext()) {
-      if (mdnsIter.next().value < mdnsCutoff) {
-        mdnsIter.remove()
+    val mIter = lanMdnsModels.entries.iterator()
+    while (mIter.hasNext()) {
+      if (mIter.next().value.third < mdnsCutoff) mIter.remove()
+    }
+
+    var filteredAudioCount = 0
+    var filteredRouterCount = 0
+    var filteredOtherCount = 0
+
+    // 1. Filter Bluetooth / BLE peers -> only keep confirmed/probable PHONES (filter out Earbuds, Watches, PCs, TVs)
+    val phoneBtPeers = mutableListOf<PeerReading>()
+    for (p in btAllPeers.values) {
+      when (p.category) {
+        CAT_AUDIO_WEARABLE -> filteredAudioCount += 1
+        CAT_TV_PC_IOT -> filteredOtherCount += 1
+        CAT_ROUTER -> filteredRouterCount += 1
+        else -> phoneBtPeers.add(p) // CAT_PHONE or CAT_UNKNOWN nearby BLE ad
+      }
+    }
+    val (btStatic, btMoving) = countStaticAndMoving(phoneBtPeers, speedKmh)
+
+    // 2. Filter Wi-Fi scanned APs -> keep only Mobile Hotspots, filter out TP-Link/Tenda/Guest Routers
+    val phoneHotspots = mutableListOf<PeerReading>()
+    for (p in wifiScannedAps.values) {
+      if (p.category == CAT_ROUTER) {
+        filteredRouterCount += 1
+      } else if (p.category == CAT_PHONE) {
+        phoneHotspots.add(p)
       }
     }
 
-    // Deduplicate BLE + Classic BT peers by MAC
-    val combinedBt = HashMap<String, PeerReading>(blePeers.size + btClassicPeers.size)
-    combinedBt.putAll(blePeers)
-    for ((k, v) in btClassicPeers) {
-      combinedBt.putIfAbsent(k, v)
+    // 3. Filter Wi-Fi Direct P2P peers -> keep Phones, filter TVs/Routers
+    val phoneP2p = mutableListOf<PeerReading>()
+    for (p in wifiP2pPeers.values) {
+      when (p.category) {
+        CAT_ROUTER -> filteredRouterCount += 1
+        CAT_TV_PC_IOT -> filteredOtherCount += 1
+        else -> phoneP2p.add(p)
+      }
     }
 
-    val btTotal = combinedBt.size
-    val (btStatic, btMoving) = countStaticAndMoving(combinedBt.values, speedKmh)
+    // 4. Filter Room LAN peers -> exclude Smart TVs / Chromecast / Routers / Printers identified via SSDP/mDNS
+    val phoneLan = mutableListOf<PeerReading>()
+    for (p in wifiLanPeers.values) {
+      when (p.category) {
+        CAT_ROUTER -> filteredRouterCount += 1
+        CAT_TV_PC_IOT -> filteredOtherCount += 1
+        CAT_AUDIO_WEARABLE -> filteredAudioCount += 1
+        else -> phoneLan.add(p)
+      }
+    }
 
-    val wifiHotspotCount = wifiHotspotPeers.size
-    val wifiP2pCount = wifiP2pPeers.size
-    val wifiLanCount = max(wifiLanPeers.size, mdnsPeers.size)
+    val wifiHotspotCount = phoneHotspots.size
+    val wifiP2pCount = phoneP2p.size
+    val wifiLanCount = phoneLan.size
     val wifiMobileTotal = wifiHotspotCount + wifiP2pCount + wifiLanCount
-    val (hsSt, hsMv) = countStaticAndMoving(wifiHotspotPeers.values, speedKmh)
-    val (p2pSt, p2pMv) = countStaticAndMoving(wifiP2pPeers.values, speedKmh)
-    val (lanSt, lanMv) = countStaticAndMoving(wifiLanPeers.values, speedKmh)
-    val mdnsExtra = max(0, mdnsPeers.size - wifiLanPeers.size)
-    val mdnsExtraSt = if (speedKmh < 3.5) mdnsExtra else 0
-    val mdnsExtraMv = mdnsExtra - mdnsExtraSt
 
-    val wifiStatic = hsSt + p2pSt + lanSt + mdnsExtraSt
-    val wifiMoving = hsMv + p2pMv + lanMv + mdnsExtraMv
+    val (hsSt, hsMv) = countStaticAndMoving(phoneHotspots, speedKmh)
+    val (p2pSt, p2pMv) = countStaticAndMoving(phoneP2p, speedKmh)
+    val (lanSt, lanMv) = countStaticAndMoving(phoneLan, speedKmh)
+    val wifiStatic = hsSt + p2pSt + lanSt
+    val wifiMoving = hsMv + p2pMv + lanMv
+
+    // Build anonymized extracted device model summary list (phones + filtered non-phones)
+    val modelTags = Arguments.createArray()
+    val allReadings = mutableListOf<PeerReading>()
+    allReadings.addAll(phoneBtPeers)
+    allReadings.addAll(phoneHotspots)
+    allReadings.addAll(phoneP2p)
+    allReadings.addAll(phoneLan)
+    for (p in btAllPeers.values) if (p.category != CAT_PHONE && p.category != CAT_UNKNOWN) allReadings.add(p)
+    for (p in wifiScannedAps.values) if (p.category == CAT_ROUTER) allReadings.add(p)
+    for (p in wifiLanPeers.values) if (p.category != CAT_PHONE && p.category != CAT_UNKNOWN) allReadings.add(p)
+
+    val seenLabels = HashSet<String>()
+    var added = 0
+    for (p in allReadings) {
+      if (added >= 24) break
+      val prefix = when (p.category) {
+        CAT_PHONE -> "📱 "
+        CAT_ROUTER -> "📡 [Filtered Router] "
+        CAT_AUDIO_WEARABLE -> "🎧 [Filtered Earbud/Watch] "
+        CAT_TV_PC_IOT -> "🖥️ [Filtered TV/PC] "
+        else -> "📶 "
+      }
+      val entry = prefix + (p.modelLabel.ifBlank { "Device" }) + " (" + p.radioSource + ")"
+      if (seenLabels.add(entry)) {
+        modelTags.pushString(entry)
+        added += 1
+      }
+    }
 
     val rssiSamples = mutableListOf<Int>()
-    for (p in combinedBt.values) rssiSamples.add(p.lastRssi)
-    for (p in wifiHotspotPeers.values) rssiSamples.add(p.lastRssi)
+    for (p in phoneBtPeers) rssiSamples.add(p.lastRssi)
+    for (p in phoneHotspots) rssiSamples.add(p.lastRssi)
     val avgRssi = if (rssiSamples.isNotEmpty()) (rssiSamples.sum() / rssiSamples.size) else -70
 
-    val btEnabled = try {
-      (reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter?.isEnabled == true
-    } catch (_: Exception) { false }
-    val wifiEnabled = try {
-      (reactContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.isWifiEnabled == true
-    } catch (_: Exception) { false }
+    val btEnabled = try { (reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter?.isEnabled == true } catch (_: Exception) { false }
+    val wifiEnabled = try { (reactContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.isWifiEnabled == true } catch (_: Exception) { false }
     val locEnabled = isLocationServiceEnabled()
 
     val missing = mutableListOf<String>()
@@ -866,15 +1122,19 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
     val diagStatus = if (missing.isEmpty()) "ALL_RADIOS_ACTIVE" else missing.joinToString(",")
 
     val map = Arguments.createMap().apply {
-      putInt("bleCount", btTotal)
+      putInt("bleCount", phoneBtPeers.size)
       putInt("bleStaticCount", btStatic)
       putInt("bleMovingCount", btMoving)
-      putInt("btClassicCount", btClassicPeers.size)
+      putInt("btClassicCount", phoneBtPeers.count { it.radioSource == "BT_CLASSIC" })
       putInt("wifiMobileCount", wifiMobileTotal)
       putInt("wifiHotspotCount", wifiHotspotCount)
       putInt("wifiP2pCount", wifiP2pCount)
       putInt("wifiLanPeerCount", wifiLanCount)
-      putInt("wifiFixedApCount", wifiFixedAps.size)
+      putInt("wifiFixedApCount", filteredRouterCount)
+      putInt("filteredRoutersCount", filteredRouterCount)
+      putInt("filteredAudioCount", filteredAudioCount)
+      putInt("filteredOtherCount", filteredOtherCount)
+      putArray("detectedModels", modelTags)
       putInt("wifiStaticCount", wifiStatic)
       putInt("wifiMovingCount", wifiMoving)
       putInt("cellRsrpDbm", cachedCellRsrp)
@@ -892,10 +1152,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
       putBoolean("hasBlePerm", hasBleScanPermission())
       putBoolean("hasWifiPerm", hasWifiScanPermission())
       putString("diagStatus", diagStatus)
-      putString(
-        "scannerMode",
-        if (isBleScanning || wifiMobileTotal > 0 || cachedCellTowerCount > 0) "NATIVE_MULTI_RADIO" else diagStatus
-      )
+      putString("scannerMode", if (isBleScanning || wifiMobileTotal > 0 || cachedCellTowerCount > 0) "NATIVE_MULTI_RADIO" else diagStatus)
     }
     promise.resolve(map)
   }
@@ -904,36 +1161,22 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
   private fun stopAllHardwareScans() {
     try {
       val cb = activeScanCallback
-      if (isBleScanning && cb != null && hasBleScanPermission()) {
-        bleScanner?.stopScan(cb)
-      }
+      if (isBleScanning && cb != null && hasBleScanPermission()) bleScanner?.stopScan(cb)
     } catch (_: Exception) {
-    } finally {
-      isBleScanning = false
-      activeScanCallback = null
-    }
+    } finally { isBleScanning = false; activeScanCallback = null }
     try {
       val advCb = activeAdvertiseCallback
-      if (isBleAdvertising && advCb != null && hasBleAdvertisePermission()) {
-        bleAdvertiser?.stopAdvertising(advCb)
-      }
+      if (isBleAdvertising && advCb != null && hasBleAdvertisePermission()) bleAdvertiser?.stopAdvertising(advCb)
     } catch (_: Exception) {
-    } finally {
-      isBleAdvertising = false
-      activeAdvertiseCallback = null
-    }
+    } finally { isBleAdvertising = false; activeAdvertiseCallback = null }
     try {
       val mgr = nsdManager
       if (mgr != null && nsdListeners.isNotEmpty()) {
-        for (l in nsdListeners) {
-          try { mgr.stopServiceDiscovery(l) } catch (_: Exception) {}
-        }
+        for (l in nsdListeners) { try { mgr.stopServiceDiscovery(l) } catch (_: Exception) {} }
         nsdListeners.clear()
       }
     } catch (_: Exception) {
-    } finally {
-      mdnsStarted = false
-    }
+    } finally { mdnsStarted = false }
     if (receiversRegistered) {
       try { reactContext.unregisterReceiver(radioReceiver) } catch (_: Exception) {}
       receiversRegistered = false
@@ -942,9 +1185,7 @@ class BigWarnBleScannerModule(private val reactContext: ReactApplicationContext)
 
   override fun onHostResume() {
     ensureReceiversRegistered()
-    if (hasBleScanPermission()) {
-      ensureBleScanningStarted()
-    }
+    if (hasBleScanPermission()) ensureBleScanningStarted()
   }
 
   override fun onHostPause() {}
@@ -983,16 +1224,9 @@ module.exports = function withBigWarnMultiRadio(config) {
     }
     if (!manifest["uses-feature"]) manifest["uses-feature"] = [];
     const features = manifest["uses-feature"];
-    if (
-      !features.some(
-        (f) => f.$ && f.$["android:name"] === "android.hardware.bluetooth_le"
-      )
-    ) {
+    if (!features.some((f) => f.$ && f.$["android:name"] === "android.hardware.bluetooth_le")) {
       features.push({
-        $: {
-          "android:name": "android.hardware.bluetooth_le",
-          "android:required": "false",
-        },
+        $: { "android:name": "android.hardware.bluetooth_le", "android:required": "false" },
       });
     }
     return cfg;
@@ -1014,27 +1248,10 @@ module.exports = function withBigWarnMultiRadio(config) {
     "android",
     async (cfg) => {
       const platformRoot = cfg.modRequest.platformProjectRoot;
-      const pkgDir = path.join(
-        platformRoot,
-        "app",
-        "src",
-        "main",
-        "java",
-        "com",
-        "bigwarn",
-        "edge"
-      );
+      const pkgDir = path.join(platformRoot, "app", "src", "main", "java", "com", "bigwarn", "edge");
       fs.mkdirSync(pkgDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(pkgDir, "BigWarnBleScannerPackage.kt"),
-        PACKAGE_KT,
-        "utf-8"
-      );
-      fs.writeFileSync(
-        path.join(pkgDir, "BigWarnBleScannerModule.kt"),
-        MODULE_KT,
-        "utf-8"
-      );
+      fs.writeFileSync(path.join(pkgDir, "BigWarnBleScannerPackage.kt"), PACKAGE_KT, "utf-8");
+      fs.writeFileSync(path.join(pkgDir, "BigWarnBleScannerModule.kt"), MODULE_KT, "utf-8");
 
       const proguardPath = path.join(platformRoot, "app", "proguard-rules.pro");
       if (fs.existsSync(proguardPath)) {

@@ -62,11 +62,15 @@ flowchart LR
    - **Hotspots & Mobile APs (`WifiManager.startScan()`)**: Detects nearby phones with Hotspot ON or mobile OUI/Locally-Administered MACs (`2, 6, A, E`).
    - **Wi-Fi Direct (`WifiP2pManager.discoverPeers()`)**: Discovers nearby Android phones with Wi-Fi ON even without sharing a router.
    - **Shared Room/Bus Wi-Fi LAN (`NsdManager` mDNS + `/24` local subnet reachability)**: When connected to a `/24` Wi-Fi router (such as a room, cafe, or bus Wi-Fi), discovers live sibling phones sharing the same router—**even iPhones or idle Androids with screen off and Bluetooth off**—excluding self and gateway IP.
-4. **Radio C — Cellular Congestion (`TelephonyManager.requestCellInfoUpdate` + `allCellInfo`)**:
+4. **Device Model Extraction & Non-Phone Noise Filtering**:
+   - **Bluetooth / BLE**: Parses local device name, GAP Appearance (`0x19`), Bluetooth SIG Company IDs (`0x004C` Apple AirPods `0x07` vs. iPhone `0x10`, `0x0075` Samsung, `0x00E0` Google, `0x038F` Xiaomi, `0x0837` vivo, `0x079A` OPPO/Realme, `0x0006` Microsoft PCs), Service UUIDs, and `BluetoothClass` to keep smartphones and **filter out earbuds, headphones, smartwatches, TVs, and PCs**.
+   - **Wi-Fi Hotspots vs. Routers**: Inspects 802.11 WPS/Vendor Information Elements (`id=221`, e.g., TP-Link, Tenda, Huawei, ZTE, Mercusys, Netis, D-Link) and same-channel multi-SSID MAC suffixes (`bssid.substring(3, 14)@freq`) to separate **mobile phone hotspots** from fixed **apartment routers & Guest VAPs**.
+   - **LAN SSDP / mDNS Resolution**: Resolves `_googlecast._tcp`, `_airplay._tcp`, `_ipp._tcp`, `_companion-link._tcp`, and `SSDP M-SEARCH` banners on the room `/24` LAN to exclude Smart TVs, repeaters, and printers from phone counts while extracting model tags.
+5. **Radio C — Cellular Congestion (`TelephonyManager.requestCellInfoUpdate` + `allCellInfo`)**:
    - Refreshes real serving/neighbor **4G LTE**, **5G NR**, **3G**, and **2G** signal strength (`rsrp`, `rsrq`, `rssnr`, `cqi`, `dbm`) across available cells to compute `cell_load_percent` (`0–100%`) and `cell_tower_count`.
-5. **Indoor/Outdoor Location + Live Sensor HUD Bar ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx))**:
+6. **Indoor/Outdoor Location & Silent Multi-Radio Background Sensing ([mobile/App.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/App.tsx))**:
    - Uses `getLastKnownPositionAsync` + `Accuracy.Balanced` + continuous `watchPositionAsync` (with 6 s retry) so pings work indoors in rooms immediately rather than stalling for outdoor GPS lock.
-   - Renders a live sensor bar directly below the route advisory showing `+X BLE • +Y Wi-Fi (P2P:.. LAN:.. HS:..) • 4G Z%` and any missing permission/adapter warning.
+   - Runs silently in the background without cluttering the map screen; crowd metrics, extracted device models, and filtered router/earbud counts are shown only when tapping a heatmap (`#crowd-hud`) or on the Frontend Live Table.
 
 ---
 

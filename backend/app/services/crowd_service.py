@@ -184,6 +184,10 @@ class CrowdIntelligenceService:
         wifi_p2p_count: int | None = None,
         wifi_lan_count: int | None = None,
         wifi_ap_count: int | None = None,
+        filtered_routers_count: int | None = None,
+        filtered_audio_count: int | None = None,
+        filtered_other_count: int | None = None,
+        detected_models: list[str] | None = None,
         wifi_static_count: int | None = None,
         wifi_moving_count: int | None = None,
         cell_rsrp_dbm: int | None = None,
@@ -282,6 +286,10 @@ class CrowdIntelligenceService:
             "wifi_p2p_count": detected_wifi_p2p,
             "wifi_lan_count": detected_wifi_lan,
             "raw_wifi_ap_count": detected_wifi_ap,
+            "filtered_routers_count": max(0, int(filtered_routers_count)) if filtered_routers_count is not None else detected_wifi_ap,
+            "filtered_audio_count": max(0, int(filtered_audio_count)) if filtered_audio_count is not None else 0,
+            "filtered_other_count": max(0, int(filtered_other_count)) if filtered_other_count is not None else 0,
+            "detected_models": [str(m)[:64] for m in (detected_models or [])][:24],
             "raw_wifi_static": st_wifi,
             "raw_wifi_moving": mv_wifi,
             "cell_rsrp_dbm": c_rsrp,
@@ -420,6 +428,14 @@ class CrowdIntelligenceService:
             max_wifi_p2p = max(int(n.get("wifi_p2p_count", 0)) for n in nodes)
             max_wifi_lan = max(int(n.get("wifi_lan_count", 0)) for n in nodes)
             max_wifi_ap = max(int(n.get("wifi_ap_count", 0)) for n in nodes)
+            max_filt_routers = max(int(n.get("filtered_routers_count", n.get("wifi_ap_count", 0))) for n in nodes)
+            max_filt_audio = max(int(n.get("filtered_audio_count", 0)) for n in nodes)
+            max_filt_other = max(int(n.get("filtered_other_count", 0)) for n in nodes)
+            merged_models: list[str] = []
+            for n in nodes:
+                for m in (n.get("detected_models") or []):
+                    if m not in merged_models and len(merged_models) < 24:
+                        merged_models.append(m)
             avg_cell_load = int(round(sum(int(n.get("cell_load_percent", 0)) for n in nodes) / len(nodes)))
             avg_cell_rsrq = int(round(sum(int(n.get("cell_rsrq_db", -9)) for n in nodes) / len(nodes)))
             avg_cell_rsrp = int(round(sum(int(n.get("cell_rsrp_dbm", -85)) for n in nodes) / len(nodes)))
@@ -491,6 +507,10 @@ class CrowdIntelligenceService:
                     "wifi_p2p_count": max_wifi_p2p,
                     "wifi_lan_count": max_wifi_lan,
                     "wifi_ap_count": max_wifi_ap,
+                    "filtered_routers_count": max_filt_routers,
+                    "filtered_audio_count": max_filt_audio,
+                    "filtered_other_count": max_filt_other,
+                    "detected_models": merged_models,
                     "cell_rsrp_dbm": avg_cell_rsrp,
                     "cell_rsrq_db": avg_cell_rsrq,
                     "cell_load_percent": avg_cell_load,

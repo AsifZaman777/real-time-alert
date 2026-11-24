@@ -510,6 +510,10 @@ export async function GET(req: NextRequest) {
         wifi_p2p_count: sc.wifi_p2p_count || 0,
         wifi_lan_count: sc.wifi_lan_count || 0,
         wifi_ap_count: sc.wifi_ap_count || 0,
+        filtered_routers_count: sc.filtered_routers_count ?? sc.wifi_ap_count ?? 0,
+        filtered_audio_count: sc.filtered_audio_count || 0,
+        filtered_other_count: sc.filtered_other_count || 0,
+        detected_models: Array.isArray(sc.detected_models) ? sc.detected_models : [],
         cell_rsrp_dbm: sc.cell_rsrp_dbm ?? -85,
         cell_rsrq_db: sc.cell_rsrq_db ?? -9,
         cell_load_percent: sc.cell_load_percent || 0,
@@ -552,6 +556,15 @@ export async function GET(req: NextRequest) {
         0
       );
       const maxWifiAp = Math.max(...nodes.map((n) => n.wifi_ap_count || 0), 0);
+      const maxFiltRouters = Math.max(...nodes.map((n) => n.filtered_routers_count || n.wifi_ap_count || 0), 0);
+      const maxFiltAudio = Math.max(...nodes.map((n) => n.filtered_audio_count || 0), 0);
+      const maxFiltOther = Math.max(...nodes.map((n) => n.filtered_other_count || 0), 0);
+      const mergedModels: string[] = [];
+      nodes.forEach((n) => {
+        (n.detected_models || []).forEach((m: string) => {
+          if (!mergedModels.includes(m) && mergedModels.length < 24) mergedModels.push(m);
+        });
+      });
       const cellNetType = nodes[0].cell_network_type || "4G_LTE";
       const avgCellLoad = Math.round(
         nodes.reduce((s, n) => s + (n.cell_load_percent || 0), 0) / nodes.length
@@ -604,6 +617,10 @@ export async function GET(req: NextRequest) {
         wifi_p2p_count: maxWifiP2p,
         wifi_lan_count: maxWifiLan,
         wifi_fixed_ap_count: maxWifiAp,
+        filtered_routers_count: maxFiltRouters,
+        filtered_audio_count: maxFiltAudio,
+        filtered_other_count: maxFiltOther,
+        detected_models: mergedModels,
         cell_load_percent: avgCellLoad,
         cell_rsrq_db: avgRsrq,
         cell_rsrp_dbm: avgRsrp,

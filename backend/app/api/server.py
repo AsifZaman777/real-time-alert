@@ -186,6 +186,10 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                     cell_load_percent = int((q.get("cell_load_percent") or ["0"])[0])
                     cell_tower_count = int((q.get("cell_tower_count") or ["0"])[0])
                     cell_network_type = (q.get("cell_network_type") or ["4G_LTE"])[0]
+                    filtered_routers_count = int((q.get("filtered_routers_count") or ["0"])[0])
+                    filtered_audio_count = int((q.get("filtered_audio_count") or ["0"])[0])
+                    filtered_other_count = int((q.get("filtered_other_count") or ["0"])[0])
+                    detected_models = [s.strip() for s in (q.get("detected_models") or [""])[0].split(",") if s.strip()][:24]
                     avg_rssi_dbm = int((q.get("avg_rssi_dbm") or ["-65"])[0])
                     scan_radius_m = int((q.get("scan_radius_m") or ["50"])[0])
                 except ValueError:
@@ -208,6 +212,10 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         wifi_p2p_count=wifi_p2p_count,
                         wifi_lan_count=wifi_lan_count,
                         wifi_ap_count=wifi_ap_count,
+                        filtered_routers_count=filtered_routers_count,
+                        filtered_audio_count=filtered_audio_count,
+                        filtered_other_count=filtered_other_count,
+                        detected_models=detected_models,
                         wifi_static_count=wifi_static,
                         wifi_moving_count=wifi_moving,
                         cell_rsrp_dbm=cell_rsrp_dbm,
@@ -252,6 +260,10 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         wifi_p2p_count=int(body["wifi_p2p_count"]) if "wifi_p2p_count" in body and body["wifi_p2p_count"] is not None else 0,
                         wifi_lan_count=int(body["wifi_lan_count"]) if "wifi_lan_count" in body and body["wifi_lan_count"] is not None else 0,
                         wifi_ap_count=int(body["wifi_ap_count"]) if "wifi_ap_count" in body and body["wifi_ap_count"] is not None else 0,
+                        filtered_routers_count=int(body["filtered_routers_count"]) if "filtered_routers_count" in body and body["filtered_routers_count"] is not None else 0,
+                        filtered_audio_count=int(body["filtered_audio_count"]) if "filtered_audio_count" in body and body["filtered_audio_count"] is not None else 0,
+                        filtered_other_count=int(body["filtered_other_count"]) if "filtered_other_count" in body and body["filtered_other_count"] is not None else 0,
+                        detected_models=[str(x)[:64] for x in (body.get("detected_models") or [])][:24] if isinstance(body.get("detected_models"), list) else [],
                         wifi_static_count=int(body["wifi_static_count"]) if "wifi_static_count" in body and body["wifi_static_count"] is not None else None,
                         wifi_moving_count=int(body["wifi_moving_count"]) if "wifi_moving_count" in body and body["wifi_moving_count"] is not None else None,
                         cell_rsrp_dbm=int(body.get("cell_rsrp_dbm") or -85),

@@ -39,6 +39,10 @@ export interface VerifiedHeatmapZone extends CrowdMetrics {
   wifi_p2p_count?: number;
   wifi_lan_count?: number;
   wifi_ap_count?: number;
+  filtered_routers_count?: number;
+  filtered_audio_count?: number;
+  filtered_other_count?: number;
+  detected_models?: string[];
   cell_rsrp_dbm?: number;
   cell_rsrq_db?: number;
   cell_load_percent?: number;

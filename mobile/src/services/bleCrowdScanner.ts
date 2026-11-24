@@ -10,6 +10,10 @@ export interface BleScanTelemetry {
   wifiP2pCount: number;
   wifiLanPeerCount: number;
   wifiFixedApCount: number;
+  filteredRoutersCount: number;
+  filteredAudioCount: number;
+  filteredOtherCount: number;
+  detectedModels: string[];
   wifiStaticCount: number;
   wifiMovingCount: number;
   cellRsrpDbm: number;
@@ -41,6 +45,10 @@ let lastKnownSnapshot: BleScanTelemetry = {
   wifiP2pCount: 0,
   wifiLanPeerCount: 0,
   wifiFixedApCount: 0,
+  filteredRoutersCount: 0,
+  filteredAudioCount: 0,
+  filteredOtherCount: 0,
+  detectedModels: [],
   wifiStaticCount: 0,
   wifiMovingCount: 0,
   cellRsrpDbm: -85,
@@ -144,6 +152,12 @@ export async function scanNearbyBleCrowdAsync(
             wifiP2pCount: Math.max(0, snap.wifiP2pCount || 0),
             wifiLanPeerCount: Math.max(0, snap.wifiLanPeerCount || 0),
             wifiFixedApCount: Math.max(0, snap.wifiFixedApCount || 0),
+            filteredRoutersCount: Math.max(0, snap.filteredRoutersCount ?? snap.wifiFixedApCount ?? 0),
+            filteredAudioCount: Math.max(0, snap.filteredAudioCount || 0),
+            filteredOtherCount: Math.max(0, snap.filteredOtherCount || 0),
+            detectedModels: Array.isArray(snap.detectedModels)
+              ? snap.detectedModels.slice(0, 24).map((x: unknown) => String(x))
+              : [],
             wifiStaticCount: Math.max(0, snap.wifiStaticCount || 0),
             wifiMovingCount: Math.max(0, snap.wifiMovingCount || 0),
             cellRsrpDbm:

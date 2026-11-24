@@ -496,35 +496,44 @@ function BigWarnAppContent() {
         // Silently query hardware Multi-Radio scanner (BLE + Wi-Fi + 4G) — only displayed when user taps a heatmap HUD
         const bleScan = await scanNearbyBleCrowdAsync(gpsSpeedKmhRef.current);
         if (hasRealGpsFixRef.current && Platform.OS !== "web") {
-          const pingParams = new URLSearchParams({
+          const pingBody = {
             device_id: deviceIdRef.current,
             device_label: `BigWarn ${Platform.OS.toUpperCase()} (${deviceIdRef.current.slice(-4)})`,
-            lat: String(activeLat),
-            lon: String(activeLon),
-            speed_kmh: String(gpsSpeedKmhRef.current),
-            accuracy_m: String(gpsAccuracyMRef.current),
-            ble_count: String(bleScan.bleCount),
-            ble_static_count: String(bleScan.bleStaticCount),
-            ble_moving_count: String(bleScan.bleMovingCount),
-            bt_classic_count: String(bleScan.btClassicCount),
-            wifi_mobile_count: String(bleScan.wifiMobileCount),
-            wifi_hotspot_count: String(bleScan.wifiHotspotCount),
-            wifi_p2p_count: String(bleScan.wifiP2pCount),
-            wifi_lan_count: String(bleScan.wifiLanPeerCount),
-            wifi_ap_count: String(bleScan.wifiFixedApCount),
-            wifi_static_count: String(bleScan.wifiStaticCount),
-            wifi_moving_count: String(bleScan.wifiMovingCount),
-            cell_rsrp_dbm: String(bleScan.cellRsrpDbm),
-            cell_rsrq_db: String(bleScan.cellRsrqDb),
-            cell_load_percent: String(bleScan.cellLoadPercent),
-            cell_tower_count: String(bleScan.cellTowerCount),
-            cell_network_type: String(bleScan.cellNetworkType),
-            avg_rssi_dbm: String(bleScan.avgRssiDbm),
-            scan_radius_m: String(bleScan.scanRadiusM),
+            lat: activeLat,
+            lon: activeLon,
+            speed_kmh: gpsSpeedKmhRef.current,
+            accuracy_m: gpsAccuracyMRef.current,
+            ble_count: bleScan.bleCount,
+            ble_static_count: bleScan.bleStaticCount,
+            ble_moving_count: bleScan.bleMovingCount,
+            bt_classic_count: bleScan.btClassicCount,
+            wifi_mobile_count: bleScan.wifiMobileCount,
+            wifi_hotspot_count: bleScan.wifiHotspotCount,
+            wifi_p2p_count: bleScan.wifiP2pCount,
+            wifi_lan_count: bleScan.wifiLanPeerCount,
+            wifi_ap_count: bleScan.wifiFixedApCount,
+            filtered_routers_count: bleScan.filteredRoutersCount,
+            filtered_audio_count: bleScan.filteredAudioCount,
+            filtered_other_count: bleScan.filteredOtherCount,
+            detected_models: bleScan.detectedModels,
+            wifi_static_count: bleScan.wifiStaticCount,
+            wifi_moving_count: bleScan.wifiMovingCount,
+            cell_rsrp_dbm: bleScan.cellRsrpDbm,
+            cell_rsrq_db: bleScan.cellRsrqDb,
+            cell_load_percent: bleScan.cellLoadPercent,
+            cell_tower_count: bleScan.cellTowerCount,
+            cell_network_type: bleScan.cellNetworkType,
+            avg_rssi_dbm: bleScan.avgRssiDbm,
+            scan_radius_m: bleScan.scanRadiusM,
             network_type: bleScan.scannerMode,
-          });
-          fetch(`${API_BASE_URL}/api/v1/crowd/ping?${pingParams.toString()}`, {
-            headers,
+          };
+          fetch(`${API_BASE_URL}/api/v1/crowd/ping`, {
+            method: "POST",
+            headers: {
+              ...headers,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(pingBody),
           }).catch(() => {});
         }
 

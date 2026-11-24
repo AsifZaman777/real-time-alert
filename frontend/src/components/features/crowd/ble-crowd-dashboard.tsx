@@ -22,6 +22,10 @@ export interface BleScannerRow {
   wifi_p2p_count?: number;
   wifi_lan_count?: number;
   wifi_ap_count?: number;
+  filtered_routers_count?: number;
+  filtered_audio_count?: number;
+  filtered_other_count?: number;
+  detected_models?: string[];
   cell_rsrp_dbm?: number;
   cell_rsrq_db?: number;
   cell_load_percent?: number;
@@ -54,6 +58,10 @@ export interface BleHeatmapZone {
   ble_peers_count: number;
   wifi_mobile_peers_count?: number;
   wifi_fixed_ap_count?: number;
+  filtered_routers_count?: number;
+  filtered_audio_count?: number;
+  filtered_other_count?: number;
+  detected_models?: string[];
   cell_load_percent?: number;
   cell_rsrq_db?: number;
   cell_rsrp_dbm?: number;
@@ -571,11 +579,37 @@ export function BleCrowdDashboard() {
                   <div className="flex flex-wrap items-center justify-between text-[11px] text-[#9a988f] font-mono pt-1">
                     <span>Opened App User: {sc.device_label}</span>
                     <span>
-                      +{sc.ble_count} BLE • +{sc.wifi_mobile_count || 0} Wi-Fi (BT Off)
+                      +{sc.ble_count} BLE • +{sc.wifi_mobile_count || 0} Wi-Fi
                     </span>
                     <span>4G Load: {sc.cell_load_percent || 0}%</span>
                     <span>Speed: {sc.speed_kmh} km/h</span>
                   </div>
+                  {((sc.filtered_routers_count || sc.filtered_audio_count || sc.filtered_other_count) ||
+                    (sc.detected_models && sc.detected_models.length > 0)) && (
+                    <div className="pt-1 border-t border-[#2e312e]/70 space-y-1">
+                      <div className="text-[10px] font-mono text-[#9a988f]">
+                        Filtered Out: {sc.filtered_routers_count || 0} Router(s) •{" "}
+                        {sc.filtered_audio_count || 0} Earbud/Watch •{" "}
+                        {sc.filtered_other_count || 0} TV/PC
+                      </div>
+                      {sc.detected_models && sc.detected_models.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {sc.detected_models.slice(0, 6).map((m, i) => (
+                            <span
+                              key={i}
+                              className={`rounded px-1.5 py-0.5 text-[9.5px] font-mono ${
+                                m.includes("Filtered")
+                                  ? "bg-[#262926] text-[#9a988f]"
+                                  : "bg-sky-950/60 text-sky-300 border border-sky-800/50"
+                              }`}
+                            >
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -646,14 +680,40 @@ export function BleCrowdDashboard() {
 
                       <td className="p-2.5 text-right font-mono">
                         <div className="font-bold text-sky-300">
-                          +{sc.ble_count} BLE
+                          +{sc.ble_count} BLE (Phones)
                         </div>
                         <div className="text-[10.5px] font-semibold text-amber-300">
                           +{sc.wifi_mobile_count || 0} Wi-Fi
                           {(sc.wifi_p2p_count || sc.wifi_lan_count || sc.wifi_hotspot_count)
                             ? ` (P2P:${sc.wifi_p2p_count || 0} LAN:${sc.wifi_lan_count || 0} HS:${sc.wifi_hotspot_count || 0})`
-                            : " (BT Off)"}
+                            : ""}
                         </div>
+                        {Boolean(
+                          (sc.filtered_routers_count || 0) +
+                            (sc.filtered_audio_count || 0) +
+                            (sc.filtered_other_count || 0)
+                        ) && (
+                          <div className="text-[9.5px] text-[#9a988f] mt-0.5">
+                            Filtered: {sc.filtered_routers_count || 0}R • {sc.filtered_audio_count || 0}A • {sc.filtered_other_count || 0}T
+                          </div>
+                        )}
+                        {sc.detected_models && sc.detected_models.length > 0 && (
+                          <div className="flex flex-wrap justify-end gap-1 mt-1 max-w-[230px] ml-auto">
+                            {sc.detected_models.slice(0, 4).map((m, idx) => (
+                              <span
+                                key={idx}
+                                className={`rounded px-1 py-0.5 text-[9px] truncate max-w-[110px] ${
+                                  m.includes("Filtered")
+                                    ? "bg-[#262926] text-[#9a988f]"
+                                    : "bg-sky-950/60 text-sky-300"
+                                }`}
+                                title={m}
+                              >
+                                {m}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
 
                       <td className="p-2.5 min-w-[170px]">
