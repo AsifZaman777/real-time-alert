@@ -5,6 +5,7 @@ import {
   Coordinates,
   DangerRoadSegment,
   GoldAlert,
+  VerifiedHeatmapZone,
 } from "../types/alert";
 import { formatEventLabel, formatNewsTimestamp } from "../services/notifications";
 
@@ -26,6 +27,7 @@ interface OsmMapWebViewProps {
   destination: Coordinates;
   todoText: string;
   alerts: GoldAlert[];
+  bleHeatmaps?: VerifiedHeatmapZone[];
   routeAlertIds: Set<string>;
   routeGeometry?: RouteRoadGeometry | null;
   focusCoords?: { lat: number; lon: number; zoom?: number; nonce: number } | null;
@@ -40,6 +42,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   destination,
   todoText,
   alerts,
+  bleHeatmaps = [],
   routeAlertIds,
   routeGeometry,
   focusCoords,
@@ -129,6 +132,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <style>
     html, body, #map {
       margin: 0; padding: 0; width: 100%; height: 100%;
@@ -413,10 +417,99 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     .leaflet-danger-road {
       animation: dangerPulse 1.5s ease-in-out infinite;
     }
+
+    /* Clickable BLE Crowd Heatmap HUD */
+    #crowd-hud {
+      position: fixed;
+      left: 50%;
+      bottom: 88px;
+      transform: translateX(-50%);
+      width: min(320px, calc(100vw - 24px));
+      background: rgba(255, 255, 255, 0.97);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1.5px solid #CBD5E1;
+      border-radius: 18px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+      z-index: 1200;
+      display: none;
+    }
+    .hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .hud-area {
+      color: #0F172A;
+      font-size: 14.5px;
+      font-weight: 800;
+    }
+    .hud-intensity-pill {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2.5px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .hud-pattern-row {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #0F172A;
+      background: #F1F5F9;
+      border-radius: 8px;
+      padding: 5px 8px;
+      margin-bottom: 8px;
+    }
+    .hud-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .hud-stat-box {
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .hud-stat-val {
+      font-size: 13.5px;
+      font-weight: 800;
+      color: #0F172A;
+    }
+    .hud-stat-lbl {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #64748B;
+      margin-top: 1px;
+    }
+    .hud-bar-track {
+      height: 7px;
+      background: #22C55E;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .hud-bar-stuck {
+      height: 100%;
+      background: #EF4444;
+    }
+    .hud-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #475569;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="crowd-hud"></div>
   <script>
     const map = L.map('map', {
       zoomControl: false,
@@ -435,6 +528,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
     const routeLayerGroup = L.featureGroup().addTo(map);
     const dangerRoadLayerGroup = L.featureGroup().addTo(map);
+    const heatmapLayerGroup = L.featureGroup().addTo(map);
     const alertMarkerLayerGroup = L.featureGroup().addTo(map);
 
     let userMarker = null;
@@ -445,6 +539,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     let lastDestSig = '';
     let lastRouteSig = '';
     let lastMarkersSig = '';
+    let lastBleSig = '';
 
     function sendBridgeMessage(obj) {
       const str = JSON.stringify(obj);
@@ -504,8 +599,63 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
     }, { passive: true });
 
-    // 3. Single tap on map drops destination pin when Pin mode is active
+    // 3. Single tap on map closes BLE HUD or drops destination pin when Pin mode is active
+    const hudEl = document.getElementById('crowd-hud');
+    function hideCrowdHud() {
+      if (hudEl) hudEl.style.display = 'none';
+    }
+
+    function showBleCrowdHud(z) {
+      if (!hudEl || !z) return;
+      const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
+      const pillBg = isStatic ? '#450A0A' : '#FEF3C7';
+      const pillCol = isStatic ? '#FECACA' : '#B45309';
+      const mobilityBadge = isStatic ? '🔴 STATIC CROWD' : (z.mobility_state === 'SLOW_MOVING' ? '🟡 SLOW CROWD' : '🟢 MOVING FLOW');
+      const totalCrowd = z.total_mobiles || 1;
+      const staticCount = z.mobiles_stuck || 0;
+      const movingCount = z.mobiles_moving || 0;
+      const staticPct = z.stuck_percent || 0;
+      const movingPct = z.moving_percent || (100 - staticPct);
+      const patternText = z.crowd_pattern || (isStatic ? 'High-Density Static Gathering' : 'Moving Crowd Flow');
+      const scannerCount = z.scanner_nodes_count || 1;
+      const blePeers = z.ble_peers_count || Math.max(0, totalCrowd - scannerCount);
+
+      hudEl.innerHTML = '<div class="hud-top">'
+        +   '<span class="hud-area">📡 ' + escapeHtml(z.area) + '</span>'
+        +   '<span class="hud-intensity-pill" style="background:' + pillBg + ';color:' + pillCol + ';">' + mobilityBadge + '</span>'
+        + '</div>'
+        + '<div class="hud-pattern-row">'
+        +   '<div>' + escapeHtml(patternText) + '</div>'
+        +   '<div style="font-size:9.5px;color:#475569;margin-top:2px;">'
+        +     scannerCount + ' Open App Scanner(s) • ' + blePeers + ' BLE Peers (' + (z.avg_rssi_dbm || -64) + ' dBm)'
+        +   '</div>'
+        + '</div>'
+        + '<div class="hud-grid">'
+        +   '<div class="hud-stat-box">'
+        +     '<div class="hud-stat-val">' + totalCrowd + '</div>'
+        +     '<div class="hud-stat-lbl">BLE Crowd</div>'
+        +   '</div>'
+        +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
+        +     '<div class="hud-stat-val" style="color:#DC2626;">' + staticCount + ' (' + staticPct + '%)</div>'
+        +     '<div class="hud-stat-lbl" style="color:#B91C1C;">Static / Stuck</div>'
+        +   '</div>'
+        +   '<div class="hud-stat-box" style="background:#F0FDF4;border-color:#BBF7D0;">'
+        +     '<div class="hud-stat-val" style="color:#15803D;">' + movingCount + ' (' + movingPct + '%)</div>'
+        +     '<div class="hud-stat-lbl" style="color:#166534;">Moving</div>'
+        +   '</div>'
+        + '</div>'
+        + '<div class="hud-bar-track">'
+        +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, staticPct)) + '%;background:' + (isStatic ? '#7F1D1D' : '#EF4444') + ';"></div>'
+        + '</div>'
+        + '<div class="hud-footer">'
+        +   '<span>Avg GPS Speed: ' + (z.avg_speed_kmh ?? 0) + ' km/h</span>'
+        +   '<span style="color:#0284C7;">40m BLE Radius</span>'
+        + '</div>';
+      hudEl.style.display = 'block';
+    }
+
     map.on('click', function(e) {
+      hideCrowdHud();
       if (currentPinMode) {
         triggerDropPin(e.latlng.lat, e.latlng.lng);
       }
@@ -839,7 +989,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     }
 
     window.updateMapState = function(payload) {
-      const { currentLocation, destination, todoText, markers, routeGeometry, pinMode } = payload;
+      const { currentLocation, destination, todoText, markers, bleHeatmaps, routeGeometry, pinMode } = payload;
       currentPinMode = Boolean(pinMode);
 
       // 1. User Blue Pulsing Dot (only update if coordinates changed)
@@ -965,7 +1115,73 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 4. Render Verified Newspaper Disruption Area Badges (zero falsy phone numbers or heatmaps)
+      // 4. Render Live BLE Proximity Heatmaps Around Active App Scanners
+      const bleList = bleHeatmaps || [];
+      const bleSig = bleList.map(function(b) {
+        return b.area + ':' + (b.total_mobiles || 0) + ':' + (b.stuck_percent || 0) + ':' + (b.mobility_state || '');
+      }).join('|');
+      if (bleSig !== lastBleSig) {
+        lastBleSig = bleSig;
+        heatmapLayerGroup.clearLayers();
+        const heatPoints = [];
+
+        bleList.forEach(function(z) {
+          const w = z.heat_intensity || 0.65;
+          const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
+          const outerColor = isStatic ? '#7F1D1D' : '#F59E0B';
+          const coreColor = isStatic ? '#3B0707' : '#D97706';
+
+          heatPoints.push([z.lat, z.lon, w]);
+          for (let i = 0; i < 8; i++) {
+            const ang = (2 * Math.PI * i) / 8;
+            const r = 0.0018 + (i % 2) * 0.0011;
+            heatPoints.push([
+              z.lat + Math.sin(ang) * r,
+              z.lon + Math.cos(ang) * r,
+              Math.max(0.3, w * 0.82)
+            ]);
+          }
+
+          L.circle([z.lat, z.lon], {
+            radius: isStatic ? 640 : 480,
+            stroke: false,
+            fillColor: outerColor,
+            fillOpacity: isStatic ? 0.26 : 0.18,
+            interactive: false
+          }).addTo(heatmapLayerGroup);
+
+          const clickZone = L.circle([z.lat, z.lon], {
+            radius: isStatic ? 420 : 340,
+            color: coreColor,
+            weight: 1.6,
+            opacity: 0.72,
+            fillColor: coreColor,
+            fillOpacity: isStatic ? 0.40 : 0.25,
+            interactive: true
+          }).addTo(heatmapLayerGroup);
+
+          clickZone.on('click', function(ev) {
+            L.DomEvent.stopPropagation(ev);
+            showBleCrowdHud(z);
+          });
+        });
+
+        if (heatPoints.length > 0 && typeof L.heatLayer === 'function') {
+          L.heatLayer(heatPoints, {
+            radius: 30,
+            blur: 20,
+            maxZoom: 15,
+            gradient: {
+              0.35: '#F59E0B',
+              0.65: '#DC2626',
+              0.85: '#991B1B',
+              1.00: '#3B0707'
+            }
+          }).addTo(heatmapLayerGroup);
+        }
+      }
+
+      // 5. Render Verified Newspaper Disruption Area Badges
       const fullMarkersSig = markersSig + '|da:' + Object.keys(activeDangerAreas).sort().join(',');
       if (fullMarkersSig !== lastMarkersSig) {
         lastMarkersSig = fullMarkersSig;
@@ -1034,6 +1250,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       destination,
       todoText,
       markers: areaMarkers,
+      bleHeatmaps,
       routeGeometry: routeGeometry || null,
       pinMode,
     });
@@ -1042,7 +1259,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
 
   useEffect(() => {
     pushStateToWebView();
-  }, [currentLocation, destination, todoText, areaMarkers, routeGeometry, pinMode]);
+  }, [currentLocation, destination, todoText, areaMarkers, bleHeatmaps, routeGeometry, pinMode]);
 
   useEffect(() => {
     if (focusCoords) {

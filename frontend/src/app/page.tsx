@@ -6,8 +6,9 @@ import type { DebugPayload, LakehouseSnapshot, NewsArticle } from "@/types/news"
 import { MedallionExplorer } from "@/components/features/lakehouse/medallion-explorer";
 import { MobileEdgeSimulator } from "@/components/features/edge-pwa/mobile-edge-simulator";
 import { SiteMatrixAndLogs } from "@/components/features/debug/site-matrix-and-logs";
+import { BleCrowdDashboard } from "@/components/features/crowd/ble-crowd-dashboard";
 
-type ActiveTab = "stream" | "lakehouse" | "matrix" | "edge";
+type ActiveTab = "stream" | "lakehouse" | "crowd" | "matrix" | "edge";
 type SortOption =
   | "updated"
   | "published"
@@ -385,6 +386,16 @@ export default function HomePage() {
                 }`}
               >
                 🏛️ Lakehouse (ELT)
+              </button>
+              <button
+                onClick={() => setActiveTab("crowd")}
+                className={`border-0 text-[12.5px] font-semibold px-2.5 py-1 rounded-[6px] cursor-pointer transition-colors ${
+                  activeTab === "crowd"
+                    ? "bg-[#1c1e1c] text-[#4fc59a] shadow-sm"
+                    : "bg-transparent text-[#9a988f] hover:text-[#ecebe6]"
+                }`}
+              >
+                📡 Crowd Sourcing (BLE)
               </button>
               <button
                 onClick={() => setActiveTab("matrix")}
@@ -826,6 +837,8 @@ export default function HomePage() {
           />
         )}
 
+        {activeTab === "crowd" && <BleCrowdDashboard />}
+
         {activeTab === "matrix" && debugData && (
           <SiteMatrixAndLogs
             items={items}
@@ -842,10 +855,10 @@ export default function HomePage() {
       </main>
 
       {/* Fixed Bottom Navigation Bar for Mobile Phones */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#181a18]/95 backdrop-blur border-t border-[#2e312e] px-2 py-1.5 grid grid-cols-4 gap-1 shadow-[0_-4px_12px_rgba(0,0,0,0.4)]">
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#181a18]/95 backdrop-blur border-t border-[#2e312e] px-2 py-1.5 grid grid-cols-5 gap-1 shadow-[0_-4px_12px_rgba(0,0,0,0.4)]">
         <button
           onClick={() => setActiveTab("stream")}
-          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[10.5px] font-semibold cursor-pointer ${
             activeTab === "stream"
               ? "bg-[#262926] text-[#4fc59a]"
               : "bg-transparent text-[#9a988f]"
@@ -856,18 +869,29 @@ export default function HomePage() {
         </button>
         <button
           onClick={() => setActiveTab("lakehouse")}
-          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[10.5px] font-semibold cursor-pointer ${
             activeTab === "lakehouse"
               ? "bg-[#262926] text-[#4fc59a]"
               : "bg-transparent text-[#9a988f]"
           }`}
         >
           <span className="text-[14px]">🏛️</span>
-          <span>Lakehouse</span>
+          <span>ELT</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("crowd")}
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[10.5px] font-semibold cursor-pointer ${
+            activeTab === "crowd"
+              ? "bg-[#262926] text-[#4fc59a]"
+              : "bg-transparent text-[#9a988f]"
+          }`}
+        >
+          <span className="text-[14px]">📡</span>
+          <span>BLE Crowd</span>
         </button>
         <button
           onClick={() => setActiveTab("matrix")}
-          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[10.5px] font-semibold cursor-pointer ${
             activeTab === "matrix"
               ? "bg-[#262926] text-[#4fc59a]"
               : "bg-transparent text-[#9a988f]"
@@ -878,7 +902,7 @@ export default function HomePage() {
         </button>
         <button
           onClick={() => setActiveTab("edge")}
-          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[11px] font-semibold cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 rounded-[8px] border-0 text-[10.5px] font-semibold cursor-pointer ${
             activeTab === "edge"
               ? "bg-[#262926] text-[#4fc59a]"
               : "bg-transparent text-[#9a988f]"

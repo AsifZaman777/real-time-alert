@@ -160,33 +160,37 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
             elif path in ("/api/stream/live", "/api/v1/stream/live"):
                 self._handle_public_feed(q, default_format="sse", default_layer="silver")
             elif path in ("/api/crowd/heatmap", "/api/v1/crowd/heatmap"):
-                snap = service.get_lakehouse_elt("latest")
-                gold_alerts = snap.get("gold_alerts", [])
-                heatmaps = crowd_service.get_all_bangladesh_heatmaps(gold_alerts=gold_alerts)
-                self._json({
-                    "status": "ok",
-                    "verified_only": True,
-                    "total_verified_zones": len(heatmaps),
-                    "heatmaps": heatmaps,
-                })
+                self._json(crowd_service.get_live_crowd_snapshot())
             elif path in ("/api/crowd/ping", "/api/v1/crowd/ping"):
                 try:
                     device_id = (q.get("device_id") or [""])[0]
+                    device_label = (q.get("device_label") or [""])[0]
                     lat = float((q.get("lat") or ["0"])[0])
                     lon = float((q.get("lon") or ["0"])[0])
                     speed_kmh = float((q.get("speed_kmh") or ["0"])[0])
-                    accuracy_m = float((q.get("accuracy_m") or ["25"])[0])
-                    network_type = (q.get("network_type") or ["4G_LTE"])[0]
+                    accuracy_m = float((q.get("accuracy_m") or ["20"])[0])
+                    network_type = (q.get("network_type") or ["BLE_5.0 + 4G"])[0]
+                    ble_count = int((q.get("ble_count") or ["0"])[0])
+                    ble_static = int((q["ble_static_count"])[0]) if "ble_static_count" in q else None
+                    ble_moving = int((q["ble_moving_count"])[0]) if "ble_moving_count" in q else None
+                    avg_rssi_dbm = int((q.get("avg_rssi_dbm") or ["-65"])[0])
+                    scan_radius_m = int((q.get("scan_radius_m") or ["40"])[0])
                 except ValueError:
                     return self._json({"status": "rejected", "verified": False, "reason": "invalid_params"}, code=400)
                 self._json(
                     crowd_service.record_verified_ping(
                         device_id=device_id,
+                        device_label=device_label,
                         lat=lat,
                         lon=lon,
                         speed_kmh=speed_kmh,
                         accuracy_m=accuracy_m,
                         network_type=network_type,
+                        ble_count=ble_count,
+                        ble_static_count=ble_static,
+                        ble_moving_count=ble_moving,
+                        avg_rssi_dbm=avg_rssi_dbm,
+                        scan_radius_m=scan_radius_m,
                     )
                 )
             elif path in ("/api/crowd/report", "/api/v1/crowd/report"):
@@ -207,11 +211,17 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                     body = json.loads(self.rfile.read(length).decode("utf-8")) if length > 0 else {}
                     res = crowd_service.record_verified_ping(
                         device_id=str(body.get("device_id") or ""),
+                        device_label=str(body.get("device_label") or ""),
                         lat=float(body.get("lat") or 0.0),
                         lon=float(body.get("lon") or 0.0),
                         speed_kmh=float(body.get("speed_kmh") or 0.0),
-                        accuracy_m=float(body.get("accuracy_m") or 25.0),
-                        network_type=str(body.get("network_type") or "4G_LTE"),
+                        accuracy_m=float(body.get("accuracy_m") or 20.0),
+                        network_type=str(body.get("network_type") or "BLE_5.0 + 4G"),
+                        ble_count=int(body["ble_count"]) if "ble_count" in body and body["ble_count"] is not None else 0,
+                        ble_static_count=int(body["ble_static_count"]) if "ble_static_count" in body and body["ble_static_count"] is not None else None,
+                        ble_moving_count=int(body["ble_moving_count"]) if "ble_moving_count" in body and body["ble_moving_count"] is not None else None,
+                        avg_rssi_dbm=int(body.get("avg_rssi_dbm") or -65),
+                        scan_radius_m=int(body.get("scan_radius_m") or 40),
                     )
                     return self._json(res)
                 except (ValueError, KeyError):

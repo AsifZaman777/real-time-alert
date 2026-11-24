@@ -28,8 +28,15 @@ export interface CrowdMetrics {
 
 export interface VerifiedHeatmapZone extends CrowdMetrics {
   area: string;
+  city?: string;
   lat: number;
   lon: number;
+  scanner_nodes_count?: number;
+  ble_peers_count?: number;
+  mobility_state?: "STATIC" | "SLOW_MOVING" | "MOVING" | string;
+  crowd_pattern?: string;
+  avg_rssi_dbm?: number;
+  density_per_100m2?: number;
   cluster_count?: number;
   sources?: string[];
   has_news?: boolean;

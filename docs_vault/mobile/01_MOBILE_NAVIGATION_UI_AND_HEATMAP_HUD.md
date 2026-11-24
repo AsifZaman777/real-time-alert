@@ -30,13 +30,16 @@ This document details the architecture of the **BigWarn Mobile Edge App** (`real
 
 ---
 
-## 3. Verified Newspaper Area Badges & Detail Drawer (Zero Falsy Phone Numbers)
+## 3. Automatic BLE Proximity Crowd-Sourcing & Clickable Heatmap HUD
 
-1. **Strictly Verified 45-Portal Newspaper Data**:
-   - All synthetic or estimated phone/device counts and crowd heatmaps have been removed.
-   - Map markers (`area-badge`) display only real, verified disruption clusters scraped from the 45 Bangladesh news portals (showing the canonical area name and verified cluster count, e.g., `Motijheel 2`).
-2. **Tapping an Area Badge**:
-   - Tapping any area badge on the map opens [AreaDetailModal.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/AreaDetailModal.tsx), displaying the corroborating newspaper sources, veracity percentage (`VeracityMeter`), and clickable newest-first news articles.
+1. **Automatic BLE Proximity Scanning When App Is Open ([src/services/bleCrowdScanner.ts](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/services/bleCrowdScanner.ts))**:
+   - When a user opens the BigWarn app, their phone automatically scans nearby Bluetooth Low Energy (BLE) advertising packets within a `~40m` radius and reads the phone's hardware GPS velocity (`speed_kmh`).
+   - It transmits the accumulated BLE peer count (`ble_count`), static vs. moving BLE split (`ble_static_count`, `ble_moving_count`), average RSSI (`avg_rssi_dbm`), and GPS velocity to `/api/v1/crowd/ping`.
+2. **Server Aggregation & Static vs. Moving Classification ([backend/app/services/crowd_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/crowd_service.py))**:
+   - The server aggregates all active open-app BLE scanners, classifies whether the crowd around each user is **STATIC (`< 3.5 km/h` or `>= 68%` static BLE peers)**, **SLOW_MOVING**, or **MOVING**, and identifies the **Crowd Pattern** (e.g., `"Dense Static Gathering / Standstill Blockade"`, `"High-Density Static Crowd / Bottleneck"`, `"Normal Free-Flowing Movement"`).
+3. **Clickable BLE Heatmap HUD ([src/components/OsmMapWebView.tsx](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/src/components/OsmMapWebView.tsx))**:
+   - Renders multi-intensity heatmaps on the map (Dark Crimson / Maroon `#7F1D1D` $\rightarrow$ `#3B0707` for **STATIC** crowds; Amber `#F59E0B` for **MOVING** crowds).
+   - Clicking any heatmap opens `#crowd-hud` displaying the Location, Mobility State badge (`🔴 STATIC CROWD` / `🟢 MOVING FLOW`), Crowd Pattern, Open App Scanner count, Total BLE Crowd, Static vs. Moving counts (`%`), and Avg GPS Speed (`km/h`).
 
 ---
 

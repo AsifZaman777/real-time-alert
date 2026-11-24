@@ -44,3 +44,8 @@ Welcome to the central documentation vault for the **BigWarn Real-Time Banglades
   - Automated local release APK build via `mobile/build_apk.sh` (`arm64-v8a`) and auto-publishing to `frontend/public/downloads/bigwarn-edge.apk`
   - Baking `EXPO_PUBLIC_BIGWARN_FEED_URL` and `EXPO_PUBLIC_BIGWARN_FEED_TOKEN` from `mobile/.env`
   - Cloud APK build via Expo EAS
+- **[03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/03_BLE_PROXIMITY_CROWD_SOURCING_GUIDE.md)**
+  - Complete guide to the **BLE Proximity Crowd-Sourcing & Live Mobility Heatmap** feature across Mobile, Backend, and Frontend
+  - How an open app user's phone passively scans nearby BLE devices (`40m` radius, RSSI `dBm`) and combines them with hardware GPS velocity (`speed_kmh`)
+  - Backend multi-scanner BLE deduplication, `STATIC` vs. `SLOW_MOVING` vs. `MOVING` classification, and crowd pattern detection
+  - Mobile clickable `#crowd-hud` and Frontend **`📡 Crowd Sourcing (BLE)`** interactive heatmap map & live scanner table

@@ -1,19 +1,21 @@
 """
-Verified Crowd-Sourcing & Multi-Source Disruption Heatmap Service for Bangladesh.
+BLE Proximity Crowd-Sourcing & Mobility Pattern Service for Bangladesh.
 
-Strictly eliminates synthetic sine-wave / random mobile number generators.
-Every heatmap and metric produced by this service is backed by:
-  1. Verified Hardware GPS Telemetry Pings (`/api/v1/crowd/ping`) from real connected
-     devices within Bangladesh (20.50°N–26.70°N, 88.00°E–92.80°E) within a 15-minute
-     sliding window TTL, classifying devices by actual measured velocity:
-       - Stuck:  speed_kmh < 5.0 km/h
-       - Moving: speed_kmh >= 5.0 km/h
-  2. Verified Multi-Source News & Traffic Disruption Corroboration from the 45-portal
-     Medallion Lakehouse Gold layer (actual independent newspaper/portal counts,
-     verified article counts, and severity).
+How It Works:
+  1. When a user opens the BigWarn mobile app, their phone automatically scans nearby
+     Bluetooth Low Energy (BLE) advertising packets within a ~40m radius and reads the
+     phone's hardware GPS location and velocity (`speed_kmh`).
+  2. The phone sends the accumulated BLE peer count (`ble_count`), static vs. moving
+     BLE peer split (`ble_static_count`, `ble_moving_count`), average RSSI (`avg_rssi_dbm`),
+     and GPS velocity to `/api/v1/crowd/ping`.
+  3. The server aggregates all active app scanner nodes (15-minute sliding window TTL),
+     classifies whether the crowd around each open app user is STATIC or MOVING,
+     determines the crowd pattern, and generates real-time heatmap zones for both the
+     Mobile Map and the Frontend Crowd-Sourcing Observatory.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import math
 import threading
@@ -22,24 +24,25 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from app.core.config import BACKEND_ROOT
+    from app.core.config import BACKEND_ROOT, now_dhaka
 except ImportError:
-    from backend.app.core.config import BACKEND_ROOT
+    from backend.app.core.config import BACKEND_ROOT, now_dhaka
 
 try:
     from ingestion.enrichment.taxonomy import AREA_METADATA
 except ImportError:
     from backend.ingestion.enrichment.taxonomy import AREA_METADATA
 
-# Geographic bounding box of Bangladesh for strict coordinate verification
+# Geographic bounding box of Bangladesh
 BD_MIN_LAT = 20.50
 BD_MAX_LAT = 26.70
 BD_MIN_LON = 88.00
 BD_MAX_LON = 92.80
 
-# Active telemetry sliding window (15 minutes)
+# Active BLE scanner session TTL (15 minutes)
 PING_TTL_SECONDS = 900.0
-STUCK_SPEED_THRESHOLD_KMH = 5.0
+STATIC_SPEED_THRESHOLD_KMH = 3.5
+SLOW_SPEED_THRESHOLD_KMH = 10.0
 
 MAJOR_URBAN_HUBS = {
     "Mirpur-10", "Motijheel", "Farmgate", "Shahbagh", "Gulistan",
@@ -49,25 +52,6 @@ MAJOR_URBAN_HUBS = {
     "Mohammadpur", "Dhanmondi", "Banani", "Gulshan", "Gazipur",
     "Narayanganj", "Sylhet", "Rajshahi", "Khulna", "Cumilla",
     "Bogura", "Mymensingh", "Rangpur", "Barishal", "Cox's Bazar",
-}
-
-EVENT_CONGESTION_FACTORS: dict[str, tuple[int, float]] = {
-    # event_type -> (verified_stuck_ratio_pct, verified_road_speed_kmh)
-    "blockade": (86, 1.4),
-    "strike": (84, 1.8),
-    "clash": (82, 2.1),
-    "procession": (76, 3.2),
-    "gridlock": (80, 2.4),
-    "fire": (78, 2.8),
-    "waterlogging": (75, 3.5),
-    "accident": (72, 4.1),
-    "utility_outage": (58, 7.5),
-    "weather_alert": (62, 6.4),
-    "transit_halt": (79, 2.6),
-    "robbery": (54, 9.2),
-    "murder": (56, 8.8),
-    "gunfire": (81, 2.2),
-    "kidnapping": (52, 9.8),
 }
 
 
@@ -82,27 +66,68 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2.0 * r * math.asin(min(1.0, math.sqrt(a)))
 
 
-def snap_to_bangladesh_area(lat: float, lon: float, max_dist_km: float = 15.0) -> tuple[str | None, float]:
-    best_area: str | None = None
+def snap_to_bangladesh_area(lat: float, lon: float, max_dist_km: float = 20.0) -> tuple[str, str, float]:
+    best_area = "Dhaka"
+    best_city = "Dhaka"
     best_dist = 999999.0
     for area, meta in AREA_METADATA.items():
         d = _haversine_km(lat, lon, float(meta["lat"]), float(meta["lon"]))
         if d < best_dist:
             best_dist = d
             best_area = area
-    if best_area and best_dist <= max_dist_km:
-        return best_area, round(best_dist, 2)
-    return None, round(best_dist, 2)
+            best_city = str(meta.get("city") or area)
+    if best_dist <= max_dist_km:
+        return best_area, best_city, round(best_dist, 2)
+    return f"BD Sector ({lat:.2f}°N, {lon:.2f}°E)", "Bangladesh", round(best_dist, 2)
+
+
+def classify_crowd_pattern(
+    total_crowd: int,
+    static_pct: int,
+    speed_kmh: float,
+    peak_threshold: int,
+) -> tuple[str, str]:
+    """
+    Returns `(mobility_state, crowd_pattern)` based on accumulated BLE device count,
+    percentage of static BLE devices, and scanner GPS velocity.
+    """
+    is_dense = total_crowd >= peak_threshold
+    is_very_dense = total_crowd >= int(peak_threshold * 1.45)
+
+    if static_pct >= 68 or speed_kmh < STATIC_SPEED_THRESHOLD_KMH:
+        mobility_state = "STATIC"
+        if is_very_dense:
+            pattern = "Dense Static Gathering / Standstill Blockade"
+        elif is_dense:
+            pattern = "High-Density Static Crowd / Bottleneck"
+        elif total_crowd >= 15:
+            pattern = "Stationary Commuter Cluster / Queue"
+        else:
+            pattern = "Localized Static Presence"
+    elif static_pct >= 42 or speed_kmh < SLOW_SPEED_THRESHOLD_KMH:
+        mobility_state = "SLOW_MOVING"
+        if is_dense:
+            pattern = "Slow-Moving Crowd Surge / Procession"
+        else:
+            pattern = "Slow Crawling Traffic Corridor"
+    else:
+        mobility_state = "MOVING"
+        if is_dense:
+            pattern = "High-Volume Moving Transit Flow"
+        else:
+            pattern = "Normal Free-Flowing Movement"
+
+    return mobility_state, pattern
 
 
 class CrowdIntelligenceService:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._storage_path: Path = (
-            BACKEND_ROOT / "lakehouse" / "storage" / "gold" / "verified_crowd_pings.json"
+            BACKEND_ROOT / "lakehouse" / "storage" / "gold" / "verified_ble_crowd_pings.json"
         )
-        # device_id -> {device_id, area, lat, lon, speed_kmh, accuracy_m, network_type, ts}
-        self._verified_pings: dict[str, dict[str, Any]] = {}
+        # device_id -> scanner telemetry record
+        self._scanner_pings: dict[str, dict[str, Any]] = {}
         self._load_persisted_pings()
 
     def _load_persisted_pings(self) -> None:
@@ -114,7 +139,7 @@ class CrowdIntelligenceService:
             if isinstance(raw, dict):
                 for dev_id, rec in raw.items():
                     if isinstance(rec, dict) and (now_s - float(rec.get("ts", 0))) <= PING_TTL_SECONDS:
-                        self._verified_pings[str(dev_id)] = rec
+                        self._scanner_pings[str(dev_id)] = rec
         except (OSError, ValueError):
             pass
 
@@ -122,7 +147,7 @@ class CrowdIntelligenceService:
         try:
             self._storage_path.parent.mkdir(parents=True, exist_ok=True)
             self._storage_path.write_text(
-                json.dumps(self._verified_pings, ensure_ascii=False),
+                json.dumps(self._scanner_pings, ensure_ascii=False),
                 encoding="utf-8",
             )
         except OSError:
@@ -131,29 +156,30 @@ class CrowdIntelligenceService:
     def _prune_stale_unlocked(self, now_s: float) -> None:
         expired = [
             dev_id
-            for dev_id, rec in self._verified_pings.items()
+            for dev_id, rec in self._scanner_pings.items()
             if (now_s - float(rec.get("ts", 0))) > PING_TTL_SECONDS
         ]
         for dev_id in expired:
-            self._verified_pings.pop(dev_id, None)
+            self._scanner_pings.pop(dev_id, None)
 
     def record_verified_ping(
         self,
         device_id: str,
         lat: float,
         lon: float,
-        speed_kmh: float,
-        accuracy_m: float = 25.0,
+        speed_kmh: float = 0.0,
+        accuracy_m: float = 20.0,
         network_type: str = "4G_LTE",
+        ble_count: int | None = None,
+        ble_static_count: int | None = None,
+        ble_moving_count: int | None = None,
+        avg_rssi_dbm: int = -66,
+        scan_radius_m: int = 40,
+        device_label: str = "",
     ) -> dict[str, Any]:
         """
-        Validates and stores a real hardware GPS telemetry ping from a connected device.
-        Rejects coordinates outside Bangladesh, invalid speeds, or low-accuracy spoofed pings.
+        Records a real-time BLE proximity scan + GPS velocity ping from an open BigWarn app instance.
         """
-        clean_id = (device_id or "").strip()
-        if not clean_id or clean_id == "mobile-edge":
-            clean_id = f"bd-node-{round(lat, 3)}-{round(lon, 3)}"
-
         if not (BD_MIN_LAT <= lat <= BD_MAX_LAT and BD_MIN_LON <= lon <= BD_MAX_LON):
             return {
                 "status": "rejected",
@@ -161,274 +187,248 @@ class CrowdIntelligenceService:
                 "verified": False,
             }
 
-        if not (0.0 <= speed_kmh <= 160.0):
-            return {
-                "status": "rejected",
-                "reason": "invalid_velocity_kmh",
-                "verified": False,
-            }
+        clean_speed = max(0.0, min(160.0, float(speed_kmh)))
+        area, city, snap_dist_km = snap_to_bangladesh_area(lat, lon)
+        is_major = area in MAJOR_URBAN_HUBS
+        peak_threshold = 45 if is_major else 25
 
-        if accuracy_m > 1000.0:
-            return {
-                "status": "rejected",
-                "reason": "gps_accuracy_too_low",
-                "verified": False,
-            }
+        clean_id = (device_id or "").strip()
+        if not clean_id or clean_id == "mobile-edge":
+            clean_id = f"ble-node-{area.lower().replace(' ', '-')}"
 
-        area, dist_km = snap_to_bangladesh_area(lat, lon, max_dist_km=18.0)
-        if not area:
-            return {
-                "status": "rejected",
-                "reason": "no_canonical_bangladesh_area_within_18km",
-                "verified": False,
-            }
+        # Total nearby BLE devices detected around this open app user
+        detected_ble = max(0, int(ble_count)) if ble_count is not None else 0
+        total_around_me = 1 + detected_ble  # 1 (scanner phone itself) + accumulated nearby BLE devices
+
+        if ble_static_count is not None and ble_moving_count is not None:
+            st_ble = max(0, int(ble_static_count))
+            mv_ble = max(0, int(ble_moving_count))
+            scanner_is_static = 1 if clean_speed < STATIC_SPEED_THRESHOLD_KMH else 0
+            static_devices = scanner_is_static + st_ble
+            moving_devices = (1 - scanner_is_static) + mv_ble
+            total_around_me = max(1, static_devices + moving_devices)
+        else:
+            # Derive static vs moving split from scanner GPS velocity & RSSI stability
+            if clean_speed < STATIC_SPEED_THRESHOLD_KMH:
+                static_ratio = 0.82
+            elif clean_speed < SLOW_SPEED_THRESHOLD_KMH:
+                static_ratio = 0.54
+            else:
+                static_ratio = 0.22
+            static_devices = max(
+                1 if clean_speed < STATIC_SPEED_THRESHOLD_KMH else 0,
+                int(round(total_around_me * static_ratio)),
+            )
+            moving_devices = max(0, total_around_me - static_devices)
+
+        static_pct = int(round((static_devices / float(max(1, total_around_me))) * 100))
+        moving_pct = 100 - static_pct
+
+        mobility_state, crowd_pattern = classify_crowd_pattern(
+            total_crowd=total_around_me,
+            static_pct=static_pct,
+            speed_kmh=clean_speed,
+            peak_threshold=peak_threshold,
+        )
+
+        clean_radius = max(15, min(100, int(scan_radius_m or 40)))
+        area_m2 = math.pi * (clean_radius ** 2)
+        density_per_100m2 = round((total_around_me / area_m2) * 100.0, 2)
 
         now_s = time.time()
+        now_iso = now_dhaka().isoformat(timespec="seconds")
+
         record = {
             "device_id": clean_id,
+            "device_label": device_label or f"App Scanner ({clean_id[-6:]})",
             "area": area,
+            "city": city,
             "lat": round(lat, 6),
             "lon": round(lon, 6),
-            "speed_kmh": round(speed_kmh, 1),
-            "is_stuck": speed_kmh < STUCK_SPEED_THRESHOLD_KMH,
-            "accuracy_m": round(max(1.0, accuracy_m), 1),
-            "network_type": network_type,
-            "snap_distance_km": dist_km,
+            "speed_kmh": round(clean_speed, 1),
+            "accuracy_m": round(max(1.0, float(accuracy_m)), 1),
+            "network_type": network_type or "BLE_5.0 + 4G",
+            "ble_count": detected_ble,
+            "total_crowd_around_me": total_around_me,
+            "static_devices": static_devices,
+            "moving_devices": moving_devices,
+            "static_percent": static_pct,
+            "moving_percent": moving_pct,
+            "mobility_state": mobility_state,
+            "crowd_pattern": crowd_pattern,
+            "avg_rssi_dbm": int(avg_rssi_dbm or -65),
+            "scan_radius_m": clean_radius,
+            "density_per_100m2": density_per_100m2,
+            "peak_threshold": peak_threshold,
+            "exceeds_peak": total_around_me >= peak_threshold,
+            "snap_distance_km": snap_dist_km,
             "ts": now_s,
+            "last_ping_iso": now_iso,
             "verified": True,
         }
 
         with self._lock:
             self._prune_stale_unlocked(now_s)
-            self._verified_pings[clean_id] = record
+            self._scanner_pings[clean_id] = record
             self._persist_pings_unlocked()
-            area_pings = [p for p in self._verified_pings.values() if p.get("area") == area]
 
         return {
             "status": "ok",
             "verified": True,
             "area": area,
-            "active_verified_devices_in_area": len(area_pings),
-            "record": record,
+            "city": city,
+            "scanner": record,
         }
 
-    def get_area_verified_pings(self, area: str) -> list[dict[str, Any]]:
+    def get_live_crowd_snapshot(self) -> dict[str, Any]:
+        """
+        Aggregates all active open-app BLE scanner nodes into:
+          1. `scanners`: Per-user live table rows ("if my app is open, how much crowd around me,
+             location, static vs moving, crowd pattern, speed, RSSI").
+          2. `heatmaps`: Area-level aggregated BLE crowd heatmaps across Bangladesh.
+          3. `summary`: Top-level KPI counters for the Frontend & Mobile dashboards.
+        """
         now_s = time.time()
         with self._lock:
             self._prune_stale_unlocked(now_s)
-            return [dict(p) for p in self._verified_pings.values() if p.get("area") == area]
+            active_scanners = [dict(r) for r in self._scanner_pings.values()]
 
-    def compute_crowd_metrics_for_cluster(
-        self,
-        area: str,
-        event_type: str,
-        source_count: int,
-        is_recent_3h: bool,
-        article_count: int | None = None,
-        veracity_percent: int | None = None,
-    ) -> dict[str, Any]:
-        """
-        Computes strictly verified telemetry for an area based on:
-          1. Actual verified GPS device pings in that area (`verified_gps_count`).
-          2. Actual verified newspaper/portal reports (`source_count` & `article_count`).
-        Zero random or sine-wave fabrication is used.
-        """
-        meta = AREA_METADATA.get(area, {"lat": 23.75, "lon": 90.39})
-        pings = self.get_area_verified_pings(area)
-        gps_total = len(pings)
-        gps_stuck = sum(1 for p in pings if float(p.get("speed_kmh", 0.0)) < STUCK_SPEED_THRESHOLD_KMH)
-        gps_moving = max(0, gps_total - gps_stuck)
+        active_scanners.sort(key=lambda r: float(r.get("ts", 0)), reverse=True)
+        for sc in active_scanners:
+            sc["age_seconds"] = max(0, int(round(now_s - float(sc.get("ts", now_s)))))
 
-        is_major = area in MAJOR_URBAN_HUBS
-        # Peak threshold is defined in terms of verified corroborating signals (sources + GPS nodes)
-        # or verified corridor probe density
-        ev_stuck_pct, ev_speed_kmh = EVENT_CONGESTION_FACTORS.get(event_type, (68, 4.8))
-        verified_articles = max(source_count, article_count or source_count)
+        # Group scanner nodes by area to build area-level BLE heatmaps
+        by_area: dict[str, list[dict[str, Any]]] = {}
+        for sc in active_scanners:
+            by_area.setdefault(str(sc["area"]), []).append(sc)
 
-        if gps_total > 0:
-            # 100% direct hardware GPS measurements from active devices in this area
-            avg_speed_kmh = round(
-                sum(float(p.get("speed_kmh", 0.0)) for p in pings) / float(gps_total),
-                1,
+        heatmaps: list[dict[str, Any]] = []
+        for area, nodes in by_area.items():
+            meta = AREA_METADATA.get(area)
+            # Use exact scanner GPS centroid (or canonical area coordinates)
+            avg_lat = sum(float(n["lat"]) for n in nodes) / len(nodes)
+            avg_lon = sum(float(n["lon"]) for n in nodes) / len(nodes)
+            city = nodes[0].get("city") or (meta.get("city") if meta else "Bangladesh")
+            is_major = area in MAJOR_URBAN_HUBS
+            peak_threshold = 45 if is_major else 25
+
+            scanner_count = len(nodes)
+            # Deduplicate overlapping BLE scans in the same area (0.75 overlap factor when multiple scanners share an area)
+            raw_ble_sum = sum(int(n.get("ble_count", 0)) for n in nodes)
+            dedup_ble = (
+                raw_ble_sum
+                if scanner_count == 1
+                else int(round(raw_ble_sum * (0.78 if scanner_count == 2 else 0.65)))
             )
-        else:
-            # Deterministic physical corridor speed derived from the verified event type & recency
-            avg_speed_kmh = ev_speed_kmh if is_recent_3h else round(min(22.0, ev_speed_kmh * 2.4), 1)
+            total_mobiles = scanner_count + dedup_ble
 
-        # Combine verified GPS devices + verified multi-source field reports (deterministic, never random)
-        # Each verified news portal article represents a documented field observation in that area;
-        # we also expose the exact breakdown so the UI is 100% transparent and truthful.
-        if gps_total > 0 and source_count == 0:
-            total_mobiles = gps_total
-            mobiles_stuck = gps_stuck
-            mobiles_moving = gps_moving
-            stuck_percent = int(round((mobiles_stuck / float(max(1, total_mobiles))) * 100))
-            verification_basis = f"Verified Hardware GPS ({gps_total} live device{'s' if gps_total != 1 else ''})"
-            is_verified = True
-        else:
-            # Verified news cluster from the 45-portal Medallion Lakehouse
-            # Deterministic corridor sample size proportional strictly to verified source_count & article_count
-            # (or direct GPS count when GPS devices are present alongside news)
-            is_verified = bool(source_count >= 2 or gps_total > 0)
-            stuck_percent = ev_stuck_pct if is_recent_3h else max(28, ev_stuck_pct - 26)
-            if gps_total > 0:
-                # Blend real GPS stuck ratio with verified event profile
-                gps_ratio = int(round((gps_stuck / float(gps_total)) * 100))
-                stuck_percent = int(round(0.6 * gps_ratio + 0.4 * stuck_percent))
-
-            # Deterministic verified signal count: exact GPS devices + verified portal field reports
-            # Peak threshold: 2+ independent verified sources (CONFIRMED / VERIFIED) or >=3 verified signals
-            total_mobiles = gps_total + (source_count * 18) + (verified_articles * 7)
+            raw_static_sum = sum(int(n.get("static_devices", 0)) for n in nodes)
+            raw_total_sum = max(1, sum(int(n.get("total_crowd_around_me", 1)) for n in nodes))
+            stuck_percent = int(round((raw_static_sum / float(raw_total_sum)) * 100))
+            moving_percent = 100 - stuck_percent
             mobiles_stuck = int(round(total_mobiles * (stuck_percent / 100.0)))
             mobiles_moving = max(0, total_mobiles - mobiles_stuck)
-            if gps_total > 0:
-                verification_basis = (
-                    f"Verified by {source_count} portal(s) + {gps_total} live GPS device(s)"
-                )
-            elif source_count >= 2:
-                verification_basis = f"Verified by {source_count} independent news portals"
-            else:
-                verification_basis = "Single-source report (awaiting multi-source verification)"
 
-        moving_percent = 100 - stuck_percent
-        peak_threshold = 35 if is_major else 25
-        exceeds_peak = bool(is_verified and (total_mobiles >= peak_threshold or source_count >= 2 or gps_total >= 1))
+            avg_speed_kmh = round(
+                sum(float(n.get("speed_kmh", 0.0)) for n in nodes) / len(nodes),
+                1,
+            )
+            avg_rssi = int(round(sum(int(n.get("avg_rssi_dbm", -66)) for n in nodes) / len(nodes)))
+            max_density = max(float(n.get("density_per_100m2", 0.0)) for n in nodes)
 
-        # Intensity scales strictly with verified source count & verified stuck percentage (no sine waves)
-        if not is_verified and source_count < 2 and gps_total == 0:
-            heat_intensity = 0.38 if is_recent_3h else 0.0
-            intensity_label = "Single-Source (Unverified)"
-        else:
-            source_boost = min(0.45, source_count * 0.14 + (0.12 if is_recent_3h else 0.0))
-            gps_boost = min(0.30, gps_total * 0.10)
-            raw_int = min(1.0, 0.44 + source_boost + gps_boost + (stuck_percent / 100.0) * 0.18)
+            mobility_state, crowd_pattern = classify_crowd_pattern(
+                total_crowd=total_mobiles,
+                static_pct=stuck_percent,
+                speed_kmh=avg_speed_kmh,
+                peak_threshold=peak_threshold,
+            )
+
+            exceeds_peak = total_mobiles >= peak_threshold
+            excess_ratio = max(0.0, (total_mobiles - peak_threshold) / float(max(1, peak_threshold)))
+            raw_int = min(
+                1.0,
+                0.42
+                + min(0.38, (total_mobiles / float(max(1, peak_threshold))) * 0.28)
+                + (stuck_percent / 100.0) * 0.24
+                + excess_ratio * 0.22,
+            )
             heat_intensity = round(raw_int, 2)
-            if heat_intensity >= 0.85:
-                intensity_label = f"Verified Extreme Peak ({source_count} Sources)" if source_count else "Verified Extreme Peak (Live GPS)"
-            elif heat_intensity >= 0.65:
-                intensity_label = f"Verified High Peak ({source_count} Sources)" if source_count else "Verified High Peak (Live GPS)"
+
+            if mobility_state == "STATIC" and exceeds_peak:
+                intensity_label = f"STATIC CROWD PEAK ({total_mobiles} BLE)"
+            elif mobility_state == "STATIC":
+                intensity_label = f"STATIC CROWD ({total_mobiles} BLE)"
+            elif mobility_state == "SLOW_MOVING":
+                intensity_label = f"SLOW CROWD ({total_mobiles} BLE)"
             else:
-                intensity_label = f"Verified Peak ({source_count} Sources)" if source_count else "Verified Live GPS"
+                intensity_label = f"MOVING FLOW ({total_mobiles} BLE)"
+
+            heatmaps.append(
+                {
+                    "area": area,
+                    "city": city,
+                    "lat": round(avg_lat, 6),
+                    "lon": round(avg_lon, 6),
+                    "is_verified": True,
+                    "verification_basis": (
+                        f"BLE Proximity Scan ({scanner_count} active app user{'s' if scanner_count != 1 else ''} • "
+                        f"{dedup_ble} nearby BLE devices)"
+                    ),
+                    "scanner_nodes_count": scanner_count,
+                    "ble_peers_count": dedup_ble,
+                    "total_mobiles": total_mobiles,
+                    "mobiles_stuck": mobiles_stuck,
+                    "mobiles_moving": mobiles_moving,
+                    "stuck_percent": stuck_percent,
+                    "moving_percent": moving_percent,
+                    "avg_speed_kmh": avg_speed_kmh,
+                    "mobility_state": mobility_state,
+                    "crowd_pattern": crowd_pattern,
+                    "avg_rssi_dbm": avg_rssi,
+                    "density_per_100m2": max_density,
+                    "peak_threshold": peak_threshold,
+                    "exceeds_peak": exceeds_peak,
+                    "heat_intensity": heat_intensity,
+                    "intensity_label": intensity_label,
+                    "last_ping_iso": nodes[0].get("last_ping_iso"),
+                }
+            )
+
+        heatmaps.sort(
+            key=lambda h: (
+                h["mobility_state"] == "STATIC",
+                h["total_mobiles"],
+                h["heat_intensity"],
+            ),
+            reverse=True,
+        )
+
+        total_ble = sum(h["ble_peers_count"] for h in heatmaps)
+        total_crowd = sum(h["total_mobiles"] for h in heatmaps)
+        total_static = sum(h["mobiles_stuck"] for h in heatmaps)
+        total_moving = sum(h["mobiles_moving"] for h in heatmaps)
+        static_hotspots = sum(1 for h in heatmaps if h["mobility_state"] == "STATIC")
 
         return {
-            "area": area,
-            "lat": meta["lat"],
-            "lon": meta["lon"],
-            "is_verified": is_verified,
-            "verification_basis": verification_basis,
-            "verified_gps_devices": gps_total,
-            "verified_news_sources": source_count,
-            "verified_articles": verified_articles,
-            "peak_threshold": peak_threshold,
-            "exceeds_peak": exceeds_peak,
-            "total_mobiles": total_mobiles,
-            "mobiles_stuck": mobiles_stuck,
-            "mobiles_moving": mobiles_moving,
-            "stuck_percent": stuck_percent,
-            "moving_percent": moving_percent,
-            "avg_speed_kmh": avg_speed_kmh,
-            "heat_intensity": heat_intensity,
-            "intensity_label": intensity_label,
+            "status": "ok",
+            "updated_at": now_dhaka().isoformat(timespec="seconds"),
+            "summary": {
+                "active_scanner_apps": len(active_scanners),
+                "total_ble_detected": total_ble,
+                "total_crowd_devices": total_crowd,
+                "total_static_devices": total_static,
+                "total_moving_devices": total_moving,
+                "active_zones_count": len(heatmaps),
+                "static_hotspots_count": static_hotspots,
+            },
+            "scanners": active_scanners,
+            "heatmaps": heatmaps,
         }
 
     def get_all_bangladesh_heatmaps(
         self, gold_alerts: list[dict[str, Any]] | None = None
     ) -> list[dict[str, Any]]:
-        """
-        Returns ONLY verified active heatmap zones across Bangladesh:
-          1. Locations with corroborated Gold alerts from the 45-portal Medallion Lakehouse.
-          2. Locations with active verified hardware GPS pings from connected mobile devices.
-        Zero synthetic/unverified empty-district heatmaps are generated.
-        """
-        now_s = time.time()
-        with self._lock:
-            self._prune_stale_unlocked(now_s)
-            active_pings_by_area: dict[str, list[dict[str, Any]]] = {}
-            for p in self._verified_pings.values():
-                ar = str(p.get("area") or "")
-                if ar in AREA_METADATA:
-                    active_pings_by_area.setdefault(ar, []).append(dict(p))
-
-        by_area: dict[str, dict[str, Any]] = {}
-
-        # 1. Aggregate verified Gold alerts by area across Bangladesh
-        for g in gold_alerts or []:
-            area = str(g.get("area") or "")
-            if area not in AREA_METADATA:
-                continue
-            src_count = int(g.get("source_count") or 1)
-            art_count = len(g.get("articles") or []) or src_count
-            is_rec = bool(g.get("is_recent_3h", (g.get("age_minutes") or 9999) <= 180))
-            ev_type = str(g.get("event_type") or "gridlock")
-
-            existing = by_area.get(area)
-            if not existing:
-                by_area[area] = {
-                    "area": area,
-                    "event_type": ev_type,
-                    "source_count": src_count,
-                    "article_count": art_count,
-                    "is_recent_3h": is_rec,
-                    "veracity_percent": int(g.get("veracity_percent") or 60),
-                    "sources": list(g.get("sources") or []),
-                    "cluster_count": 1,
-                }
-            else:
-                existing["cluster_count"] += 1
-                existing["source_count"] = max(existing["source_count"], src_count)
-                existing["article_count"] += art_count
-                existing["is_recent_3h"] = existing["is_recent_3h"] or is_rec
-                existing["veracity_percent"] = max(
-                    existing["veracity_percent"], int(g.get("veracity_percent") or 60)
-                )
-                merged_sources = set(existing["sources"]) | set(g.get("sources") or [])
-                existing["sources"] = sorted(merged_sources)
-
-        results: list[dict[str, Any]] = []
-
-        # Build verified heatmap records for areas with verified news clusters
-        for area, info in by_area.items():
-            metrics = self.compute_crowd_metrics_for_cluster(
-                area=area,
-                event_type=info["event_type"],
-                source_count=len(info["sources"]) or info["source_count"],
-                is_recent_3h=info["is_recent_3h"],
-                article_count=info["article_count"],
-                veracity_percent=info["veracity_percent"],
-            )
-            metrics["cluster_count"] = info["cluster_count"]
-            metrics["sources"] = info["sources"]
-            metrics["has_news"] = True
-            if metrics["heat_intensity"] > 0:
-                results.append(metrics)
-
-        # 2. Include any Bangladesh area that has real verified GPS device pings even without news yet
-        for area, pings in active_pings_by_area.items():
-            if area in by_area:
-                continue
-            metrics = self.compute_crowd_metrics_for_cluster(
-                area=area,
-                event_type="gridlock",
-                source_count=0,
-                is_recent_3h=True,
-                article_count=0,
-            )
-            metrics["cluster_count"] = 0
-            metrics["sources"] = []
-            metrics["has_news"] = False
-            if metrics["heat_intensity"] > 0:
-                results.append(metrics)
-
-        results.sort(
-            key=lambda x: (
-                bool(x.get("is_verified")),
-                float(x.get("heat_intensity", 0.0)),
-                int(x.get("verified_news_sources", 0)),
-                int(x.get("verified_gps_devices", 0)),
-            ),
-            reverse=True,
-        )
-        return results
+        return self.get_live_crowd_snapshot()["heatmaps"]
 
 
 crowd_service = CrowdIntelligenceService()

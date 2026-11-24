@@ -32,8 +32,10 @@ import {
   LakehouseLayerStats,
   MapAlertResponse,
   RouteAlertResponse,
+  VerifiedHeatmapZone,
 } from "./src/types/alert";
 import { OsmMapWebView, RouteRoadGeometry } from "./src/components/OsmMapWebView";
+import { scanNearbyBleCrowd } from "./src/services/bleCrowdScanner";
 import { VeracityMeter } from "./src/components/VeracityMeter";
 import { AreaDetailModal } from "./src/components/AreaDetailModal";
 import {
@@ -210,8 +212,14 @@ export default function App() {
     nonce: number;
   } | null>(null);
   const [fitRouteNonce, setFitRouteNonce] = useState<number>(0);
+  const [bleHeatmaps, setBleHeatmaps] = useState<VerifiedHeatmapZone[]>([]);
 
   const lastPollSigRef = useRef<string>("");
+  const deviceIdRef = useRef<string>(
+    `bw-${Platform.OS}-${Math.random().toString(36).slice(2, 8)}`
+  );
+  const gpsSpeedKmhRef = useRef<number>(0.8);
+  const gpsAccuracyMRef = useRef<number>(18);
 
   // Draggable Bottom Drawer Geometry & Gesture Physics
   const safeHeight = Math.max(windowHeight || 760, 560);
@@ -347,6 +355,13 @@ export default function App() {
           return;
         }
         const pos = await Location.getCurrentPositionAsync({});
+        const rawSpeedMs = pos.coords.speed;
+        if (typeof rawSpeedMs === "number" && rawSpeedMs >= 0) {
+          gpsSpeedKmhRef.current = Math.round(rawSpeedMs * 3.6 * 10) / 10;
+        }
+        if (typeof pos.coords.accuracy === "number" && pos.coords.accuracy > 0) {
+          gpsAccuracyMRef.current = Math.round(pos.coords.accuracy * 10) / 10;
+        }
         const next = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
@@ -403,6 +418,41 @@ export default function App() {
         if (FEED_ACCESS_TOKEN) {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
+
+        // Automatically scan nearby BLE devices around this open app user & transmit accumulated BLE telemetry
+        const bleScan = scanNearbyBleCrowd(
+          currentLocation.lat,
+          currentLocation.lon,
+          gpsSpeedKmhRef.current
+        );
+        const pingParams = new URLSearchParams({
+          device_id: deviceIdRef.current,
+          device_label: `BigWarn ${Platform.OS.toUpperCase()} (${deviceIdRef.current.slice(-4)})`,
+          lat: String(currentLocation.lat),
+          lon: String(currentLocation.lon),
+          speed_kmh: String(gpsSpeedKmhRef.current),
+          accuracy_m: String(gpsAccuracyMRef.current),
+          ble_count: String(bleScan.bleCount),
+          ble_static_count: String(bleScan.bleStaticCount),
+          ble_moving_count: String(bleScan.bleMovingCount),
+          avg_rssi_dbm: String(bleScan.avgRssiDbm),
+          scan_radius_m: String(bleScan.scanRadiusM),
+          network_type: "BLE_5.0 + 4G",
+        });
+
+        fetch(`${API_BASE_URL}/api/v1/crowd/ping?${pingParams.toString()}`, {
+          headers,
+        })
+          .then(() =>
+            fetch(`${API_BASE_URL}/api/v1/crowd/heatmap`, { headers })
+          )
+          .then((r) => (r && r.ok ? r.json() : null))
+          .then((hData) => {
+            if (hData && Array.isArray(hData.heatmaps)) {
+              setBleHeatmaps(hData.heatmaps);
+            }
+          })
+          .catch(() => {});
 
         const routeRes = await fetch(
           `${API_BASE_URL}/api/v1/alerts/route?${routeParams.toString()}`,
@@ -721,6 +771,7 @@ export default function App() {
           destination={destination}
           todoText={todoText}
           alerts={visibleMapAlerts}
+          bleHeatmaps={bleHeatmaps}
           routeAlertIds={routeAlertIds}
           routeGeometry={routeGeometry}
           focusCoords={focusCoords}
