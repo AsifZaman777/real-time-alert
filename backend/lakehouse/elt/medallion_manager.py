@@ -421,21 +421,51 @@ class MedallionLakehouseManager:
         self, cycle_label: str, ref_day: str, raw_items: list[dict[str, Any]]
     ) -> tuple[Path, bool]:
         """
-        Before clearing a completed (>2-day / 48h) window locally, exports all Gold, Silver,
-        and Bronze layers into a timestamped .txt archive and pushes it synchronously to R2.
+        Before clearing a completed (>2-day / 48h) retention window locally, exports all
+        Gold, Silver, and Bronze data into a date + timestamp folder in Cloudflare R2:
+          retention_archives/date=<cycle_label>/ts=<YYYY-MM-DD_HH-MM-SS>/
+            ├── gold/gold_alerts_<cycle_label>_<ts>.json
+            ├── silver/silver_disruptions_<cycle_label>_<ts>.jsonl
+            ├── bronze/bronze_articles_<cycle_label>_<ts>.jsonl
+            └── summary/medallion_2day_<cycle_label>_<ts>.txt
         """
         now_dt = datetime.now(DHAKA_TZ)
-        ts_slug = now_dt.strftime("%Y%m%d_%H%M%S")
+        ts_slug = now_dt.strftime("%Y-%m-%d_%H-%M-%S")
         silver_records, gold_alerts = self._compute_layers(raw_items, ref_day)
         report_txt = self._format_txt_report(
             cycle_label, raw_items, silver_records, gold_alerts, now_dt.isoformat()
         )
         self.archive_48h_dir.mkdir(parents=True, exist_ok=True)
+
         txt_path = self.archive_48h_dir / f"medallion_2day_{cycle_label}_{ts_slug}.txt"
+        gold_path = self.archive_48h_dir / f"gold_alerts_{cycle_label}_{ts_slug}.json"
+        silver_path = self.archive_48h_dir / f"silver_disruptions_{cycle_label}_{ts_slug}.jsonl"
+        bronze_path = self.archive_48h_dir / f"bronze_articles_{cycle_label}_{ts_slug}.jsonl"
+
         txt_path.write_text(report_txt, encoding="utf-8")
+        gold_path.write_text(json.dumps(gold_alerts, ensure_ascii=False, indent=2), encoding="utf-8")
+        silver_path.write_text(
+            "\n".join(json.dumps(s, ensure_ascii=False) for s in silver_records) + ("\n" if silver_records else ""),
+            encoding="utf-8",
+        )
+        bronze_path.write_text(
+            "\n".join(json.dumps(b, ensure_ascii=False) for b in raw_items) + ("\n" if raw_items else ""),
+            encoding="utf-8",
+        )
+
+        r2_prefix = f"retention_archives/date={cycle_label}/ts={ts_slug}"
         uploaded = cloud_connector.upload_files_sync([
-            (f"archives/{cycle_label}/{txt_path.name}", txt_path, "text/plain; charset=utf-8")
+            (f"{r2_prefix}/gold/{gold_path.name}", gold_path, "application/json"),
+            (f"{r2_prefix}/silver/{silver_path.name}", silver_path, "application/x-ndjson"),
+            (f"{r2_prefix}/bronze/{bronze_path.name}", bronze_path, "application/x-ndjson"),
+            (f"{r2_prefix}/summary/{txt_path.name}", txt_path, "text/plain; charset=utf-8"),
         ])
+
+        # Clean temporary staging copies after successful R2 upload
+        if uploaded:
+            for tmp_p in (gold_path, silver_path, bronze_path):
+                tmp_p.unlink(missing_ok=True)
+
         return txt_path, uploaded
 
     def _persist_snapshot_async(

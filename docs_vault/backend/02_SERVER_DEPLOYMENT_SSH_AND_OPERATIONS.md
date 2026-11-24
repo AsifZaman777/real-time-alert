@@ -100,10 +100,22 @@ Copy the printed `https://*.trycloudflare.com` URL into:
 
 ---
 
-## 5. Environment Variables & 48-Hour Cloudflare R2 Archival
+## 5. Environment Variables & 48-Hour Cloudflare R2 Archival (Gold, Silver & Bronze)
 
 - Configure [backend/.env](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/.env) with:
   - `BIGWARN_FEED_TOKEN` (must match `frontend/.env.local` and `mobile/.env`)
   - `BIGWARN_LOG_RETENTION_HOURS=48`
   - Cloudflare R2 credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_ENDPOINT_URL`, `S3_LAKEHOUSE_BUCKET`)
-- The background R2 archive worker ([r2_archive_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/r2_archive_service.py)) runs hourly inside `bigwarn-api`, keeping the active 48-hour hot window on local VM disk while archiving completed daily JSONL/log/Gold files to Cloudflare R2.
+- When the 48-hour retention window expires, the R2 archive worker ([r2_archive_service.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/app/services/r2_archive_service.py) and [medallion_manager.py](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/backend/lakehouse/elt/medallion_manager.py)) saves **all three Medallion layers (`Gold`, `Silver`, `Bronze`) + summary report + raw logs** into a **date + timestamp folder** in Cloudflare R2 before pruning local disk files:
+  ```text
+  retention_archives/date=<YYYY-MM-DD>/ts=<YYYY-MM-DD_HH-MM-SS>/
+  ├── gold/gold_alerts_<YYYY-MM-DD>.json
+  ├── silver/silver_disruptions_<YYYY-MM-DD>.jsonl
+  ├── bronze/bronze_articles_<YYYY-MM-DD>.jsonl
+  ├── summary/stream_48h_<YYYY-MM-DD>.txt
+  └── logs/news_stream_<YYYY-MM-DD>.(jsonl|log)
+  ```
+- You can preview the exact Cloudflare R2 archive paths at any time with `--dry-run`:
+  ```bash
+  python3 -m backend.app.services.r2_archive_service --dry-run
+  ```

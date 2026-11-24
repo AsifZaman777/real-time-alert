@@ -1,15 +1,25 @@
 """
-Cloudflare R2 Daily Log Archiver & 48-Hour Rolling Server Retention Manager.
+Cloudflare R2 Daily Medallion Archiver & 48-Hour Rolling Server Retention Manager.
 
-Keeps daily 24-hour files (`news_stream_YYYY-MM-DD.jsonl` and `.log`) on the
-server for a 48-hour (2-day) window. Files older than 48 hours are uploaded to
-Cloudflare R2 with date-partitioned keys and pruned locally after confirmation.
+Keeps daily 24-hour files (`news_stream_YYYY-MM-DD.jsonl` and `.log`) and active
+Medallion tables on the server for the 48-hour (2-day) retention period.
+Once the retention period expires, ALL THREE Medallion layers (Gold, Silver, Bronze)
+plus the raw stream log and summary report are uploaded into a timestamped and
+date-partitioned folder in Cloudflare R2 before local files are pruned:
+
+  retention_archives/date=<YYYY-MM-DD>/ts=<YYYY-MM-DD_HH-MM-SS>/
+    ├── gold/gold_alerts_<YYYY-MM-DD>.json
+    ├── silver/silver_disruptions_<YYYY-MM-DD>.jsonl
+    ├── bronze/bronze_articles_<YYYY-MM-DD>.jsonl
+    ├── summary/stream_48h_<YYYY-MM-DD>.txt
+    └── logs/news_stream_<YYYY-MM-DD>.log
 """
 from __future__ import annotations
 
 import datetime as dt
 import hashlib
 import hmac
+import json
 import re
 import threading
 import time
@@ -19,7 +29,12 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-from backend.app.core.config import now_dhaka, settings
+try:
+    from app.core.config import now_dhaka, settings
+    from lakehouse.elt.medallion_manager import MedallionLakehouseManager
+except ImportError:
+    from backend.app.core.config import now_dhaka, settings
+    from backend.lakehouse.elt.medallion_manager import MedallionLakehouseManager
 
 LOG_DATE_RE = re.compile(r"^news_stream_(\d{4}-\d{2}-\d{2})\.(jsonl|log)$")
 
@@ -48,6 +63,7 @@ class R2ArchiveService:
         self.region = settings.r2_region or "auto"
         self.bucket = settings.r2_bucket or "bigwarn"
         self.base_endpoint = self._normalize_endpoint(settings.r2_endpoint_url, self.bucket)
+        self.lakehouse = MedallionLakehouseManager()
         self.last_run: dict[str, Any] = {
             "last_checked_at": None,
             "uploaded": [],
@@ -137,14 +153,136 @@ class R2ArchiveService:
         except requests.RequestException as exc:
             return False, str(exc)
 
+    def _ensure_medallion_layers_on_disk(self, day_str: str) -> tuple[Path, Path, Path, Path]:
+        """
+        Ensures Bronze, Silver, Gold, and Summary TXT files exist on disk for `day_str`
+        so that all three layers are always archived to Cloudflare R2 after retention.
+        """
+        bronze_file = self.lakehouse.bronze_dir / f"bronze_articles_{day_str}.jsonl"
+        silver_file = self.lakehouse.silver_dir / f"silver_disruptions_{day_str}.jsonl"
+        gold_file = self.lakehouse.gold_dir / f"gold_alerts_{day_str}.json"
+        txt_file = self.lakehouse.archive_48h_dir / f"stream_48h_{day_str}.txt"
+
+        raw_stream = self.logs_dir / f"news_stream_{day_str}.jsonl"
+        if raw_stream.exists() and (
+            not bronze_file.exists() or not silver_file.exists() or not gold_file.exists()
+        ):
+            raw_items: list[dict[str, Any]] = []
+            try:
+                for line in raw_stream.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        if isinstance(obj, dict):
+                            raw_items.append(obj)
+                    except ValueError:
+                        continue
+            except OSError:
+                pass
+
+            silver_records, gold_alerts = self.lakehouse._compute_layers(raw_items, day_str)
+            self.lakehouse.bronze_dir.mkdir(parents=True, exist_ok=True)
+            self.lakehouse.silver_dir.mkdir(parents=True, exist_ok=True)
+            self.lakehouse.gold_dir.mkdir(parents=True, exist_ok=True)
+            self.lakehouse.archive_48h_dir.mkdir(parents=True, exist_ok=True)
+
+            bronze_file.write_text(
+                "\n".join(json.dumps(r, ensure_ascii=False) for r in raw_items)
+                + ("\n" if raw_items else ""),
+                encoding="utf-8",
+            )
+            silver_file.write_text(
+                "\n".join(json.dumps(s, ensure_ascii=False) for s in silver_records)
+                + ("\n" if silver_records else ""),
+                encoding="utf-8",
+            )
+            gold_file.write_text(
+                json.dumps(gold_alerts, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            report_txt = self.lakehouse._format_txt_report(
+                day_str, raw_items, silver_records, gold_alerts, now_dhaka().isoformat()
+            )
+            txt_file.write_text(report_txt, encoding="utf-8")
+
+        return bronze_file, silver_file, gold_file, txt_file
+
+    def archive_day_medallion_bundle(
+        self,
+        day_str: str,
+        ts_slug: str,
+        dry_run: bool = False,
+    ) -> tuple[bool, list[str], list[str]]:
+        """
+        Uploads Gold, Silver, Bronze, Summary TXT, and raw logs for `day_str` into a
+        date + timestamp folder in Cloudflare R2:
+          retention_archives/date=<YYYY-MM-DD>/ts=<YYYY-MM-DD_HH-MM-SS>/
+            ├── gold/gold_alerts_<YYYY-MM-DD>.json
+            ├── silver/silver_disruptions_<YYYY-MM-DD>.jsonl
+            ├── bronze/bronze_articles_<YYYY-MM-DD>.jsonl
+            ├── summary/stream_48h_<YYYY-MM-DD>.txt
+            └── logs/news_stream_<YYYY-MM-DD>.(jsonl|log)
+        Also updates the canonical date-partitioned paths (`gold/date=...`, `silver/date=...`, `bronze/date=...`).
+        """
+        bronze_file, silver_file, gold_file, txt_file = self._ensure_medallion_layers_on_disk(day_str)
+        y, mo, d = day_str.split("-")
+        ts_folder = f"retention_archives/date={day_str}/ts={ts_slug}"
+
+        targets: list[tuple[Path, str, bool]] = [
+            # (local_path, r2_object_key, is_required_medallion_layer)
+            (gold_file, f"{ts_folder}/gold/{gold_file.name}", True),
+            (silver_file, f"{ts_folder}/silver/{silver_file.name}", True),
+            (bronze_file, f"{ts_folder}/bronze/{bronze_file.name}", True),
+            (txt_file, f"{ts_folder}/summary/{txt_file.name}", False),
+            # Canonical date-partitioned Lakehouse folders in Cloudflare R2
+            (gold_file, f"gold/date={day_str}/{gold_file.name}", False),
+            (silver_file, f"silver/date={day_str}/{silver_file.name}", False),
+            (bronze_file, f"bronze/date={day_str}/{bronze_file.name}", False),
+        ]
+
+        for ext in ("jsonl", "log"):
+            raw_p = self.logs_dir / f"news_stream_{day_str}.{ext}"
+            if raw_p.exists():
+                targets.append((raw_p, f"{ts_folder}/logs/{raw_p.name}", ext == "jsonl"))
+                targets.append((raw_p, f"logs/{y}/{mo}/{d}/{raw_p.name}", False))
+
+        uploaded_keys: list[str] = []
+        errors: list[str] = []
+        all_required_ok = True
+
+        for local_p, r2_key, is_req in targets:
+            if not local_p.exists():
+                if is_req:
+                    all_required_ok = False
+                    errors.append(f"Missing required Medallion file for {day_str}: {local_p.name}")
+                continue
+            if dry_run:
+                uploaded_keys.append(f"[dry-run] {r2_key}")
+                continue
+            ok, msg = self.upload_file_to_r2(local_p, r2_key)
+            if ok:
+                uploaded_keys.append(r2_key)
+            else:
+                if is_req:
+                    all_required_ok = False
+                errors.append(f"R2 upload failed for {r2_key}: {msg}")
+
+        return all_required_ok, uploaded_keys, errors
+
     def archive_and_prune_logs(self, dry_run: bool = False) -> dict[str, Any]:
         """
-        Maintains a 48-hour (2-day) rolling window on the server:
-        - Keeps today (D) and yesterday (D-1) on local disk.
-        - Backs up yesterday's completed 24h file to R2 without deleting it.
-        - Uploads any file older than 48h (<= D-2) to Cloudflare R2 and deletes locally.
+        Maintains a 48-hour (2-day) rolling retention window on the server:
+        - Keeps today (D) and yesterday (D-1) hot on local disk.
+        - Backs up yesterday's completed 24h Gold, Silver, Bronze & logs to R2 without deleting.
+        - After the 48h retention period expires (<= D-2), saves Gold, Silver, and Bronze
+          into a timestamp + date folder (`retention_archives/date=<YYYY-MM-DD>/ts=<TIMESTAMP>/`)
+          in Cloudflare R2 and then prunes the expired local files.
         """
-        today = now_dhaka().date()
+        now_dt = now_dhaka()
+        today = now_dt.date()
+        ts_slug = now_dt.strftime("%Y-%m-%d_%H-%M-%S")
         prune_cutoff = today - dt.timedelta(days=self.retention_days)
         yesterday = today - dt.timedelta(days=1)
 
@@ -152,48 +290,76 @@ class R2ArchiveService:
         pruned: list[str] = []
         errors: list[str] = []
 
+        # Collect all distinct dates present in logs_dir or medallion storage
+        candidate_days: set[str] = set()
         if self.logs_dir.exists():
             for path in sorted(self.logs_dir.iterdir()):
                 m = LOG_DATE_RE.match(path.name)
-                if not m or not path.is_file():
-                    continue
-                try:
-                    file_date = dt.date.fromisoformat(m.group(1))
-                except ValueError:
+                if m and path.is_file():
+                    candidate_days.add(m.group(1))
+        for layer_dir, prefix in (
+            (self.lakehouse.bronze_dir, "bronze_articles_"),
+            (self.lakehouse.silver_dir, "silver_disruptions_"),
+            (self.lakehouse.gold_dir, "gold_alerts_"),
+        ):
+            if layer_dir.exists():
+                for p in layer_dir.iterdir():
+                    if p.name.startswith(prefix):
+                        day_part = p.stem.replace(prefix, "")
+                        if re.match(r"^\d{4}-\d{2}-\d{2}$", day_part):
+                            candidate_days.add(day_part)
+
+        for day_str in sorted(candidate_days):
+            try:
+                file_date = dt.date.fromisoformat(day_str)
+            except ValueError:
+                continue
+
+            if file_date <= prune_cutoff:
+                ok_bundle, up_keys, err_list = self.archive_day_medallion_bundle(
+                    day_str=day_str,
+                    ts_slug=ts_slug,
+                    dry_run=dry_run,
+                )
+                uploaded.extend(up_keys)
+                errors.extend(err_list)
+
+                local_files_to_prune = [
+                    self.logs_dir / f"news_stream_{day_str}.jsonl",
+                    self.logs_dir / f"news_stream_{day_str}.log",
+                    self.lakehouse.bronze_dir / f"bronze_articles_{day_str}.jsonl",
+                    self.lakehouse.silver_dir / f"silver_disruptions_{day_str}.jsonl",
+                    self.lakehouse.gold_dir / f"gold_alerts_{day_str}.json",
+                    self.lakehouse.archive_48h_dir / f"stream_48h_{day_str}.txt",
+                ]
+
+                if dry_run:
+                    for lp in local_files_to_prune:
+                        if lp.exists():
+                            pruned.append(f"[dry-run] {lp.name}")
                     continue
 
-                y, mo, d = m.group(1).split("-")
-                object_key = f"logs/{y}/{mo}/{d}/{path.name}"
-
-                if file_date <= prune_cutoff:
-                    if dry_run:
-                        uploaded.append(f"[dry-run] {object_key}")
-                        pruned.append(f"[dry-run] {path.name}")
-                        continue
-                    ok, msg = self.upload_file_to_r2(path, object_key)
-                    if ok:
-                        uploaded.append(object_key)
-                        # Also archive matching Gold snapshot if it exists
-                        gold_file = settings.gold_path / f"gold_alerts_{m.group(1)}.json"
-                        if gold_file.exists():
-                            g_ok, _ = self.upload_file_to_r2(gold_file, f"gold/{y}/{mo}/{d}/{gold_file.name}")
-                            if g_ok:
-                                uploaded.append(f"gold/{y}/{mo}/{d}/{gold_file.name}")
-                        try:
-                            path.unlink()
-                            pruned.append(path.name)
-                        except OSError as exc:
-                            errors.append(f"Failed deleting {path.name}: {exc}")
-                    else:
-                        errors.append(f"R2 upload failed for {path.name}: {msg}")
-                elif file_date == yesterday and self.is_configured() and not dry_run:
-                    # Daily backup of completed 24h log while keeping it hot for 48h window
-                    ok, _ = self.upload_file_to_r2(path, object_key)
-                    if ok:
-                        uploaded.append(object_key)
+                # Only delete local files after Gold, Silver, and Bronze are safely saved in Cloudflare R2
+                if ok_bundle:
+                    for lp in local_files_to_prune:
+                        if lp.exists():
+                            try:
+                                lp.unlink()
+                                pruned.append(lp.name)
+                            except OSError as exc:
+                                errors.append(f"Failed deleting {lp.name}: {exc}")
+            elif file_date == yesterday and self.is_configured() and not dry_run:
+                # Hot backup of yesterday's Gold, Silver, Bronze & logs without deleting locally
+                _, up_keys, _ = self.archive_day_medallion_bundle(
+                    day_str=day_str,
+                    ts_slug=ts_slug,
+                    dry_run=False,
+                )
+                uploaded.extend(up_keys)
 
         self.last_run = {
-            "last_checked_at": now_dhaka().isoformat(),
+            "last_checked_at": now_dt.isoformat(),
+            "archive_timestamp_folder": ts_slug,
             "retention_hours": self.retention_days * 24,
             "prune_cutoff_date": prune_cutoff.isoformat(),
             "r2_configured": self.is_configured(),
@@ -213,13 +379,14 @@ class R2ArchiveService:
             "r2_configured": self.is_configured(),
             "bucket": self.bucket,
             "retention_hours": self.retention_days * 24,
+            "r2_folder_schema": "retention_archives/date=<YYYY-MM-DD>/ts=<YYYY-MM-DD_HH-MM-SS>/{gold,silver,bronze,summary,logs}/",
             "local_log_files": local_files,
             "last_run": self.last_run,
         }
 
 
 def start_r2_archive_worker(service: R2ArchiveService, interval_seconds: int = 3600) -> None:
-    """Runs R2 archival & 48h pruning in a background daemon thread."""
+    """Runs R2 Medallion archival & 48h pruning in a background daemon thread."""
     def _loop() -> None:
         while True:
             try:
@@ -238,9 +405,8 @@ def start_r2_archive_worker(service: R2ArchiveService, interval_seconds: int = 3
 
 if __name__ == "__main__":
     import argparse
-    import json
 
-    parser = argparse.ArgumentParser(description="BigWarn Cloudflare R2 48h Log Archiver")
+    parser = argparse.ArgumentParser(description="BigWarn Cloudflare R2 48h Medallion Archiver")
     parser.add_argument("--dry-run", action="store_true", help="Preview uploads/prunes without modifying files")
     args = parser.parse_args()
     svc = R2ArchiveService()
