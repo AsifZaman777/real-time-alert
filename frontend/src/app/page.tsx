@@ -818,6 +818,7 @@ export default function HomePage() {
         {activeTab === "lakehouse" && (
           <MedallionExplorer
             snapshot={lakehouse}
+            items={items}
             onSelectArea={(area) => {
               setSelectedArea(area);
               setActiveTab("stream");
