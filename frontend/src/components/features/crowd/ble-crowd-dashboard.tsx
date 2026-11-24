@@ -16,6 +16,11 @@ export interface BleScannerRow {
   accuracy_m: number;
   network_type: string;
   ble_count: number;
+  wifi_mobile_count?: number;
+  wifi_ap_count?: number;
+  cell_rsrp_dbm?: number;
+  cell_rsrq_db?: number;
+  cell_load_percent?: number;
   total_crowd_around_me: number;
   static_devices: number;
   moving_devices: number;
@@ -41,6 +46,11 @@ export interface BleHeatmapZone {
   verification_basis: string;
   scanner_nodes_count: number;
   ble_peers_count: number;
+  wifi_mobile_peers_count?: number;
+  wifi_fixed_ap_count?: number;
+  cell_load_percent?: number;
+  cell_rsrq_db?: number;
+  cell_rsrp_dbm?: number;
   total_mobiles: number;
   mobiles_stuck: number;
   mobiles_moving: number;
@@ -64,6 +74,8 @@ export interface BleCrowdSnapshot {
   summary: {
     active_scanner_apps: number;
     total_ble_detected: number;
+    total_wifi_mobile_detected?: number;
+    avg_cell_load_percent?: number;
     total_crowd_devices: number;
     total_static_devices: number;
     total_moving_devices: number;
@@ -193,7 +205,7 @@ export function BleCrowdDashboard() {
         + '</div>'
         + '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;color:#475569;">'
         +   '<span>Avg Speed: ' + z.avg_speed_kmh + ' km/h</span>'
-        +   '<span>Signal: ' + (z.avg_rssi_dbm || -64) + ' dBm (40m)</span>'
+        +   '<span>+' + (z.ble_peers_count || 0) + ' BLE • +' + (z.wifi_mobile_peers_count || 0) + ' Wi-Fi • 4G ' + (z.cell_load_percent || 0) + '%</span>'
         + '</div>';
       hud.style.display = 'block';
     }
@@ -305,6 +317,8 @@ export function BleCrowdDashboard() {
   const summary = snapshot?.summary || {
     active_scanner_apps: 0,
     total_ble_detected: 0,
+    total_wifi_mobile_detected: 0,
+    avg_cell_load_percent: 0,
     total_crowd_devices: 0,
     total_static_devices: 0,
     total_moving_devices: 0,
@@ -323,7 +337,7 @@ export function BleCrowdDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Top Live BLE Crowd-Sourcing Observatory Header (Read-Only View of Active Mobile App Users) */}
+      {/* 1. Top Live Multi-Radio Crowd-Sourcing Observatory Header (Read-Only View of Active Mobile App Users) */}
       <div className="rounded-xl border border-[#2e312e] bg-[#181a18] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -333,10 +347,10 @@ export function BleCrowdDashboard() {
             </span>
             <div>
               <h2 className="text-sm sm:text-base font-bold text-[#ecebe6] m-0">
-                📡 BLE Proximity Crowd-Sourcing &amp; Live Mobility Heatmap
+                📡 Multi-Radio Proximity Crowd-Sourcing (BLE + Wi-Fi [BT Off] + 4G Cell Load) &amp; Live Mobility Heatmap
               </h2>
               <p className="text-xs text-[#9a988f] m-0">
-                Live telemetry streamed exclusively from active BigWarn mobile app users scanning nearby BLE devices (40m radius) and GPS velocity.
+                Live telemetry streamed from active BigWarn mobile app users scanning nearby BLE devices (40m), Wi-Fi mobile peers with Bluetooth OFF (50m), 4G cell tower congestion, and GPS velocity.
               </p>
             </div>
           </div>
@@ -351,12 +365,12 @@ export function BleCrowdDashboard() {
         </div>
       </div>
 
-      {/* 2. Top 4 BLE Crowd Telemetry KPI Cards */}
+      {/* 2. Top 4 BLE + Wi-Fi + 4G Crowd Telemetry KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-sky-400 bg-[#181a18] border-[#2e312e]">
           <CardHeader className="pb-1">
             <CardTitle className="text-xs text-[#9a988f] uppercase">
-              📱 Open App BLE Scanners
+              📱 Open App Multi-Radio Scanners
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -365,7 +379,8 @@ export function BleCrowdDashboard() {
             </div>
             <div className="text-[11px] text-[#9a988f] mt-1">
               Across <b className="text-[#ecebe6]">{summary.active_zones_count}</b>{" "}
-              active Bangladesh area(s)
+              area(s) • 4G Load:{" "}
+              <b className="text-sky-300">{summary.avg_cell_load_percent || 0}%</b>
             </div>
           </CardContent>
         </Card>
@@ -373,7 +388,7 @@ export function BleCrowdDashboard() {
         <Card className="border-l-4 border-l-amber-400 bg-[#181a18] border-[#2e312e]">
           <CardHeader className="pb-1">
             <CardTitle className="text-xs text-[#9a988f] uppercase">
-              📡 Accumulated BLE Crowd
+              📡 Surrounding Crowd Detected
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -381,9 +396,11 @@ export function BleCrowdDashboard() {
               {summary.total_crowd_devices}
             </div>
             <div className="text-[11px] text-[#9a988f] mt-1">
-              {summary.active_scanner_apps} scanner(s) +{" "}
-              <b className="text-[#ecebe6]">{summary.total_ble_detected}</b>{" "}
-              nearby BLE peers
+              +<b className="text-[#ecebe6]">{summary.total_ble_detected}</b> BLE • +
+              <b className="text-amber-300">
+                {summary.total_wifi_mobile_detected || 0}
+              </b>{" "}
+              Wi-Fi (BT Off)
             </div>
           </CardContent>
         </Card>
@@ -542,15 +559,18 @@ export function BleCrowdDashboard() {
 
                   <div className="flex flex-wrap items-center justify-between text-[11px] text-[#9a988f] font-mono pt-1">
                     <span>Opened App User: {sc.device_label}</span>
+                    <span>
+                      +{sc.ble_count} BLE • +{sc.wifi_mobile_count || 0} Wi-Fi (BT Off)
+                    </span>
+                    <span>4G Load: {sc.cell_load_percent || 0}%</span>
                     <span>Speed: {sc.speed_kmh} km/h</span>
-                    <span>RSSI: {sc.avg_rssi_dbm} dBm</span>
                   </div>
                 </div>
               );
             })}
             {(!snapshot?.scanners || snapshot.scanners.length === 0) && (
               <div className="p-6 text-center text-xs text-[#9a988f] rounded-xl border border-[#2e312e] bg-[#121312]">
-                No opened mobile app users are currently transmitting BLE scans. Open the BigWarn app on an Android phone with Bluetooth &amp; GPS enabled to stream the live BLE crowd around that opened app user.
+                No opened mobile app users are currently transmitting multi-radio scans. Open the BigWarn app on an Android phone with Location, Wi-Fi &amp; Bluetooth enabled to stream the live crowd around that opened app user.
               </div>
             )}
           </div>
@@ -563,12 +583,12 @@ export function BleCrowdDashboard() {
                   <th className="p-2.5">Opened App User</th>
                   <th className="p-2.5">Location (Area &amp; GPS)</th>
                   <th className="p-2.5 text-right">Crowd Around Opened App User</th>
-                  <th className="p-2.5 text-right">BLE Peers (40m)</th>
+                  <th className="p-2.5 text-right">Radio Peers (BLE + Wi-Fi BT-Off)</th>
                   <th className="p-2.5">Static vs. Moving Split</th>
                   <th className="p-2.5">Mobility State</th>
                   <th className="p-2.5">Detected Crowd Pattern</th>
                   <th className="p-2.5 text-right">GPS Speed</th>
-                  <th className="p-2.5 text-right">BLE Signal / Density</th>
+                  <th className="p-2.5 text-right">4G Cell Load / Signal</th>
                   <th className="p-2.5 text-right">Last Ping</th>
                 </tr>
               </thead>
@@ -613,8 +633,13 @@ export function BleCrowdDashboard() {
                         </div>
                       </td>
 
-                      <td className="p-2.5 text-right font-mono font-bold text-sky-300">
-                        +{sc.ble_count} BLE
+                      <td className="p-2.5 text-right font-mono">
+                        <div className="font-bold text-sky-300">
+                          +{sc.ble_count} BLE
+                        </div>
+                        <div className="text-[10.5px] font-semibold text-amber-300">
+                          +{sc.wifi_mobile_count || 0} Wi-Fi (BT Off)
+                        </div>
                       </td>
 
                       <td className="p-2.5 min-w-[170px]">
@@ -661,8 +686,12 @@ export function BleCrowdDashboard() {
                       </td>
 
                       <td className="p-2.5 text-right font-mono text-[11px] text-[#9a988f]">
-                        <div>{sc.avg_rssi_dbm} dBm</div>
-                        <div>{sc.density_per_100m2}/100m²</div>
+                        <div className="text-sky-300 font-semibold">
+                          4G Load: {sc.cell_load_percent || 0}%
+                        </div>
+                        <div>
+                          {sc.avg_rssi_dbm} dBm • {sc.density_per_100m2}/100m²
+                        </div>
                       </td>
 
                       <td className="p-2.5 text-right font-mono text-[11px] text-emerald-400">

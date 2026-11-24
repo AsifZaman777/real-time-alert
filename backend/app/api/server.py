@@ -169,12 +169,19 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                     lon = float((q.get("lon") or ["0"])[0])
                     speed_kmh = float((q.get("speed_kmh") or ["0"])[0])
                     accuracy_m = float((q.get("accuracy_m") or ["20"])[0])
-                    network_type = (q.get("network_type") or ["BLE_5.0 + 4G"])[0]
+                    network_type = (q.get("network_type") or ["NATIVE_MULTI_RADIO"])[0]
                     ble_count = int((q.get("ble_count") or ["0"])[0])
                     ble_static = int((q["ble_static_count"])[0]) if "ble_static_count" in q else None
                     ble_moving = int((q["ble_moving_count"])[0]) if "ble_moving_count" in q else None
+                    wifi_mobile_count = int((q.get("wifi_mobile_count") or ["0"])[0])
+                    wifi_ap_count = int((q.get("wifi_ap_count") or ["0"])[0])
+                    wifi_static = int((q["wifi_static_count"])[0]) if "wifi_static_count" in q else None
+                    wifi_moving = int((q["wifi_moving_count"])[0]) if "wifi_moving_count" in q else None
+                    cell_rsrp_dbm = int((q.get("cell_rsrp_dbm") or ["-85"])[0])
+                    cell_rsrq_db = int((q.get("cell_rsrq_db") or ["-9"])[0])
+                    cell_load_percent = int((q.get("cell_load_percent") or ["0"])[0])
                     avg_rssi_dbm = int((q.get("avg_rssi_dbm") or ["-65"])[0])
-                    scan_radius_m = int((q.get("scan_radius_m") or ["40"])[0])
+                    scan_radius_m = int((q.get("scan_radius_m") or ["50"])[0])
                 except ValueError:
                     return self._json({"status": "rejected", "verified": False, "reason": "invalid_params"}, code=400)
                 self._json(
@@ -189,6 +196,13 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         ble_count=ble_count,
                         ble_static_count=ble_static,
                         ble_moving_count=ble_moving,
+                        wifi_mobile_count=wifi_mobile_count,
+                        wifi_ap_count=wifi_ap_count,
+                        wifi_static_count=wifi_static,
+                        wifi_moving_count=wifi_moving,
+                        cell_rsrp_dbm=cell_rsrp_dbm,
+                        cell_rsrq_db=cell_rsrq_db,
+                        cell_load_percent=cell_load_percent,
                         avg_rssi_dbm=avg_rssi_dbm,
                         scan_radius_m=scan_radius_m,
                     )
@@ -216,12 +230,19 @@ def make_api_handler(service: StreamService, archive_service: R2ArchiveService |
                         lon=float(body.get("lon") or 0.0),
                         speed_kmh=float(body.get("speed_kmh") or 0.0),
                         accuracy_m=float(body.get("accuracy_m") or 20.0),
-                        network_type=str(body.get("network_type") or "BLE_5.0 + 4G"),
+                        network_type=str(body.get("network_type") or "NATIVE_MULTI_RADIO"),
                         ble_count=int(body["ble_count"]) if "ble_count" in body and body["ble_count"] is not None else 0,
                         ble_static_count=int(body["ble_static_count"]) if "ble_static_count" in body and body["ble_static_count"] is not None else None,
                         ble_moving_count=int(body["ble_moving_count"]) if "ble_moving_count" in body and body["ble_moving_count"] is not None else None,
+                        wifi_mobile_count=int(body["wifi_mobile_count"]) if "wifi_mobile_count" in body and body["wifi_mobile_count"] is not None else 0,
+                        wifi_ap_count=int(body["wifi_ap_count"]) if "wifi_ap_count" in body and body["wifi_ap_count"] is not None else 0,
+                        wifi_static_count=int(body["wifi_static_count"]) if "wifi_static_count" in body and body["wifi_static_count"] is not None else None,
+                        wifi_moving_count=int(body["wifi_moving_count"]) if "wifi_moving_count" in body and body["wifi_moving_count"] is not None else None,
+                        cell_rsrp_dbm=int(body.get("cell_rsrp_dbm") or -85),
+                        cell_rsrq_db=int(body.get("cell_rsrq_db") or -9),
+                        cell_load_percent=int(body.get("cell_load_percent") or 0),
                         avg_rssi_dbm=int(body.get("avg_rssi_dbm") or -65),
-                        scan_radius_m=int(body.get("scan_radius_m") or 40),
+                        scan_radius_m=int(body.get("scan_radius_m") or 50),
                     )
                     return self._json(res)
                 except (ValueError, KeyError):

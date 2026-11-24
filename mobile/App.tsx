@@ -441,7 +441,7 @@ export default function App() {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
         }
 
-        // Query real hardware BLE scanner (`BigWarnBleScannerModule.kt`) and only transmit ping when real GPS is active
+        // Query real hardware Multi-Radio scanner (`BigWarnBleScannerModule.kt`: BLE + Wi-Fi Mobile Peers + 4G Cell Load)
         const bleScan = await scanNearbyBleCrowdAsync(gpsSpeedKmhRef.current);
         if (hasRealGpsFixRef.current && Platform.OS !== "web") {
           const pingParams = new URLSearchParams({
@@ -454,6 +454,13 @@ export default function App() {
             ble_count: String(bleScan.bleCount),
             ble_static_count: String(bleScan.bleStaticCount),
             ble_moving_count: String(bleScan.bleMovingCount),
+            wifi_mobile_count: String(bleScan.wifiMobileCount),
+            wifi_ap_count: String(bleScan.wifiFixedApCount),
+            wifi_static_count: String(bleScan.wifiStaticCount),
+            wifi_moving_count: String(bleScan.wifiMovingCount),
+            cell_rsrp_dbm: String(bleScan.cellRsrpDbm),
+            cell_rsrq_db: String(bleScan.cellRsrqDb),
+            cell_load_percent: String(bleScan.cellLoadPercent),
             avg_rssi_dbm: String(bleScan.avgRssiDbm),
             scan_radius_m: String(bleScan.scanRadiusM),
             network_type: bleScan.scannerMode,

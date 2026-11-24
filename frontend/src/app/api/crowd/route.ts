@@ -17,6 +17,11 @@ interface LocalBleScannerRecord {
   accuracy_m: number;
   network_type: string;
   ble_count: number;
+  wifi_mobile_count: number;
+  wifi_ap_count: number;
+  cell_rsrp_dbm: number;
+  cell_rsrq_db: number;
+  cell_load_percent: number;
   total_crowd_around_me: number;
   static_devices: number;
   moving_devices: number;
@@ -110,10 +115,12 @@ function classifyPattern(
   totalCrowd: number,
   staticPct: number,
   speedKmh: number,
-  peakThreshold: number
+  peakThreshold: number,
+  cellLoadPercent: number = 0
 ): { mobility_state: "STATIC" | "SLOW_MOVING" | "MOVING"; crowd_pattern: string } {
-  const isDense = totalCrowd >= peakThreshold;
-  const isVeryDense = totalCrowd >= Math.round(peakThreshold * 1.45);
+  const isDense = totalCrowd >= peakThreshold || cellLoadPercent >= 65;
+  const isVeryDense =
+    totalCrowd >= Math.round(peakThreshold * 1.45) || cellLoadPercent >= 82;
   if (staticPct >= 68 || speedKmh < 3.5) {
     return {
       mobility_state: "STATIC",
@@ -121,7 +128,7 @@ function classifyPattern(
         ? "Dense Static Gathering / Standstill Blockade"
         : isDense
         ? "High-Density Static Crowd / Bottleneck"
-        : totalCrowd >= 15
+        : totalCrowd >= 15 || cellLoadPercent >= 45
         ? "Stationary Commuter Cluster / Queue"
         : "Localized Static Presence",
     };
@@ -152,6 +159,13 @@ function recordLocalPing(params: {
   ble_count: number;
   ble_static_count?: number;
   ble_moving_count?: number;
+  wifi_mobile_count?: number;
+  wifi_ap_count?: number;
+  wifi_static_count?: number;
+  wifi_moving_count?: number;
+  cell_rsrp_dbm?: number;
+  cell_rsrq_db?: number;
+  cell_load_percent?: number;
   avg_rssi_dbm?: number;
   scan_radius_m?: number;
   network_type?: string;
@@ -162,25 +176,41 @@ function recordLocalPing(params: {
   const cleanId =
     (params.device_id || "").trim() ||
     `ble-node-${area.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  const bleCount = Math.max(0, Math.round(params.ble_count || 0));
+  const isLegacy = params.network_type === "BLE_5.0 + 4G";
+  const bleCount = isLegacy ? 0 : Math.max(0, Math.round(params.ble_count || 0));
+  const wifiMobileCount = isLegacy
+    ? 0
+    : Math.max(0, Math.round(params.wifi_mobile_count || 0));
+  const wifiApCount = isLegacy
+    ? 0
+    : Math.max(0, Math.round(params.wifi_ap_count || 0));
+  const cellRsrpDbm = Math.round(params.cell_rsrp_dbm ?? -85);
+  const cellRsrqDb = Math.round(params.cell_rsrq_db ?? -9);
+  const cellLoadPercent = Math.max(
+    0,
+    Math.min(100, Math.round(params.cell_load_percent || 0))
+  );
   const speed = Math.max(0, Math.round((params.speed_kmh || 0) * 10) / 10);
 
-  let staticDevices: number;
-  let movingDevices: number;
-  if (
-    typeof params.ble_static_count === "number" &&
-    typeof params.ble_moving_count === "number"
-  ) {
-    const selfStatic = speed < 3.5 ? 1 : 0;
-    staticDevices = selfStatic + Math.max(0, Math.round(params.ble_static_count));
-    movingDevices =
-      1 - selfStatic + Math.max(0, Math.round(params.ble_moving_count));
-  } else {
-    const ratio = speed < 3.5 ? 0.82 : speed < 10 ? 0.54 : 0.22;
-    const total = 1 + bleCount;
-    staticDevices = Math.round(total * ratio);
-    movingDevices = Math.max(0, total - staticDevices);
-  }
+  const selfStatic = speed < 3.5 ? 1 : 0;
+  const bleStatic =
+    typeof params.ble_static_count === "number"
+      ? Math.max(0, Math.round(params.ble_static_count))
+      : speed < 3.5
+      ? bleCount
+      : Math.round(bleCount * 0.35);
+  const bleMoving = Math.max(0, bleCount - bleStatic);
+
+  const wifiStatic =
+    typeof params.wifi_static_count === "number"
+      ? Math.max(0, Math.round(params.wifi_static_count))
+      : speed < 3.5
+      ? wifiMobileCount
+      : Math.round(wifiMobileCount * 0.35);
+  const wifiMoving = Math.max(0, wifiMobileCount - wifiStatic);
+
+  const staticDevices = selfStatic + bleStatic + wifiStatic;
+  const movingDevices = 1 - selfStatic + bleMoving + wifiMoving;
 
   const totalAroundMe = Math.max(1, staticDevices + movingDevices);
   const staticPct = Math.round((staticDevices / totalAroundMe) * 100);
@@ -189,9 +219,10 @@ function recordLocalPing(params: {
     totalAroundMe,
     staticPct,
     speed,
-    peakThreshold
+    peakThreshold,
+    cellLoadPercent
   );
-  const radiusM = params.scan_radius_m || 40;
+  const radiusM = params.scan_radius_m || 50;
   const density =
     Math.round(((totalAroundMe / (Math.PI * radiusM * radiusM)) * 100) * 100) /
     100;
@@ -209,8 +240,13 @@ function recordLocalPing(params: {
     lon: Number(params.lon.toFixed(6)),
     speed_kmh: speed,
     accuracy_m: params.accuracy_m || 18,
-    network_type: params.network_type || "BLE_5.0 + 4G",
+    network_type: params.network_type || "NATIVE_MULTI_RADIO",
     ble_count: bleCount,
+    wifi_mobile_count: wifiMobileCount,
+    wifi_ap_count: wifiApCount,
+    cell_rsrp_dbm: cellRsrpDbm,
+    cell_rsrq_db: cellRsrqDb,
+    cell_load_percent: cellLoadPercent,
     total_crowd_around_me: totalAroundMe,
     static_devices: staticDevices,
     moving_devices: movingDevices,
@@ -254,10 +290,25 @@ function buildLocalSnapshot() {
     const avgLat = nodes.reduce((s, n) => s + n.lat, 0) / nodes.length;
     const avgLon = nodes.reduce((s, n) => s + n.lon, 0) / nodes.length;
     const scannerCount = nodes.length;
-    const rawBle = nodes.reduce((s, n) => s + n.ble_count, 0);
-    const dedupBle =
-      scannerCount === 1 ? rawBle : Math.round(rawBle * 0.75);
-    const totalMobiles = scannerCount + dedupBle;
+    const maxBle = Math.max(...nodes.map((n) => n.ble_count || 0), 0);
+    const maxWifiMobile = Math.max(
+      ...nodes.map((n) => n.wifi_mobile_count || 0),
+      0
+    );
+    const maxWifiAp = Math.max(...nodes.map((n) => n.wifi_ap_count || 0), 0);
+    const avgCellLoad = Math.round(
+      nodes.reduce((s, n) => s + (n.cell_load_percent || 0), 0) / nodes.length
+    );
+    const avgRsrq = Math.round(
+      nodes.reduce((s, n) => s + (n.cell_rsrq_db || -9), 0) / nodes.length
+    );
+    const avgRsrp = Math.round(
+      nodes.reduce((s, n) => s + (n.cell_rsrp_dbm || -85), 0) / nodes.length
+    );
+    const totalMobiles = Math.max(
+      scannerCount,
+      scannerCount + maxBle + maxWifiMobile
+    );
     const rawStatic = nodes.reduce((s, n) => s + n.static_devices, 0);
     const rawTotal = Math.max(
       1,
@@ -279,9 +330,11 @@ function buildLocalSnapshot() {
       totalMobiles,
       stuckPct,
       avgSpeed,
-      peakThreshold
+      peakThreshold,
+      avgCellLoad
     );
-    const exceedsPeak = totalMobiles >= peakThreshold;
+    const exceedsPeak =
+      totalMobiles >= peakThreshold || avgCellLoad >= 65;
     const excessRatio = Math.max(
       0,
       (totalMobiles - peakThreshold) / peakThreshold
@@ -292,6 +345,7 @@ function buildLocalSnapshot() {
         (0.42 +
           Math.min(0.38, (totalMobiles / peakThreshold) * 0.28) +
           (stuckPct / 100) * 0.24 +
+          (avgCellLoad / 100) * 0.14 +
           excessRatio * 0.22) *
           100
       ) / 100
@@ -303,11 +357,16 @@ function buildLocalSnapshot() {
       lat: Number(avgLat.toFixed(6)),
       lon: Number(avgLon.toFixed(6)),
       is_verified: true,
-      verification_basis: `BLE Proximity Scan (${scannerCount} active app user${
+      verification_basis: `Multi-Radio Scan (${scannerCount} app user${
         scannerCount !== 1 ? "s" : ""
-      } • ${dedupBle} nearby BLE devices)`,
+      } • +${maxBle} BLE • +${maxWifiMobile} Wi-Fi [BT Off] • 4G Load ${avgCellLoad}%)`,
       scanner_nodes_count: scannerCount,
-      ble_peers_count: dedupBle,
+      ble_peers_count: maxBle,
+      wifi_mobile_peers_count: maxWifiMobile,
+      wifi_fixed_ap_count: maxWifiAp,
+      cell_load_percent: avgCellLoad,
+      cell_rsrq_db: avgRsrq,
+      cell_rsrp_dbm: avgRsrp,
       total_mobiles: totalMobiles,
       mobiles_stuck: mobilesStuck,
       mobiles_moving: mobilesMoving,
@@ -321,7 +380,7 @@ function buildLocalSnapshot() {
       peak_threshold: peakThreshold,
       exceeds_peak: exceedsPeak,
       heat_intensity: heatIntensity,
-      intensity_label: `${mobility_state} (${totalMobiles} BLE)`,
+      intensity_label: `${mobility_state} (${totalMobiles} Devices)`,
       last_ping_iso: nodes[0].last_ping_iso,
     };
   });
@@ -332,6 +391,17 @@ function buildLocalSnapshot() {
     summary: {
       active_scanner_apps: scanners.length,
       total_ble_detected: heatmaps.reduce((s, h) => s + h.ble_peers_count, 0),
+      total_wifi_mobile_detected: heatmaps.reduce(
+        (s, h) => s + (h.wifi_mobile_peers_count || 0),
+        0
+      ),
+      avg_cell_load_percent:
+        heatmaps.length > 0
+          ? Math.round(
+              heatmaps.reduce((s, h) => s + (h.cell_load_percent || 0), 0) /
+                heatmaps.length
+            )
+          : 0,
       total_crowd_devices: heatmaps.reduce((s, h) => s + h.total_mobiles, 0),
       total_static_devices: heatmaps.reduce((s, h) => s + h.mobiles_stuck, 0),
       total_moving_devices: heatmaps.reduce((s, h) => s + h.mobiles_moving, 0),
@@ -350,11 +420,28 @@ export async function GET(req: NextRequest) {
   if (searchParams.get("action") === "ping") {
     const lat = Number(searchParams.get("lat") || 23.8069);
     const lon = Number(searchParams.get("lon") || 90.3687);
-    const speed_kmh = Number(searchParams.get("speed_kmh") || 0.8);
-    const ble_count = Number(searchParams.get("ble_count") || 38);
+    const speed_kmh = Number(searchParams.get("speed_kmh") || 0.0);
+    const ble_count = Number(searchParams.get("ble_count") || 0);
+    const wifi_mobile_count = Number(
+      searchParams.get("wifi_mobile_count") || 0
+    );
+    const wifi_ap_count = Number(searchParams.get("wifi_ap_count") || 0);
+    const cell_load_percent = Number(
+      searchParams.get("cell_load_percent") || 0
+    );
     const device_id = searchParams.get("device_id") || undefined;
     const device_label = searchParams.get("device_label") || undefined;
-    recordLocalPing({ device_id, device_label, lat, lon, speed_kmh, ble_count });
+    recordLocalPing({
+      device_id,
+      device_label,
+      lat,
+      lon,
+      speed_kmh,
+      ble_count,
+      wifi_mobile_count,
+      wifi_ap_count,
+      cell_load_percent,
+    });
     await fetchFromRemoteBackend(
       `/api/v1/crowd/ping?${searchParams.toString()}`
     );
@@ -382,7 +469,7 @@ export async function GET(req: NextRequest) {
     });
 
     const rawScanners = Array.from(mergedScannersMap.values());
-    // Cross-detect nearby opened BigWarn phones within 50m of each other
+    // Cross-detect nearby opened BigWarn phones within 50m of each other & fuse BLE + Wi-Fi (BT-Off) peers
     const scanners = rawScanners.map((sc: any) => {
       let nearbyOpenAppsStatic = 0;
       let nearbyOpenAppsMoving = 0;
@@ -396,18 +483,37 @@ export async function GET(req: NextRequest) {
         }
       });
       const hwBle = sc.ble_count || 0;
-      const totalBlePeers = Math.max(
-        hwBle,
-        nearbyOpenAppsStatic + nearbyOpenAppsMoving
-      );
+      const hwWifiMobile = sc.wifi_mobile_count || 0;
+      const nearbyApps = nearbyOpenAppsStatic + nearbyOpenAppsMoving;
+      const extraOpenApps = Math.max(0, nearbyApps - hwBle);
       const selfStatic = (sc.speed_kmh || 0) < 3.5 ? 1 : 0;
-      const staticDevs = selfStatic + Math.max(0, totalBlePeers - nearbyOpenAppsMoving);
-      const movingDevs = (1 - selfStatic) + nearbyOpenAppsMoving;
+      const hwStatic = Math.max(
+        0,
+        (sc.static_devices || 1) - selfStatic
+      );
+      const hwMoving = Math.max(
+        0,
+        hwBle + hwWifiMobile - hwStatic
+      );
+      const staticDevs =
+        selfStatic +
+        hwStatic +
+        (extraOpenApps > 0 ? nearbyOpenAppsStatic : 0);
+      const movingDevs =
+        1 -
+        selfStatic +
+        hwMoving +
+        (extraOpenApps > 0 ? nearbyOpenAppsMoving : 0);
       const totalAround = Math.max(1, staticDevs + movingDevs);
       const staticPct = Math.round((staticDevs / totalAround) * 100);
       return {
         ...sc,
-        ble_count: totalBlePeers,
+        ble_count: Math.max(hwBle, nearbyApps),
+        wifi_mobile_count: hwWifiMobile,
+        wifi_ap_count: sc.wifi_ap_count || 0,
+        cell_rsrp_dbm: sc.cell_rsrp_dbm ?? -85,
+        cell_rsrq_db: sc.cell_rsrq_db ?? -9,
+        cell_load_percent: sc.cell_load_percent || 0,
         total_crowd_around_me: totalAround,
         static_devices: staticDevs,
         moving_devices: movingDevs,
@@ -428,7 +534,24 @@ export async function GET(req: NextRequest) {
       const avgLon = nodes.reduce((s, n) => s + n.lon, 0) / nodes.length;
       const scannerCount = nodes.length;
       const maxBle = Math.max(...nodes.map((n) => n.ble_count || 0), 0);
-      const totalMobiles = Math.max(scannerCount, 1 + maxBle);
+      const maxWifiMobile = Math.max(
+        ...nodes.map((n) => n.wifi_mobile_count || 0),
+        0
+      );
+      const maxWifiAp = Math.max(...nodes.map((n) => n.wifi_ap_count || 0), 0);
+      const avgCellLoad = Math.round(
+        nodes.reduce((s, n) => s + (n.cell_load_percent || 0), 0) / nodes.length
+      );
+      const avgRsrq = Math.round(
+        nodes.reduce((s, n) => s + (n.cell_rsrq_db ?? -9), 0) / nodes.length
+      );
+      const avgRsrp = Math.round(
+        nodes.reduce((s, n) => s + (n.cell_rsrp_dbm ?? -85), 0) / nodes.length
+      );
+      const totalMobiles = Math.max(
+        scannerCount,
+        scannerCount + maxBle + maxWifiMobile
+      );
       const rawStatic = nodes.reduce((s, n) => s + (n.static_devices || 0), 0);
       const rawTotal = Math.max(
         1,
@@ -447,7 +570,8 @@ export async function GET(req: NextRequest) {
         totalMobiles,
         stuckPct,
         avgSpeed,
-        peakThreshold
+        peakThreshold,
+        avgCellLoad
       );
       return {
         area,
@@ -455,11 +579,16 @@ export async function GET(req: NextRequest) {
         lat: Number(avgLat.toFixed(6)),
         lon: Number(avgLon.toFixed(6)),
         is_verified: true,
-        verification_basis: `BLE Proximity Scan (${scannerCount} opened app user${
+        verification_basis: `Multi-Radio Scan (${scannerCount} opened app user${
           scannerCount !== 1 ? "s" : ""
-        })`,
+        } • +${maxBle} BLE • +${maxWifiMobile} Wi-Fi [BT Off] • 4G Load ${avgCellLoad}%)`,
         scanner_nodes_count: scannerCount,
-        ble_peers_count: Math.max(0, totalMobiles - scannerCount),
+        ble_peers_count: maxBle,
+        wifi_mobile_peers_count: maxWifiMobile,
+        wifi_fixed_ap_count: maxWifiAp,
+        cell_load_percent: avgCellLoad,
+        cell_rsrq_db: avgRsrq,
+        cell_rsrp_dbm: avgRsrp,
         total_mobiles: totalMobiles,
         mobiles_stuck: mobilesStuck,
         mobiles_moving: mobilesMoving,
@@ -471,9 +600,9 @@ export async function GET(req: NextRequest) {
         avg_rssi_dbm: nodes[0].avg_rssi_dbm || -70,
         density_per_100m2: nodes[0].density_per_100m2 || 0.04,
         peak_threshold: peakThreshold,
-        exceeds_peak: totalMobiles >= peakThreshold,
+        exceeds_peak: totalMobiles >= peakThreshold || avgCellLoad >= 65,
         heat_intensity: mobility_state === "STATIC" ? 0.78 : 0.55,
-        intensity_label: `${mobility_state} (${totalMobiles} BLE)`,
+        intensity_label: `${mobility_state} (${totalMobiles} Devices)`,
       };
     });
 
@@ -486,6 +615,17 @@ export async function GET(req: NextRequest) {
           (s, h) => s + (h.ble_peers_count || 0),
           0
         ),
+        total_wifi_mobile_detected: heatmaps.reduce(
+          (s, h) => s + (h.wifi_mobile_peers_count || 0),
+          0
+        ),
+        avg_cell_load_percent:
+          heatmaps.length > 0
+            ? Math.round(
+                heatmaps.reduce((s, h) => s + (h.cell_load_percent || 0), 0) /
+                  heatmaps.length
+              )
+            : 0,
         total_crowd_devices: heatmaps.reduce(
           (s, h) => s + (h.total_mobiles || 0),
           0
@@ -519,9 +659,9 @@ export async function POST(req: NextRequest) {
       device_label: body.device_label,
       lat: Number(body.lat || 23.8069),
       lon: Number(body.lon || 90.3687),
-      speed_kmh: Number(body.speed_kmh ?? 0.8),
+      speed_kmh: Number(body.speed_kmh ?? 0.0),
       accuracy_m: Number(body.accuracy_m || 18),
-      ble_count: Number(body.ble_count ?? 38),
+      ble_count: Number(body.ble_count ?? 0),
       ble_static_count:
         typeof body.ble_static_count === "number"
           ? body.ble_static_count
@@ -530,9 +670,22 @@ export async function POST(req: NextRequest) {
         typeof body.ble_moving_count === "number"
           ? body.ble_moving_count
           : undefined,
+      wifi_mobile_count: Number(body.wifi_mobile_count ?? 0),
+      wifi_ap_count: Number(body.wifi_ap_count ?? 0),
+      wifi_static_count:
+        typeof body.wifi_static_count === "number"
+          ? body.wifi_static_count
+          : undefined,
+      wifi_moving_count:
+        typeof body.wifi_moving_count === "number"
+          ? body.wifi_moving_count
+          : undefined,
+      cell_rsrp_dbm: Number(body.cell_rsrp_dbm ?? -85),
+      cell_rsrq_db: Number(body.cell_rsrq_db ?? -9),
+      cell_load_percent: Number(body.cell_load_percent ?? 0),
       avg_rssi_dbm: Number(body.avg_rssi_dbm || -64),
-      scan_radius_m: Number(body.scan_radius_m || 40),
-      network_type: body.network_type || "BLE_5.0 + 4G",
+      scan_radius_m: Number(body.scan_radius_m || 50),
+      network_type: body.network_type || "NATIVE_MULTI_RADIO",
     });
 
     const base = getRemoteBackendUrl();

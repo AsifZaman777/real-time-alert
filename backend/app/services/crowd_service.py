@@ -1,15 +1,19 @@
 """
-BLE Proximity Crowd-Sourcing & Mobility Pattern Service for Bangladesh.
+Single-Phone Multi-Radio Surroundings & Traffic Detection Service for Bangladesh.
 
 How It Works:
-  1. When a user opens the BigWarn mobile app, their phone automatically scans nearby
-     Bluetooth Low Energy (BLE) advertising packets within a ~40m radius and reads the
-     phone's hardware GPS location and velocity (`speed_kmh`).
-  2. Active opened-app sessions have a strict 30-second live TTL (since open apps ping
-     every 6 seconds), so closed or reloaded app sessions disappear immediately instead
-     of lingering as stale ghost rows.
-  3. If multiple phones have the BigWarn app open within 50 meters of each other, the
-     server also cross-detects those nearby open app phones alongside hardware BLE peers.
+  1. When 1 or 2 people with the BigWarn mobile app are at a strike or road blockade,
+     each open phone scans four hardware sensors:
+       - Radio A: Bluetooth Low Energy (`ble_count`, 40m radius)
+       - Radio B: Wi-Fi Mobile Peers & Hotspots (`wifi_mobile_count`, 50m radius —
+         detects surrounding phones/vehicles even when they have Bluetooth turned OFF!)
+       - Radio C: 4G/LTE Cell-Tower Sector Load (`cell_rsrp_dbm`, `cell_rsrq_db`,
+         `cell_load_percent` — measures SIM-card saturation on the local cell tower)
+       - Radio D: Hardware GPS Velocity (`speed_kmh` — measures whether traffic is
+         STATIC / BLOCKED vs. MOVING)
+  2. The server fuses all four hardware signals (`1 Self + BLE Peers + Wi-Fi Mobile Peers
+     + Nearby Open App Phones within 50m`), enforces a strict 30-second live TTL, and
+     determines the traffic & crowd state for both the Mobile Map HUD and Frontend Table.
 """
 from __future__ import annotations
 
@@ -84,24 +88,25 @@ def classify_crowd_pattern(
     static_pct: int,
     speed_kmh: float,
     peak_threshold: int,
+    cell_load_pct: int = 25,
 ) -> tuple[str, str]:
-    is_dense = total_crowd >= peak_threshold
-    is_very_dense = total_crowd >= int(peak_threshold * 1.45)
+    is_dense = total_crowd >= peak_threshold or cell_load_pct >= 75
+    is_very_dense = total_crowd >= int(peak_threshold * 1.45) or (total_crowd >= 15 and cell_load_pct >= 82)
 
     if static_pct >= 68 or speed_kmh < STATIC_SPEED_THRESHOLD_KMH:
         mobility_state = "STATIC"
         if is_very_dense:
-            pattern = "Dense Static Gathering / Standstill Blockade"
+            pattern = "Strike / Standstill Blockade (High Multi-Radio & Cell Density)"
         elif is_dense:
-            pattern = "High-Density Static Crowd / Bottleneck"
-        elif total_crowd >= 15:
-            pattern = "Stationary Commuter Cluster / Queue"
+            pattern = "High-Density Static Crowd / Traffic Bottleneck"
+        elif total_crowd >= 10:
+            pattern = "Stationary Traffic Queue / Commuter Cluster"
         else:
             pattern = f"Localized Static Presence ({total_crowd} device{'s' if total_crowd != 1 else ''})"
     elif static_pct >= 42 or speed_kmh < SLOW_SPEED_THRESHOLD_KMH:
         mobility_state = "SLOW_MOVING"
         if is_dense:
-            pattern = "Slow-Moving Crowd Surge / Procession"
+            pattern = "Slow-Moving Procession / Congested Traffic Surge"
         else:
             pattern = "Slow Crawling Traffic Corridor"
     else:
@@ -109,7 +114,7 @@ def classify_crowd_pattern(
         if is_dense:
             pattern = "High-Volume Moving Transit Flow"
         else:
-            pattern = "Normal Free-Flowing Movement"
+            pattern = "Normal Free-Flowing Traffic"
 
     return mobility_state, pattern
 
@@ -126,7 +131,6 @@ class CrowdIntelligenceService:
     def _is_valid_non_legacy_record(self, rec: dict[str, Any], now_s: float) -> bool:
         if (now_s - float(rec.get("ts", 0))) > PING_TTL_SECONDS:
             return False
-        # Reject legacy synthetic AMBIENT_BLE_MESH records that used network_type == "BLE_5.0 + 4G"
         if str(rec.get("network_type") or "") == "BLE_5.0 + 4G":
             return False
         return True
@@ -170,17 +174,24 @@ class CrowdIntelligenceService:
         lon: float,
         speed_kmh: float = 0.0,
         accuracy_m: float = 20.0,
-        network_type: str = "NATIVE_BLE_HARDWARE",
+        network_type: str = "MULTI_RADIO_BLE_WIFI_CELL",
         ble_count: int | None = None,
         ble_static_count: int | None = None,
         ble_moving_count: int | None = None,
+        wifi_mobile_count: int | None = None,
+        wifi_ap_count: int | None = None,
+        wifi_static_count: int | None = None,
+        wifi_moving_count: int | None = None,
+        cell_rsrp_dbm: int | None = None,
+        cell_rsrq_db: int | None = None,
+        cell_load_percent: int | None = None,
         avg_rssi_dbm: int = -70,
-        scan_radius_m: int = 40,
+        scan_radius_m: int = 50,
         device_label: str = "",
     ) -> dict[str, Any]:
         """
-        Records a real-time BLE proximity scan + GPS velocity ping from an opened BigWarn mobile app.
-        Rejects legacy synthetic "BLE_5.0 + 4G" pings from older app bundles.
+        Records a real-time Multi-Radio scan (BLE + Wi-Fi Mobile Peers + 4G Cell Load + GPS Speed)
+        from an opened BigWarn mobile app.
         """
         if not (BD_MIN_LAT <= lat <= BD_MAX_LAT and BD_MIN_LON <= lon <= BD_MAX_LON):
             return {
@@ -189,14 +200,15 @@ class CrowdIntelligenceService:
                 "verified": False,
             }
 
-        # If an older cached JS bundle on a phone sends the legacy synthetic "BLE_5.0 + 4G" tag,
-        # zero out its synthetic ble_count so it only counts the real phone itself!
         is_legacy_bundle = (network_type or "") == "BLE_5.0 + 4G"
         if is_legacy_bundle:
             ble_count = 0
             ble_static_count = 0
             ble_moving_count = 0
-            network_type = "REAL_GPS_ONLY (Update App for Native BLE)"
+            wifi_mobile_count = 0
+            wifi_static_count = 0
+            wifi_moving_count = 0
+            network_type = "REAL_GPS_ONLY (Update App for Multi-Radio)"
 
         clean_speed = max(0.0, min(160.0, float(speed_kmh)))
         area, city, snap_dist_km = snap_to_bangladesh_area(lat, lon)
@@ -208,10 +220,29 @@ class CrowdIntelligenceService:
             clean_id = f"ble-node-{area.lower().replace(' ', '-')}"
 
         detected_ble = max(0, int(ble_count)) if ble_count is not None else 0
-        st_ble = max(0, int(ble_static_count)) if ble_static_count is not None else (
-            detected_ble if clean_speed < STATIC_SPEED_THRESHOLD_KMH else 0
+        st_ble = (
+            max(0, int(ble_static_count))
+            if ble_static_count is not None
+            else (detected_ble if clean_speed < STATIC_SPEED_THRESHOLD_KMH else 0)
         )
         mv_ble = max(0, detected_ble - st_ble)
+
+        detected_wifi_mob = max(0, int(wifi_mobile_count)) if wifi_mobile_count is not None else 0
+        detected_wifi_ap = max(0, int(wifi_ap_count)) if wifi_ap_count is not None else 0
+        st_wifi = (
+            max(0, int(wifi_static_count))
+            if wifi_static_count is not None
+            else (detected_wifi_mob if clean_speed < STATIC_SPEED_THRESHOLD_KMH else 0)
+        )
+        mv_wifi = max(0, detected_wifi_mob - st_wifi)
+
+        c_rsrp = int(cell_rsrp_dbm) if cell_rsrp_dbm is not None else -85
+        c_rsrq = int(cell_rsrq_db) if cell_rsrq_db is not None else -9
+        c_load = (
+            max(10, min(100, int(cell_load_percent)))
+            if cell_load_percent is not None
+            else max(12, min(98, int(round(((-5.0 - c_rsrq) / 15.0) * 100.0))))
+        )
 
         now_s = time.time()
         now_iso = now_dhaka().isoformat(timespec="seconds")
@@ -225,12 +256,19 @@ class CrowdIntelligenceService:
             "lon": round(lon, 6),
             "speed_kmh": round(clean_speed, 1),
             "accuracy_m": round(max(1.0, float(accuracy_m)), 1),
-            "network_type": network_type or "NATIVE_BLE_HARDWARE",
+            "network_type": network_type or "MULTI_RADIO_BLE_WIFI_CELL",
             "raw_ble_count": detected_ble,
             "raw_ble_static": st_ble,
             "raw_ble_moving": mv_ble,
+            "raw_wifi_mobile_count": detected_wifi_mob,
+            "raw_wifi_ap_count": detected_wifi_ap,
+            "raw_wifi_static": st_wifi,
+            "raw_wifi_moving": mv_wifi,
+            "cell_rsrp_dbm": c_rsrp,
+            "cell_rsrq_db": c_rsrq,
+            "cell_load_percent": c_load,
             "avg_rssi_dbm": int(avg_rssi_dbm or -70),
-            "scan_radius_m": max(15, min(100, int(scan_radius_m or 40))),
+            "scan_radius_m": max(15, min(100, int(scan_radius_m or 50))),
             "peak_threshold": peak_threshold,
             "snap_distance_km": snap_dist_km,
             "ts": now_s,
@@ -254,10 +292,11 @@ class CrowdIntelligenceService:
     def get_live_crowd_snapshot(self) -> dict[str, Any]:
         """
         Aggregates all currently open BigWarn mobile app users (active within last 30s).
-        For each opened app user, computes:
-          - `ble_count`: Hardware BLE peers + any other opened BigWarn app phones within 50m.
-          - `total_crowd_around_me`: 1 (this opened app phone) + `ble_count`.
-          - Static vs. Moving split and Crowd Pattern.
+        For each opened app user, fuses:
+          - `ble_count`: Real hardware BLE peers (40m) + nearby open BigWarn phones (50m)
+          - `wifi_mobile_count`: Real hardware Wi-Fi mobile peers/hotspots (50m, Bluetooth OFF)
+          - `cell_load_percent`: 4G/LTE Cell-Tower Sector RSRQ Congestion (%)
+          - `total_crowd_around_me`: 1 (this opened app phone) + `ble_count` + `wifi_mobile_count`
         """
         now_s = time.time()
         with self._lock:
@@ -273,9 +312,9 @@ class CrowdIntelligenceService:
             lon_i = float(sc["lon"])
             speed_i = float(sc.get("speed_kmh", 0.0))
             peak_thresh = int(sc.get("peak_threshold", 25))
-            radius_m = int(sc.get("scan_radius_m", 40))
+            radius_m = int(sc.get("scan_radius_m", 50))
+            cell_load = int(sc.get("cell_load_percent", 25))
 
-            # Count any other currently open BigWarn app phones within 50 meters of this phone
             nearby_open_apps_static = 0
             nearby_open_apps_moving = 0
             for other in raw_scanners:
@@ -289,17 +328,22 @@ class CrowdIntelligenceService:
                         nearby_open_apps_moving += 1
 
             hw_ble = int(sc.get("raw_ble_count", sc.get("ble_count", 0)))
-            hw_static = int(sc.get("raw_ble_static", 0))
-            hw_moving = int(sc.get("raw_ble_moving", 0))
+            hw_ble_static = int(sc.get("raw_ble_static", 0))
 
-            # Total nearby BLE peers = max(hardware BLE scan, nearby open BigWarn app phones)
+            hw_wifi_mob = int(sc.get("raw_wifi_mobile_count", sc.get("wifi_mobile_count", 0)))
+            hw_wifi_ap = int(sc.get("raw_wifi_ap_count", sc.get("wifi_ap_count", 0)))
+            hw_wifi_static = int(sc.get("raw_wifi_static", 0))
+
             total_ble_peers = max(hw_ble, nearby_open_apps_static + nearby_open_apps_moving)
-            peer_static = max(hw_static, nearby_open_apps_static)
-            peer_moving = max(0, total_ble_peers - peer_static)
+            ble_peer_static = max(hw_ble_static, nearby_open_apps_static)
+            ble_peer_moving = max(0, total_ble_peers - ble_peer_static)
+
+            wifi_peer_static = min(hw_wifi_mob, hw_wifi_static)
+            wifi_peer_moving = max(0, hw_wifi_mob - wifi_peer_static)
 
             self_is_static = 1 if speed_i < STATIC_SPEED_THRESHOLD_KMH else 0
-            static_devices = self_is_static + peer_static
-            moving_devices = (1 - self_is_static) + peer_moving
+            static_devices = self_is_static + ble_peer_static + wifi_peer_static
+            moving_devices = (1 - self_is_static) + ble_peer_moving + wifi_peer_moving
             total_around = max(1, static_devices + moving_devices)
 
             static_pct = int(round((static_devices / float(total_around)) * 100))
@@ -310,6 +354,7 @@ class CrowdIntelligenceService:
                 static_pct=static_pct,
                 speed_kmh=speed_i,
                 peak_threshold=peak_thresh,
+                cell_load_pct=cell_load,
             )
 
             area_m2 = math.pi * (radius_m ** 2)
@@ -318,6 +363,8 @@ class CrowdIntelligenceService:
             enriched = {
                 **sc,
                 "ble_count": total_ble_peers,
+                "wifi_mobile_count": hw_wifi_mob,
+                "wifi_ap_count": hw_wifi_ap,
                 "total_crowd_around_me": total_around,
                 "static_devices": static_devices,
                 "moving_devices": moving_devices,
@@ -326,12 +373,11 @@ class CrowdIntelligenceService:
                 "mobility_state": mobility_state,
                 "crowd_pattern": crowd_pattern,
                 "density_per_100m2": density_per_100m2,
-                "exceeds_peak": total_around >= peak_thresh,
+                "exceeds_peak": total_around >= peak_thresh or cell_load >= 75,
                 "age_seconds": max(0, int(round(now_s - float(sc.get("ts", now_s))))),
             }
             active_scanners.append(enriched)
 
-        # Group by area for map heatmaps
         by_area: dict[str, list[dict[str, Any]]] = {}
         for sc in active_scanners:
             by_area.setdefault(str(sc["area"]), []).append(sc)
@@ -347,7 +393,13 @@ class CrowdIntelligenceService:
 
             scanner_count = len(nodes)
             max_hw_ble = max(int(n.get("raw_ble_count", 0)) for n in nodes)
-            total_mobiles = scanner_count + max_hw_ble
+            max_wifi_mob = max(int(n.get("wifi_mobile_count", 0)) for n in nodes)
+            max_wifi_ap = max(int(n.get("wifi_ap_count", 0)) for n in nodes)
+            avg_cell_load = int(round(sum(int(n.get("cell_load_percent", 25)) for n in nodes) / len(nodes)))
+            avg_cell_rsrq = int(round(sum(int(n.get("cell_rsrq_db", -9)) for n in nodes) / len(nodes)))
+            avg_cell_rsrp = int(round(sum(int(n.get("cell_rsrp_dbm", -85)) for n in nodes) / len(nodes)))
+
+            total_mobiles = scanner_count + max_hw_ble + max_wifi_mob
 
             raw_static_sum = sum(int(n.get("static_devices", 0)) for n in nodes)
             raw_total_sum = max(1, sum(int(n.get("total_crowd_around_me", 1)) for n in nodes))
@@ -368,27 +420,29 @@ class CrowdIntelligenceService:
                 static_pct=stuck_percent,
                 speed_kmh=avg_speed_kmh,
                 peak_threshold=peak_threshold,
+                cell_load_pct=avg_cell_load,
             )
 
-            exceeds_peak = total_mobiles >= peak_threshold
+            exceeds_peak = total_mobiles >= peak_threshold or avg_cell_load >= 75
             excess_ratio = max(0.0, (total_mobiles - peak_threshold) / float(max(1, peak_threshold)))
             raw_int = min(
                 1.0,
                 0.42
-                + min(0.38, (total_mobiles / float(max(1, peak_threshold))) * 0.28)
-                + (stuck_percent / 100.0) * 0.24
-                + excess_ratio * 0.22,
+                + min(0.35, (total_mobiles / float(max(1, peak_threshold))) * 0.25)
+                + (stuck_percent / 100.0) * 0.22
+                + (avg_cell_load / 100.0) * 0.14
+                + excess_ratio * 0.18,
             )
             heat_intensity = round(raw_int, 2)
 
             if mobility_state == "STATIC" and exceeds_peak:
-                intensity_label = f"STATIC CROWD PEAK ({total_mobiles} BLE)"
+                intensity_label = f"STATIC BLOCKADE ({total_mobiles} Devs)"
             elif mobility_state == "STATIC":
-                intensity_label = f"STATIC CROWD ({total_mobiles} BLE)"
+                intensity_label = f"STATIC CROWD ({total_mobiles} Devs)"
             elif mobility_state == "SLOW_MOVING":
-                intensity_label = f"SLOW CROWD ({total_mobiles} BLE)"
+                intensity_label = f"SLOW TRAFFIC ({total_mobiles} Devs)"
             else:
-                intensity_label = f"MOVING FLOW ({total_mobiles} BLE)"
+                intensity_label = f"MOVING FLOW ({total_mobiles} Devs)"
 
             heatmaps.append(
                 {
@@ -398,11 +452,16 @@ class CrowdIntelligenceService:
                     "lon": round(avg_lon, 6),
                     "is_verified": True,
                     "verification_basis": (
-                        f"BLE Proximity Scan ({scanner_count} opened app user{'s' if scanner_count != 1 else ''} • "
-                        f"{max_hw_ble} external BLE peer{'s' if max_hw_ble != 1 else ''})"
+                        f"Multi-Radio Scan ({scanner_count} opened app{'s' if scanner_count != 1 else ''} • "
+                        f"+{max_hw_ble} BLE • +{max_wifi_mob} Wi-Fi Peers • Cell Load {avg_cell_load}%)"
                     ),
                     "scanner_nodes_count": scanner_count,
                     "ble_peers_count": max_hw_ble,
+                    "wifi_mobile_count": max_wifi_mob,
+                    "wifi_ap_count": max_wifi_ap,
+                    "cell_rsrp_dbm": avg_cell_rsrp,
+                    "cell_rsrq_db": avg_cell_rsrq,
+                    "cell_load_percent": avg_cell_load,
                     "total_mobiles": total_mobiles,
                     "mobiles_stuck": mobiles_stuck,
                     "mobiles_moving": mobiles_moving,
@@ -431,6 +490,7 @@ class CrowdIntelligenceService:
         )
 
         total_ble = sum(h["ble_peers_count"] for h in heatmaps)
+        total_wifi_mob = sum(h["wifi_mobile_count"] for h in heatmaps)
         total_crowd = sum(h["total_mobiles"] for h in heatmaps)
         total_static = sum(h["mobiles_stuck"] for h in heatmaps)
         total_moving = sum(h["mobiles_moving"] for h in heatmaps)
@@ -442,6 +502,7 @@ class CrowdIntelligenceService:
             "summary": {
                 "active_scanner_apps": len(active_scanners),
                 "total_ble_detected": total_ble,
+                "total_wifi_mobile_detected": total_wifi_mob,
                 "total_crowd_devices": total_crowd,
                 "total_static_devices": total_static,
                 "total_moving_devices": total_moving,

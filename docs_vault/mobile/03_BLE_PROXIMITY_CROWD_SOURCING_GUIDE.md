@@ -1,18 +1,28 @@
-# 📡 BLE Proximity Crowd-Sourcing & Live Mobility Heatmap Guide
+# 📡 Multi-Radio Proximity Crowd-Sourcing (BLE + Wi-Fi [BT Off] + 4G Cell Load) & Live Mobility Heatmap Guide
 
-This document explains how **BigWarn** detects real-time crowd size, static vs. moving crowd behavior, and spatial congestion patterns across Bangladesh using **Passive Bluetooth Low Energy (BLE) Proximity Scanning + Hardware GPS Velocity**, and how this data is visualized on both the **Mobile App Map** and the **Frontend Web Console (`📡 Crowd Sourcing (BLE)`)**.
+This document explains how **BigWarn** detects real-time crowd size, static vs. moving crowd behavior, and spatial congestion patterns across Bangladesh using **4-Radio Hardware Sensing (Passive BLE + Wi-Fi Mobile Peers with Bluetooth OFF + 4G/LTE Cell Tower Load + Hardware GPS Velocity)**, and how this data is visualized on both the **Mobile App Map** and the **Frontend Web Console (`📡 Crowd Sourcing (BLE)`)**.
+
+> [!TIP]
+> For the complete Single-Phone Multi-Radio Surroundings & Traffic Detection architecture and mathematical formulas, see [04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/docs_vault/mobile/04_MULTI_RADIO_CROWD_AND_TRAFFIC_DETECTION_PLAN.md).
 
 ---
 
-## 1. Core Concept: Why BLE Proximity Scanning Works With Even 1 App User
+## 1. Core Concept: How 1 Opened App Phone Measures Surroundings Even When Others Have Bluetooth OFF
 
-A single smartphone's GPS sensor only knows the location of that **1 phone**. However, every modern smartphone, smartwatch, wireless earbud, and vehicle continuously broadcasts anonymous **Bluetooth Low Energy (BLE) advertising packets** within a **`30–50 meter` radius**.
+A single smartphone's GPS sensor only knows the location and speed of that **1 phone**. To measure the surrounding crowd and traffic with **only 1 or 2 opened BigWarn phones**—even when people around them have **not downloaded the app** and have **Bluetooth turned OFF**—BigWarn fuses **4 independent hardware radios** in [BigWarnBleScannerModule.kt](file:///Users/sabihakhairohi/Projects/news-alert/real-time-alert/mobile/android/app/src/main/java/com/bigwarn/edge/BigWarnBleScannerModule.kt):
 
-When a commuter opens the **BigWarn Mobile App**:
-1. Their phone acts as a **mobile BLE crowd sensor**, passively counting the nearby BLE advertisements around them (`ble_count`) and measuring their RSSI signal strength (`avg_rssi_dbm`, e.g., `-58 dBm` to `-74 dBm`).
-2. Simultaneously, the phone reads its **hardware GPS coordinates (`lat`, `lon`) and travel velocity (`speed_kmh`)** via `expo-location`.
-3. By combining **RSSI signal stability** ($\Delta\text{RSSI}$ over consecutive scans) with the scanner phone's **GPS velocity (`km/h`)**, the app and server determine how many devices around the user are **STATIC / STUCK** versus **MOVING**.
-4. Even **1 open BigWarn app user** standing in a blockade at Mirpur-10 or Shahbagh can detect **50–140+ nearby BLE devices** around them without needing those other people to install the app.
+1. **Radio A — Bluetooth Low Energy (`BluetoothLeScanner`, 40m radius)**:
+   - Passively counts nearby BLE advertisements (`ble_count`) from smartwatches, TWS earbuds, fitness bands, vehicle audio units, and phones with BLE active.
+2. **Radio B — Wi-Fi Mobile Peer & Hotspot Scanner (`WifiManager.getScanResults()`, 50m radius — Detects Phones with Bluetooth OFF)**:
+   - Passively detects nearby smartphones, dashcams, and vehicle transit routers that have **Bluetooth turned OFF** by identifying:
+     - **IEEE 802.11 Locally Administered MAC bit** (`2nd hex char of BSSID in {'2', '6', 'A', 'E'}`), used by Android/iOS randomized mobile hotspots and Wi-Fi Direct peers.
+     - **Mobile & Vehicle SSIDs** (`DIRECT-*`, `AndroidAP*`, `Galaxy*`, `Redmi*`, `Poco*`, `vivo*`, `OPPO*`, `Realme*`, `OnePlus*`, `iPhone*`, `Car-*`, `Dashcam*`).
+   - Separates mobile peers (`wifi_mobile_count`) from stationary building routers (`wifi_ap_count`).
+3. **Radio C — 4G/LTE/5G Cellular Tower Congestion (`TelephonyManager.getAllCellInfo()`)**:
+   - Reads the serving cell tower's **RSRP (`dBm`)** and **RSRQ (`dB`, `-3` to `-20 dB`)** to compute **`cell_load_percent` (`0–100%`)**.
+   - Even if surrounding phones have **both Bluetooth and Wi-Fi turned OFF**, every phone with a SIM card connects to the local 4G cell tower—causing `RSRQ` to drop from `-6 dB` (empty road) to `-16 dB+` (`75–100%` load) during a strike or traffic blockade.
+4. **Radio D — Hardware GPS Velocity (`expo-location`, `speed_kmh`)**:
+   - Measures the scanner phone's real ground speed (`km/h`) and combines it with BLE/Wi-Fi RSSI stability ($\Delta\text{RSSI} \le 6\text{ dBm}$) to classify how many surrounding devices are **STATIC / STUCK (`< 3.5 km/h`)** vs. **MOVING (`>= 3.5 km/h`)**.
 
 ---
 

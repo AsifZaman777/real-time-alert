@@ -610,7 +610,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       const isStatic = z.mobility_state === 'STATIC' || (z.stuck_percent || 0) >= 65;
       const pillBg = isStatic ? '#450A0A' : '#FEF3C7';
       const pillCol = isStatic ? '#FECACA' : '#B45309';
-      const mobilityBadge = isStatic ? '🔴 STATIC CROWD' : (z.mobility_state === 'SLOW_MOVING' ? '🟡 SLOW CROWD' : '🟢 MOVING FLOW');
+      const mobilityBadge = isStatic ? '🔴 STATIC / BLOCKED' : (z.mobility_state === 'SLOW_MOVING' ? '🟡 SLOW TRAFFIC' : '🟢 MOVING FLOW');
       const totalCrowd = z.total_mobiles || 1;
       const staticCount = z.mobiles_stuck || 0;
       const movingCount = z.mobiles_moving || 0;
@@ -618,7 +618,9 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       const movingPct = z.moving_percent || (100 - staticPct);
       const patternText = z.crowd_pattern || (isStatic ? 'High-Density Static Gathering' : 'Moving Crowd Flow');
       const scannerCount = z.scanner_nodes_count || 1;
-      const blePeers = z.ble_peers_count || Math.max(0, totalCrowd - scannerCount);
+      const blePeers = z.ble_peers_count || 0;
+      const wifiPeers = z.wifi_mobile_count || 0;
+      const cellLoad = z.cell_load_percent || 25;
 
       hudEl.innerHTML = '<div class="hud-top">'
         +   '<span class="hud-area">📡 ' + escapeHtml(z.area) + '</span>'
@@ -627,13 +629,13 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         + '<div class="hud-pattern-row">'
         +   '<div>' + escapeHtml(patternText) + '</div>'
         +   '<div style="font-size:9.5px;color:#475569;margin-top:2px;">'
-        +     scannerCount + ' Open App Scanner(s) • ' + blePeers + ' BLE Peers (' + (z.avg_rssi_dbm || -64) + ' dBm)'
+        +     scannerCount + ' Open App • +' + blePeers + ' BLE (40m) • +' + wifiPeers + ' Wi-Fi (BT Off) • 4G Load ' + cellLoad + '%'
         +   '</div>'
         + '</div>'
         + '<div class="hud-grid">'
         +   '<div class="hud-stat-box">'
         +     '<div class="hud-stat-val">' + totalCrowd + '</div>'
-        +     '<div class="hud-stat-lbl">BLE Crowd</div>'
+        +     '<div class="hud-stat-lbl">Surrounding</div>'
         +   '</div>'
         +   '<div class="hud-stat-box" style="background:#FEF2F2;border-color:#FECACA;">'
         +     '<div class="hud-stat-val" style="color:#DC2626;">' + staticCount + ' (' + staticPct + '%)</div>'
@@ -648,8 +650,8 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         +   '<div class="hud-bar-stuck" style="width:' + Math.min(100, Math.max(5, staticPct)) + '%;background:' + (isStatic ? '#7F1D1D' : '#EF4444') + ';"></div>'
         + '</div>'
         + '<div class="hud-footer">'
-        +   '<span>Avg GPS Speed: ' + (z.avg_speed_kmh ?? 0) + ' km/h</span>'
-        +   '<span style="color:#0284C7;">40m BLE Radius</span>'
+        +   '<span>Traffic Speed: ' + (z.avg_speed_kmh ?? 0) + ' km/h</span>'
+        +   '<span style="color:#0284C7;">50m Multi-Radio</span>'
         + '</div>';
       hudEl.style.display = 'block';
     }
