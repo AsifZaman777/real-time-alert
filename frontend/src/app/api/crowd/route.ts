@@ -3,6 +3,11 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { fetchFromRemoteBackend, getRemoteBackendUrl } from "@/lib/proxy-backend";
 import { AREA_COORDS } from "@/lib/server-stream";
+import {
+  getAdminSessionFromRequest,
+  hasValidFeedBearerToken,
+  unauthorizedAdminResponse,
+} from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -471,8 +476,13 @@ function buildLocalSnapshot() {
 }
 
 export async function GET(req: NextRequest) {
+  const isAdmin = Boolean(getAdminSessionFromRequest(req));
+  const isFeedAuthorized = hasValidFeedBearerToken(req);
   const { searchParams } = new URL(req.url);
   if (searchParams.get("action") === "ping") {
+    if (!isAdmin && !isFeedAuthorized) {
+      return unauthorizedAdminResponse();
+    }
     const lat = Number(searchParams.get("lat") || 23.8069);
     const lon = Number(searchParams.get("lon") || 90.3687);
     const speed_kmh = Number(searchParams.get("speed_kmh") || 0.0);
@@ -518,6 +528,10 @@ export async function GET(req: NextRequest) {
     await fetchFromRemoteBackend(
       `/api/v1/crowd/ping?${searchParams.toString()}`
     );
+  }
+
+  if (!isAdmin) {
+    return unauthorizedAdminResponse();
   }
 
   const remote = await fetchFromRemoteBackend("/api/v1/crowd/heatmap");
@@ -775,6 +789,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!getAdminSessionFromRequest(req) && !hasValidFeedBearerToken(req)) {
+    return unauthorizedAdminResponse();
+  }
   try {
     const body = await req.json();
     const rec = recordLocalPing({

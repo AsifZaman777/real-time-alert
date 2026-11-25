@@ -25,7 +25,7 @@ export interface RouteRoadGeometry {
 
 interface OsmMapWebViewProps {
   currentLocation: Coordinates;
-  destination: Coordinates;
+  destination: Coordinates | null;
   todoText: string;
   alerts: GoldAlert[];
   bleHeatmaps?: VerifiedHeatmapZone[];
@@ -35,6 +35,7 @@ interface OsmMapWebViewProps {
   fitRouteNonce?: number;
   pinMode?: boolean;
   onPinDestination: (lat: number, lon: number, roadLabel?: string) => void;
+  onUnpinDestination?: () => void;
   onSelectArea: (area: string) => void;
 }
 
@@ -50,6 +51,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   fitRouteNonce,
   pinMode = false,
   onPinDestination,
+  onUnpinDestination,
   onSelectArea,
 }) => {
   const { lang, t, tEvent } = useI18n();
@@ -70,6 +72,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       altRoute: t("hudAltRoute"),
       detailsLbl: t("hudDetails"),
       avoidLbl: t("avoidRoad"),
+      removePin: t("removePin"),
     }),
     [t]
   );
@@ -690,6 +693,10 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
       sendBridgeMessage({ type: 'selectArea', area: areaName });
     };
 
+    window.__unpinDestination = function() {
+      sendBridgeMessage({ type: 'unpinDestination' });
+    };
+
     // Exact perpendicular point-to-segment projection onto the route polyline (in meters)
     function projectPointToSegmentMeters(pLat, pLon, aLat, aLon, bLat, bLon) {
       const cosLat = Math.cos(((aLat + bLat) * 0.5) * Math.PI / 180);
@@ -1030,101 +1037,119 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         }
       }
 
-      // 2. Google Maps-style Red Teardrop Destination Pin (only moves via Pin button or search)
-      const pinTitle = escapeHtml(destination.label || todoText || 'Pinned Destination');
-      const destSig = destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5) + ':' + pinTitle;
-      if (destSig !== lastDestSig) {
-        lastDestSig = destSig;
-        if (destMarker) map.removeLayer(destMarker);
-        const gmapPinHtml = '<div class="gmap-pin-container">'
-          + '<div class="gmap-pin-label">' + pinTitle + '</div>'
-          + '<svg class="gmap-pin-svg" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg">'
-          +   '<path d="M19 2C9.6 2 2 9.6 2 19c0 12.6 15.2 26.2 16 26.9.6.5 1.4.5 2 0 .8-.7 16-14.3 16-26.9C36 9.6 28.4 2 19 2z" fill="#EA4335" stroke="#FFFFFF" stroke-width="2.5"/>'
-          +   '<circle cx="19" cy="18.5" r="6.5" fill="#7F1D1D"/>'
-          +   '<circle cx="19" cy="18.5" r="4" fill="#FFFFFF"/>'
-          + '</svg>'
-          + '<div class="gmap-pin-shadow"></div>'
-          + '</div>';
-
-        destMarker = L.marker([destination.lat, destination.lon], {
-          draggable: false,
-          icon: L.divIcon({
-            className: 'custom-pin-wrapper',
-            html: gmapPinHtml,
-            iconSize: [0, 0],
-            iconAnchor: [0, 0]
-          }),
-          zIndexOffset: 900
-        }).addTo(map);
-      }
-
-      // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots
-      const markersSig = (markers || []).map(function(m) {
-        return m.area + ':' + m.clusterCount + ':' + (m.onRoute ? '1' : '0') + ':' + m.color;
-      }).join('|');
-      const polyLen = (routeGeometry && routeGeometry.polyline) ? routeGeometry.polyline.length : 0;
-      const dangerKeys = (routeGeometry && routeGeometry.danger_segments)
-        ? routeGeometry.danger_segments.map(function(d) { return d.area + ':' + d.event_type; }).join('|')
-        : '';
-      const routeSig = userSig + '->' + destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5)
-        + '|p:' + polyLen + '|d:' + dangerKeys + '|m:' + markersSig;
-
-      const isFallbackStraightLine =
-        routeGeometry &&
-        routeGeometry.road_names &&
-        routeGeometry.road_names.length === 1 &&
-        routeGeometry.road_names[0] === 'Direct Road Corridor';
-
+      // 2. Google Maps-style Red Teardrop Destination Pin (only moves via Pin button or search; removable via Unpin)
       let activeDangerAreas = {};
-      if (routeSig !== lastRouteSig) {
-        lastRouteSig = routeSig;
-        if (
-          routeGeometry &&
-          routeGeometry.polyline &&
-          routeGeometry.polyline.length >= 2 &&
-          !isFallbackStraightLine
-        ) {
-          activeDangerAreas = renderLeafletRoadNavigation(
-            routeGeometry.polyline,
-            routeGeometry.alt_polyline || [],
-            routeGeometry.route_distance_km,
-            routeGeometry.duration_min,
-            routeGeometry.danger_segments || [],
-            markers
-          ) || {};
-        } else {
-          const fetchId = ++lastRouteFetchId;
-          const osrmUrl = 'https://router.project-osrm.org/route/v1/driving/'
-            + currentLocation.lon + ',' + currentLocation.lat + ';'
-            + destination.lon + ',' + destination.lat
-            + '?overview=full&geometries=geojson&alternatives=true';
+      if (!destination || typeof destination.lat !== 'number' || typeof destination.lon !== 'number') {
+        lastDestSig = '';
+        if (destMarker) {
+          map.removeLayer(destMarker);
+          destMarker = null;
+        }
+        lastRouteFetchId += 1;
+        lastRouteSig = '';
+        routeLayerGroup.clearLayers();
+        dangerRoadLayerGroup.clearLayers();
+      } else {
+        const pinTitle = escapeHtml(destination.label || todoText || 'Pinned Destination');
+        const destSig = destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5) + ':' + pinTitle;
+        if (destSig !== lastDestSig) {
+          lastDestSig = destSig;
+          if (destMarker) map.removeLayer(destMarker);
+          const gmapPinHtml = '<div class="gmap-pin-container">'
+            + '<div class="gmap-pin-label">' + pinTitle + '</div>'
+            + '<svg class="gmap-pin-svg" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg">'
+            +   '<path d="M19 2C9.6 2 2 9.6 2 19c0 12.6 15.2 26.2 16 26.9.6.5 1.4.5 2 0 .8-.7 16-14.3 16-26.9C36 9.6 28.4 2 19 2z" fill="#EA4335" stroke="#FFFFFF" stroke-width="2.5"/>'
+            +   '<circle cx="19" cy="18.5" r="6.5" fill="#7F1D1D"/>'
+            +   '<circle cx="19" cy="18.5" r="4" fill="#FFFFFF"/>'
+            + '</svg>'
+            + '<div class="gmap-pin-shadow"></div>'
+            + '</div>';
 
-          fetch(osrmUrl)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (fetchId !== lastRouteFetchId) return;
-              if (data && data.routes && data.routes.length > 0) {
-                const r0 = data.routes[0];
-                const poly0 = r0.geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
-                const poly1 = data.routes[1]
-                  ? data.routes[1].geometry.coordinates.map(function(c) { return [c[1], c[0]]; })
-                  : [];
-                const dKm = Math.round((r0.distance / 1000) * 10) / 10;
-                const dMin = Math.max(1, Math.round(r0.duration / 60));
-                renderLeafletRoadNavigation(poly0, poly1, dKm, dMin, [], markers);
-              }
-            })
-            .catch(function() {
-              if (fetchId !== lastRouteFetchId) return;
-              renderLeafletRoadNavigation(
-                [[currentLocation.lat, currentLocation.lon], [destination.lat, destination.lon]],
-                [],
-                null,
-                null,
-                [],
-                markers
-              );
-            });
+          destMarker = L.marker([destination.lat, destination.lon], {
+            draggable: false,
+            icon: L.divIcon({
+              className: 'custom-pin-wrapper',
+              html: gmapPinHtml,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0]
+            }),
+            zIndexOffset: 900
+          }).addTo(map);
+
+          const pinPopupHtml = '<div style="text-align:center;min-width:130px;padding:2px 4px;">'
+            + '<div style="font-size:12px;font-weight:800;color:#0F172A;margin-bottom:6px;">📍 ' + pinTitle + '</div>'
+            + '<button type="button" onclick="window.__unpinDestination()" style="width:100%;border:none;border-radius:8px;background:#DC2626;color:#FFFFFF;font-size:11px;font-weight:800;padding:6px 10px;cursor:pointer;">✕ ' + escapeHtml(currentHudStrs.removePin || 'Remove Pin') + '</button>'
+            + '</div>';
+          destMarker.bindPopup(pinPopupHtml, { closeButton: false, offset: [0, -28] });
+        }
+
+        // 3. Render Road Navigation Route + Red Road Stretches + Interactive Red Dots
+        const markersSig = (markers || []).map(function(m) {
+          return m.area + ':' + m.clusterCount + ':' + (m.onRoute ? '1' : '0') + ':' + m.color;
+        }).join('|');
+        const polyLen = (routeGeometry && routeGeometry.polyline) ? routeGeometry.polyline.length : 0;
+        const dangerKeys = (routeGeometry && routeGeometry.danger_segments)
+          ? routeGeometry.danger_segments.map(function(d) { return d.area + ':' + d.event_type; }).join('|')
+          : '';
+        const routeSig = userSig + '->' + destination.lat.toFixed(5) + ',' + destination.lon.toFixed(5)
+          + '|p:' + polyLen + '|d:' + dangerKeys + '|m:' + markersSig;
+
+        const isFallbackStraightLine =
+          routeGeometry &&
+          routeGeometry.road_names &&
+          routeGeometry.road_names.length === 1 &&
+          routeGeometry.road_names[0] === 'Direct Road Corridor';
+
+        if (routeSig !== lastRouteSig) {
+          lastRouteSig = routeSig;
+          if (
+            routeGeometry &&
+            routeGeometry.polyline &&
+            routeGeometry.polyline.length >= 2 &&
+            !isFallbackStraightLine
+          ) {
+            activeDangerAreas = renderLeafletRoadNavigation(
+              routeGeometry.polyline,
+              routeGeometry.alt_polyline || [],
+              routeGeometry.route_distance_km,
+              routeGeometry.duration_min,
+              routeGeometry.danger_segments || [],
+              markers
+            ) || {};
+          } else {
+            const fetchId = ++lastRouteFetchId;
+            const osrmUrl = 'https://router.project-osrm.org/route/v1/driving/'
+              + currentLocation.lon + ',' + currentLocation.lat + ';'
+              + destination.lon + ',' + destination.lat
+              + '?overview=full&geometries=geojson&alternatives=true';
+
+            fetch(osrmUrl)
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (fetchId !== lastRouteFetchId) return;
+                if (data && data.routes && data.routes.length > 0) {
+                  const r0 = data.routes[0];
+                  const poly0 = r0.geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+                  const poly1 = data.routes[1]
+                    ? data.routes[1].geometry.coordinates.map(function(c) { return [c[1], c[0]]; })
+                    : [];
+                  const dKm = Math.round((r0.distance / 1000) * 10) / 10;
+                  const dMin = Math.max(1, Math.round(r0.duration / 60));
+                  renderLeafletRoadNavigation(poly0, poly1, dKm, dMin, [], markers);
+                }
+              })
+              .catch(function() {
+                if (fetchId !== lastRouteFetchId) return;
+                renderLeafletRoadNavigation(
+                  [[currentLocation.lat, currentLocation.lon], [destination.lat, destination.lon]],
+                  [],
+                  null,
+                  null,
+                  [],
+                  markers
+                );
+              });
+          }
         }
       }
 
@@ -1277,7 +1302,7 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
   }, [focusCoords]);
 
   useEffect(() => {
-    if (fitRouteNonce && fitRouteNonce > 0) {
+    if (fitRouteNonce && fitRouteNonce > 0 && destination) {
       runScript(
         `window.fitRouteBounds && window.fitRouteBounds(${currentLocation.lat}, ${currentLocation.lon}, ${destination.lat}, ${destination.lon}); true;`
       );
@@ -1292,6 +1317,8 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
         const msg = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data;
         if (msg?.type === "pinDestination" && typeof msg.lat === "number") {
           onPinDestination(msg.lat, msg.lon, msg.roadLabel);
+        } else if (msg?.type === "unpinDestination") {
+          onUnpinDestination?.();
         } else if (msg?.type === "selectArea" && typeof msg.area === "string") {
           onSelectArea(msg.area);
         }
@@ -1299,13 +1326,15 @@ export const OsmMapWebView: React.FC<OsmMapWebViewProps> = ({
     };
     window.addEventListener("message", onWebMsg);
     return () => window.removeEventListener("message", onWebMsg);
-  }, [onPinDestination, onSelectArea]);
+  }, [onPinDestination, onUnpinDestination, onSelectArea]);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === "pinDestination" && typeof msg.lat === "number") {
         onPinDestination(msg.lat, msg.lon, msg.roadLabel);
+      } else if (msg.type === "unpinDestination") {
+        onUnpinDestination?.();
       } else if (msg.type === "selectArea" && typeof msg.area === "string") {
         onSelectArea(msg.area);
       }

@@ -170,10 +170,8 @@ function BigWarnAppContent() {
   const [currentLocation, setCurrentLocation] = useState<Coordinates>(
     DHAKA_PRESETS.Dhanmondi
   );
-  const [destination, setDestination] = useState<Coordinates>(
-    DHAKA_PRESETS.Motijheel
-  );
-  const [todoText, setTodoText] = useState("Motijheel");
+  const [destination, setDestination] = useState<Coordinates | null>(null);
+  const [todoText, setTodoText] = useState("");
   const [pinMode, setPinMode] = useState(false);
 
   const [routeAlerts, setRouteAlerts] = useState<GoldAlert[]>([]);
@@ -476,18 +474,6 @@ function BigWarnAppContent() {
           } catch {}
         }
 
-        const routeParams = new URLSearchParams({
-          date: "latest",
-          cur_lat: String(activeLat),
-          cur_lon: String(activeLon),
-          dest_lat: String(destination.lat),
-          dest_lon: String(destination.lon),
-          todo: todoText,
-          radius_km: "2.5",
-          include_map: "1",
-          city: selectedCity,
-        });
-
         const headers: Record<string, string> = {};
         if (FEED_ACCESS_TOKEN) {
           headers.Authorization = `Bearer ${FEED_ACCESS_TOKEN}`;
@@ -546,6 +532,61 @@ function BigWarnAppContent() {
           })
           .catch(() => {});
 
+        const isActualPlaceName = (area?: string) =>
+          Boolean(area && /^[A-Za-z0-9\s.'()-]+$/.test(area) && area !== "Dhaka (General)");
+
+        if (!destination) {
+          const mapRes = await fetch(
+            `${API_BASE_URL}/api/v1/alerts/map?date=latest&city=${encodeURIComponent(selectedCity)}`,
+            { signal: controller.signal, headers }
+          );
+          if (!mapRes.ok) {
+            setStreamStatus("OFFLINE");
+            return;
+          }
+          const mapData: MapAlertResponse = await mapRes.json();
+          const cleanMapAlerts = (mapData.alerts || []).filter((a) =>
+            isActualPlaceName(a.area)
+          );
+          const pollSig = [
+            selectedCity,
+            activeLat.toFixed(4),
+            activeLon.toFixed(4),
+            "NO_DEST",
+            cleanMapAlerts.map((a) => `${a.cluster_id}:${a.last_updated}`).join(","),
+          ].join("|");
+
+          setStreamStatus("LIVE");
+          if (pollSig !== lastPollSigRef.current || manualSync) {
+            lastPollSigRef.current = pollSig;
+            setRouteAlerts([]);
+            setRiskLevel("CLEAR");
+            setRouteDistKm(0);
+            setRouteDurationMin(0);
+            setRouteGeometry(null);
+            setAllMapAlerts(cleanMapAlerts);
+            setLayers(mapData.layers);
+            if (mapData.available_cities) {
+              setAvailableCities(
+                mapData.available_cities.filter((c) => isActualPlaceName(c.city))
+              );
+            }
+          }
+          return;
+        }
+
+        const routeParams = new URLSearchParams({
+          date: "latest",
+          cur_lat: String(activeLat),
+          cur_lon: String(activeLon),
+          dest_lat: String(destination.lat),
+          dest_lon: String(destination.lon),
+          todo: todoText,
+          radius_km: "2.5",
+          include_map: "1",
+          city: selectedCity,
+        });
+
         const routeRes = await fetch(
           `${API_BASE_URL}/api/v1/alerts/route?${routeParams.toString()}`,
           { signal: controller.signal, headers }
@@ -569,10 +610,6 @@ function BigWarnAppContent() {
           }
         }
 
-        // Client-side guard: reject any non-place random Bangla words if cached by an older server
-        const isActualPlaceName = (area?: string) =>
-          Boolean(area && /^[A-Za-z0-9\s.'()-]+$/.test(area) && area !== "Dhaka (General)");
-
         const nextRouteAlerts = (routeData.route_alerts || []).filter((a) =>
           isActualPlaceName(a.area)
         );
@@ -582,8 +619,8 @@ function BigWarnAppContent() {
 
         const pollSig = [
           selectedCity,
-          currentLocation.lat.toFixed(4),
-          currentLocation.lon.toFixed(4),
+          activeLat.toFixed(4),
+          activeLon.toFixed(4),
           destination.lat.toFixed(4),
           destination.lon.toFixed(4),
           routeData.route_risk_level,
@@ -643,6 +680,7 @@ function BigWarnAppContent() {
     setTodoText(name);
     setPinMode(false);
     setShowPlacesTray(false);
+    setDrawerTab("route");
     setFitRouteNonce((n) => n + 1);
   };
 
@@ -667,7 +705,21 @@ function BigWarnAppContent() {
     setDestination({ lat, lon, label: pinLabel });
     setTodoText(pinLabel);
     setPinMode(false);
+    setDrawerTab("route");
   };
+
+  const handleUnpin = useCallback(() => {
+    setDestination(null);
+    setTodoText("");
+    setPinMode(false);
+    setRouteAlerts([]);
+    setRouteDistKm(0);
+    setRouteDurationMin(0);
+    setRouteGeometry(null);
+    setRiskLevel("CLEAR");
+    setDrawerTab("all");
+    lastPollSigRef.current = "";
+  }, []);
 
   const handleFocusArea = (name: string) => {
     const preset = DHAKA_PRESETS[name];
@@ -693,6 +745,7 @@ function BigWarnAppContent() {
 
   // Ensure every RECENT (<= 3h) map alert geometrically intercepted by the route (<= 1.35 km) is included in route alerts
   const sortedRouteAlerts = useMemo(() => {
+    if (!destination) return [];
     const poly =
       routeGeometry?.polyline && routeGeometry.polyline.length >= 2
         ? routeGeometry.polyline
@@ -815,16 +868,19 @@ function BigWarnAppContent() {
   }, [sortedRouteAlerts, riskLevel]);
 
   const riskMeta = RISK_META[effectiveRiskLevel] || RISK_META.CLEAR;
-  const riskShortLabel =
-    effectiveRiskLevel === "BLOCKED"
-      ? t("riskBlocked")
-      : effectiveRiskLevel === "HIGH_RISK"
-      ? t("riskHigh")
-      : effectiveRiskLevel === "CAUTION"
-      ? t("riskCaution")
-      : t("riskClear");
+  const riskShortLabel = !destination
+    ? t("radarActive")
+    : effectiveRiskLevel === "BLOCKED"
+    ? t("riskBlocked")
+    : effectiveRiskLevel === "HIGH_RISK"
+    ? t("riskHigh")
+    : effectiveRiskLevel === "CAUTION"
+    ? t("riskCaution")
+    : t("riskClear");
   const topRouteAlert = sortedRouteAlerts[0] || null;
-  const advisoryText = topRouteAlert
+  const advisoryText = !destination
+    ? `${t("noDestSummary")} (${allMapAlerts.length})`
+    : topRouteAlert
     ? `${t("avoidRoad")}: ${topRouteAlert.affected_road || topRouteAlert.area} (${tEvent(topRouteAlert.event_type)})`
     : t("routeClearSummary");
 
@@ -860,6 +916,7 @@ function BigWarnAppContent() {
           fitRouteNonce={fitRouteNonce}
           pinMode={pinMode}
           onPinDestination={handleMapPin}
+          onUnpinDestination={handleUnpin}
           onSelectArea={(area) => setSelectedArea(area)}
         />
       </View>
@@ -940,7 +997,7 @@ function BigWarnAppContent() {
             </View>
           </View>
 
-          {/* Search Input + Explicit Pin Toggle */}
+          {/* Search Input + Explicit Pin / Unpin Controls */}
           <View style={styles.todoRow}>
             <View style={styles.inputWrap}>
               <Ionicons name="search-outline" size={15} color="#1A73E8" />
@@ -951,10 +1008,11 @@ function BigWarnAppContent() {
                 placeholder={t("searchPlaceholder")}
                 placeholderTextColor="#94A3B8"
               />
-              {todoText.length > 0 && (
+              {(todoText.length > 0 || destination !== null) && (
                 <TouchableOpacity
-                  onPress={() => setTodoText("")}
+                  onPress={handleUnpin}
                   style={styles.clearInputBtn}
+                  accessibilityLabel="Clear destination pin"
                 >
                   <Ionicons name="close-circle" size={15} color="#94A3B8" />
                 </TouchableOpacity>
@@ -973,6 +1031,16 @@ function BigWarnAppContent() {
                 {pinMode ? t("cancelPin") : t("pin")}
               </Text>
             </TouchableOpacity>
+            {destination !== null && !pinMode && (
+              <TouchableOpacity
+                onPress={handleUnpin}
+                style={styles.unpinBtn}
+                accessibilityLabel="Remove pin from map"
+              >
+                <Ionicons name="close-circle-outline" size={14} color="#DC2626" />
+                <Text style={styles.unpinBtnText}>{t("unpin")}</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Expandable City & Quick Destination Tray (collapsed by default to avoid clutter) */}
@@ -1018,7 +1086,7 @@ function BigWarnAppContent() {
                     key={name}
                     label={name}
                     icon="navigate"
-                    active={destination.label === name}
+                    active={destination?.label === name}
                     activeTone="green"
                     onPress={() => handleSelectPresetDest(name)}
                   />
@@ -1046,6 +1114,7 @@ function BigWarnAppContent() {
               if (topRouteAlert) {
                 setSelectedArea(topRouteAlert.area);
               } else {
+                if (!destination) setDrawerTab("all");
                 snapDrawerTo(drawerSnap === "off" ? "half" : "off");
               }
             }}
@@ -1086,13 +1155,15 @@ function BigWarnAppContent() {
           <MaterialIcons name="my-location" size={21} color="#1A73E8" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setFitRouteNonce((n) => n + 1)}
-          style={styles.mapPillBtn}
-        >
-          <MaterialIcons name="route" size={14} color="#1A73E8" />
-          <Text style={styles.mapPillText}>{t("fitRoute")}</Text>
-        </TouchableOpacity>
+        {destination !== null && (
+          <TouchableOpacity
+            onPress={() => setFitRouteNonce((n) => n + 1)}
+            style={styles.mapPillBtn}
+          >
+            <MaterialIcons name="route" size={14} color="#1A73E8" />
+            <Text style={styles.mapPillText}>{t("fitRoute")}</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           onPress={() => setShowAllOnMap((v) => !v)}
@@ -1546,6 +1617,18 @@ const styles = StyleSheet.create({
   },
   pinBtnText: { color: "#DC2626", fontSize: 12, fontWeight: "800" },
   pinBtnTextActive: { color: "#FFFFFF" },
+  unpinBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFF1F2",
+    borderWidth: 1,
+    borderColor: "#FDA4AF",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 14,
+  },
+  unpinBtnText: { color: "#BE123C", fontSize: 12, fontWeight: "800" },
   chipScroll: { flexDirection: "row" },
   chip: {
     flexDirection: "row",

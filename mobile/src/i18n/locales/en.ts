@@ -6,8 +6,12 @@ export const en = {
 
   searchPlaceholder: "Search destination (e.g. Motijheel)",
   pin: "Pin",
+  unpin: "Unpin",
+  removePin: "Remove Pin",
   cancelPin: "Cancel",
   pinModeBanner: "Tap anywhere on the map to set your destination",
+  radarActive: "RADAR",
+  noDestSummary: "No destination set • Tap Pin to check a route",
   filters: "Places",
   allBangladesh: "All BD",
 
@@ -83,8 +87,8 @@ export const en = {
   how1Desc: "Shaded circles on the map show detected crowd pockets. Tap any heatmap circle to open its live HUD card with total nearby devices, static vs. moving ratio, and traffic speed.",
   how2Title: "2. How Surrounding Devices Are Counted",
   how2Desc: "Your phone passively listens for nearby Bluetooth devices, Wi-Fi hotspots/Direct/LAN peers (for phones with Bluetooth off), and 4G tower congestion within ~50m—even if others don't have BigWarn installed.",
-  how3Title: "3. Dropping a Destination Pin",
-  how3Desc: "Scroll and zoom freely anytime. When you want to check a custom spot, tap the 'Pin' button next to search, then tap the exact spot on the map.",
+  how3Title: "3. Pinning & Removing a Destination",
+  how3Desc: "Scroll and zoom freely anytime. Tap 'Pin' then tap the map to set a destination route. To remove the pin anytime, tap 'Unpin', tap the search clear (×) button, or tap the red pin directly.",
   how4Title: "4. Area Alert Badges",
   how4Desc: "Tap any numbered badge on the map to read the latest verified reports and credibility scores for that neighborhood.",
 

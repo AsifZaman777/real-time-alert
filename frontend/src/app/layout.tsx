@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bangladesh news stream | BigWarn",
+  title: "BigWarn Edge | Bangladesh Road Alerts & App Portal",
   description:
-    "Debug-friendly real-time stream inspector, Medallion Lakehouse ELT console, and Mobile Edge PWA for Bangladesh news.",
+    "Get BigWarn Edge for Android (APK) or Apple iPhone (Web App PWA) for real-time Bangladesh road disruption alerts and safe routing.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
